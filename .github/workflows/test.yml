@@ -1,0 +1,15 @@
+name: test
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 構文検査
+        run: |
+          zsh -n cafe-wifi-okawari.sh install.sh test/run.sh
+          osacompile -o /dev/null -e 'display notification "x" with title "cafe-wifi-okawari"'
+      - name: 模擬試験
+        run: zsh test/run.sh
