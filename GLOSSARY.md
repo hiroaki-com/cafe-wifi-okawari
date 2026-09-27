@@ -4,7 +4,7 @@
 具体的な位置づけの両方から学ぶための文書です。仕様書ではありません。
 各カフェの Wi‑Fi サービスの内容や規約条文の読み方そのものは設計書で扱い、本ページには掲載しません。
 規約・法令の関連では、実装の判断を理解するのに必要な用語だけを扱います。
-仕様・安全性・検証状況の正は [DESIGN.md](../../DESIGN.md)、利用条件の正は [README.ja.md](../../README.ja.md)
+仕様・安全性・検証状況の正は [DESIGN.md](DESIGN.md)、利用条件の正は [README.ja.md](README.ja.md)
 とコードであり、ここでは語の意味と背景だけを扱います。設定値や手順の詳細は参照先で確認します。
 
 各項目は次の形で書いています。
@@ -909,7 +909,7 @@ WIP / Work In Progress — まだ途中で、完成品として見ないでほ�
 
 ## 関連文書
 
-- 要件・構成・安全性・検証状況: [DESIGN.md](../../DESIGN.md)
-- 利用条件・使い方・ログの読み方: [README.ja.md](../../README.ja.md) / [README.md](../../README.md)
-- 本体・導入: [cafe-wifi-okawari.sh](../../cafe-wifi-okawari.sh) / [install.sh](../../install.sh)
-- 模擬試験と CI: [test/run.sh](../../test/run.sh) / [.github/workflows/test.yml](../../.github/workflows/test.yml)
+- 要件・構成・安全性・検証状況: [DESIGN.md](DESIGN.md)
+- 利用条件・使い方・ログの読み方: [README.ja.md](README.ja.md) / [README.md](README.md)
+- 本体・導入: [cafe-wifi-okawari.sh](cafe-wifi-okawari.sh) / [install.sh](install.sh)
+- 模擬試験と CI: [test/run.sh](test/run.sh) / [.github/workflows/test.yml](.github/workflows/test.yml)
