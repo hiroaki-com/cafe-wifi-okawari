@@ -16,7 +16,7 @@ case ${1-} in
   '') ;;
   uninstall)
     launchctl bootout gui/$UID/$label 2>/dev/null || true
-    rm -f $plist $bin $HOME/Library/Caches/cafe-wifi-okawari{,.pending}
+    rm -f $plist $bin $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen}
     rm -rf "$HOME/Library/Application Support/cafe-wifi-okawari"   # 同意した接続先の記録
     msg "削除しました（ログは残しています: $log）" "Uninstalled (the log is kept: $log)"
     exit 0 ;;
@@ -35,6 +35,10 @@ plutil -insert ProgramArguments -array $plist
 plutil -insert ProgramArguments -string $bin -append $plist
 plutil -insert StartInterval -integer 30 $plist
 plutil -insert RunAtLoad -bool true $plist
+# DNS の設定が変わるたびに書き換わるファイルを見て、そのときにも実行する。認証画面つきの網では、
+# 接続画面で同意して通信できるようになった時刻に書き換わる（<date omitted> 実測）ので、同意の直後に記録できる。
+plutil -insert WatchPaths -array $plist
+plutil -insert WatchPaths -string /var/run/resolv.conf -append $plist
 plutil -insert ProcessType -string Background $plist
 plutil -insert StandardOutPath -string $log $plist
 plutil -insert StandardErrorPath -string $log $plist
