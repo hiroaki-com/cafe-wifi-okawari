@@ -7,9 +7,10 @@ zmodload zsh/datetime   # EPOCHSECONDS
 zmodload -F zsh/stat b:zstat
 
 WI2=https://service.wi2.ne.jp
-ST=$HOME/Library/Caches/cafe-wifi-okawari            # 連続失敗回数・次回試行時刻・接続先
+ST=$HOME/Library/Caches/cafe-wifi-okawari            # 連続失敗回数・次回試行時刻・接続先・拒否回数・知らせたか・拒否したブランド
 PD=$HOME/Library/Caches/cafe-wifi-okawari.pending    # 捕捉中でまだ同意していない接続先「MAC ブランド [notified]」
-SN=$HOME/Library/Caches/cafe-wifi-okawari.seen       # 通信できる状態で Wi2 のブランドを確かめ終えた接続先（MAC）
+SN=$HOME/Library/Caches/cafe-wifi-okawari.seen       # 通信できる状態で Wi2 のブランドを確かめた接続先と回数「MAC 回数」
+DG=$HOME/Library/Caches/cafe-wifi-okawari.probe      # 接続の状態を確かめられないことが続いている接続先と回数「MAC 回数」
 KN="$HOME/Library/Application Support/cafe-wifi-okawari/consented"   # 利用者が自分で同意した接続先「MAC ブランド」（1行1つ）
 RC=/var/run/resolv.conf   # DNS の設定が変わるたびに書き換わる（接続画面での同意の直後も）。launchd の WatchPaths でもこれを見る
 JOIN=300                  # 接続してからこの秒数の間は、同意していない網でも状態を確かめる
@@ -30,10 +31,11 @@ HOWEN='on the login page (reconnect to the Wi-Fi, or open http://captive.apple.c
 curl=(/usr/bin/curl -q -s)
 
 # 0=認証済み 1=ポータルに捕捉されている 2=無接続・判定不能（HTTP 障害など）。
-# code に HTTP コード、loc に転送先（Location）を入れる。
+# code に HTTP コード、loc に転送先（Location）、prc に curl の終了値を入れる。
 state() {
   local r t
-  r=$("${curl[@]}" -m 5 -w '\n%{http_code} %{redirect_url}' http://captive.apple.com/hotspot-detect.html) || return 2
+  r=$("${curl[@]}" -m 5 -w '\n%{http_code} %{redirect_url}' http://captive.apple.com/hotspot-detect.html); prc=$?
+  (( prc )) && { code=000 loc=; return 2 }
   t=${r##*$'\n'} code=${t%% *} loc=${t#* }
   case $code in
     200) [[ $r == *'<TITLE>Success</TITLE>'* ]] && return 0 || return 1 ;;
@@ -54,6 +56,13 @@ netid() {
 }
 # URL のうち、ホストとパスだけ（ログ用。クエリには端末の MAC・IP が入るので残さない）
 path() { print -r -- "${1%%\?*}" }
+# 接続先・インターフェース・端末の IP が、始めたときのままか（テザリングへの切り替えなどで途中で変わっていないか）
+same() {
+  local n0=$net i0=$ifc r
+  netid; [[ $net == "$n0" && $ifc == "$i0" && $(/usr/sbin/ipconfig getifaddr "$ifc" 2>/dev/null) == "$myip" ]]; r=$?
+  net=$n0 ifc=$i0
+  return r
+}
 
 netid
 [[ -n $net ]] || exit 0
@@ -90,55 +99,75 @@ wi2() {
 }
 
 state; s=$?
-(( s == 2 )) && exit 0
+# 確かめられない（通信失敗・想定外の HTTP）ときは何も送らない。ただし Wi2 の網・同意済み・同意待ちの接続先では、
+# 現地で「動いていない理由」を切り分けられるよう、続いた回数の 1,2,4,8… 回目だけ記録する（自宅などでは記録しない）。
+if (( s == 2 )); then
+  (( wi2net || kmac )) || [[ ${pd[1]-} == "$net" ]] || exit 0
+  dg=(); [[ -r $DG ]] && dg=(${=$(<"$DG")})
+  [[ ${dg[1]-} == "$net" ]] && k=$(( ${dg[2]-0} + 1 )) || k=1
+  print -r -- "$net $k" > "$DG"
+  (( k & (k - 1) )) || log "probe failed x$k net=$net if=$ifc curl=$prc http=$code"
+  exit 0
+fi
+[[ -e $DG ]] && rm -f "$DG"
 if (( s == 0 )); then
   rm -f "$ST"
-  # 捕捉されていた接続先が認証済みになった = 利用者が自分で同意した。以後この接続先だけ自動で再認証する。
-  if (( $#pd >= 2 )) && [[ $pd[1] == "$net" ]] && ! grep -qxF -- "$pd[1,2]" "$KN" 2>/dev/null; then
-    mkdir -p "${KN:h}" && print -r -- "$pd[1,2]" >> "$KN" && log "consent recorded net=$pd[1,2]"
-  fi
-  rm -f "$PD"
+  # 捕捉されて同意待ちだった接続先が認証済みになった = 利用者が自分で同意した。以後この接続先だけ自動で再認証する。
+  # 同じ MAC で別ブランドの古い同意待ちを取り違えないよう、どのブランドかは Wi2 に確かめてから記録する（下記）。
+  (( $#pd >= 2 )) && [[ $pd[1] == "$net" ]] && pdn=1 || { pdn=0; rm -f "$PD" }
   # Wi2 の無料 Wi‑Fi に、本ツールが同意を送っていないのに通信できている = 利用者が接続画面で同意した
   # （macOS は同意するまでこの網を使わせないので、接続直後の捕捉は本ツールからは見えない）。
-  # ブランドを確かめるのは接続先ごとに1回（失敗したら3回まで）。
+  # ブランドを確かめるのは接続ごとに1回（失敗したら3回まで）。つなぎ直したら（resolv.conf が新しい）確かめ直す。
+  # 同意待ちのときは、確認に失敗しても保留を消さず、30秒→60秒→…→最大30分 と間隔を空けて確かめ続ける
+  # （保留を書くとき・自動を止めるときに確認の記録を消すので、入店時の確認済みの記録には妨げられない）。
   sn=(); [[ -r $SN ]] && sn=(${=$(<"$SN")})
-  t=0; [[ ${sn[1]-} == "$net" ]] && t=${sn[2]-3}
-  (( wi2net && t < 3 )) || exit 0
+  t=0; [[ ${sn[1]-} == "$net" && ! $RC -nt $SN ]] && t=${sn[2]-3}
+  if (( pdn && t )); then
+    zstat -A m +mtime $SN 2>/dev/null || m=(0)
+    (( EPOCHSECONDS - m[1] >= (t > 6 ? 1800 : 30 << (t - 1)) )) || exit 0
+  elif (( ! pdn && (! wi2net || t >= 3) )); then
+    exit 0
+  fi
+  k=$(( t + 1 ))
   wi2 "$WI2/wi2auth/redirect"; case $? in
-    0) print -r -- "$net 3" > "$SN"
+    0) print -r -- "$net 3" > "$SN"; rm -f "$PD"
        grep -qxF -- "$net $brand" "$KN" 2>/dev/null && exit 0
-       mkdir -p "${KN:h}" && print -r -- "$net $brand" >> "$KN" && log "consent recorded net=$net $brand (online)" ;;
-    1) print -r -- "$net $(( t + 1 ))" > "$SN"; log "not free wi-fi x$(( t + 1 )) net=$net http=${r%% *} to=$(path $to)" ;;
-    2) print -r -- "$net $(( t + 1 ))" > "$SN"; log "redirect failed x$(( t + 1 )) net=$net curl=$rc http=${r%% *}" ;;
+       [[ ${pd[1,2]} == "$net $brand" ]] && how= || how=' (online)'
+       mkdir -p "${KN:h}" && print -r -- "$net $brand" >> "$KN" && log "consent recorded net=$net $brand$how" ;;
+    1) print -r -- "$net $k" > "$SN"; (( k <= 3 || !(k & (k - 1)) )) && log "not free wi-fi x$k net=$net http=${r%% *} to=$(path $to)" ;;
+    2) print -r -- "$net $k" > "$SN"; (( k <= 3 || !(k & (k - 1)) )) && log "redirect failed x$k net=$net curl=$rc http=${r%% *}" ;;
   esac
   exit 0
 fi
 
-# 同意待ちの接続先では通信しない。捕捉が2回続いたら（OS の接続画面で済ませていなければ）1回だけ知らせる。
-if [[ ${pd[1]-} == "$net" ]]; then
-  if (( $#pd == 2 )); then
-    print -r -- "$pd[1,2] notified" > "$PD"
-    notify "この Wi-Fi では最初の1回だけ、${HOWJA}規約を読んで同意してください。次からは自動で再接続します。" \
-      "For this Wi-Fi, read and accept the terms yourself once, $HOWEN. After that, it reconnects automatically."
-  fi
-  exit 0
-fi
+# 同意待ち。捕捉が2回続いたら（OS の接続画面で済ませていなければ）1回だけ知らせる。
+waiting() {
+  (( $#pd == 2 )) || return 0
+  print -r -- "$pd[1,2] notified" > "$PD"
+  notify "この Wi-Fi では最初の1回だけ、${HOWJA}規約を読んで同意してください。次からは自動で再接続します。" \
+    "For this Wi-Fi, read and accept the terms yourself once, $HOWEN. After that, it reconnects automatically."
+}
+# 同意待ちの接続先では通信しない。ただし同じ MAC で同意済みのブランドがあるときは、どのブランドかを Wi2 に確かめる
+# （ルーターの冗長化用の共通 MAC では、別ブランドの古い同意待ちが残っていることがある）。
+[[ ${pd[1]-} == "$net" ]] && (( ! kmac )) && { waiting; exit 0 }
 
 # 失敗が続いているときは 30秒→60秒→…→最大30分 と間隔を空ける。店を移った・つなぎ直したら前の待機状態は持ち越さない。
-# 拒否の回数（rej）は、つなぎ直しても同じ接続先なら持ち越す。
-n=0 next=0 prev= rej=0
-[[ -r $ST ]] && read -r n next prev rej < "$ST"
-[[ $prev == "$net" ]] || rej=0
-[[ $prev == "$net" && ! $RC -nt $ST ]] || n=0 next=0
+# 拒否の回数（rej）は、つなぎ直しても同じ接続先・同じブランド（rb）なら持ち越す。知らせたか（told）は、失敗が続く間は持ち越す。
+n=0 next=0 prev= rej=0 told=0 rb=
+[[ -r $ST ]] && read -r n next prev rej told rb < "$ST"
+[[ $prev == "$net" ]] || rej=0 rb=
+[[ $prev == "$net" && ! $RC -nt $ST ]] || n=0 next=0 told=0
 (( EPOCHSECONDS < next )) && exit 0
 
 # 失敗回数を増やして次の試行を遅らせる。同じ失敗の繰り返しは 1,2,4,8,… 回目だけ記録する。
-# $1=事象 $2=詳細 $3=1 なら、失敗が続く間に1回だけ知らせる
+# $1=事象 $2=詳細 $3=1 なら、失敗が続く間に1回だけ知らせる（通知しない失敗が先にあっても、まだなら知らせる）
 fail() {
+  local tell=0
   (( n++, wait = 30 << (n > 7 ? 6 : n - 1), wait > 1800 && (wait = 1800) ))
-  print -r -- "$n $(( EPOCHSECONDS + wait )) $net ${rej:-0}" > "$ST"
+  (( $3 && ! ${told:-0} )) && tell=1 told=1
+  print -r -- "$n $(( EPOCHSECONDS + wait )) $net ${rej:-0} ${told:-0} $rb" > "$ST"
   (( n & (n - 1) )) || log "$1 x$n $2"
-  (( $3 && n == 1 )) && notify "Wi-Fi に自動で再接続できませんでした。${HOWJA}確認してください。" \
+  (( tell )) && notify "Wi-Fi に自動で再接続できませんでした。${HOWJA}確認してください。" \
     "Could not reconnect to Wi-Fi automatically. Check the login page (reconnect to the Wi-Fi, or open http://captive.apple.com in a browser)."
   exit 1
 }
@@ -153,10 +182,16 @@ q=${loc#*\?}; q=${q//\%3[Aa]/:}
 qm=${${(M)${(s:&:)q}:#mac=*}#mac=} qi=${${(M)${(s:&:)q}:#ip=*}#ip=}
 mymac=$(/sbin/ifconfig "$ifc" 2>/dev/null | /usr/bin/awk '$1 == "ether" { print $2; exit }')
 myip=$(/usr/sbin/ipconfig getifaddr "$ifc" 2>/dev/null)
-# MAC は大文字小文字・区切り（: と -）・先頭の 0 の有無の違いを吸収して比べる
-hex() { local o; for o in ${(s.:.)${${1:l}//-/:}}; do printf '%02x' 0x$o 2>/dev/null; done }
-if [[ -z $qm || -z $qi || $(hex $qm) != $(hex $mymac) || $qi != "$myip" ]]; then
-  fail "portal mismatch" "mac=$([[ $(hex $qm) == $(hex $mymac) ]] && print ok || print ng) ip=$([[ $qi == $myip ]] && print ok || print ng)" 0
+# MAC は大文字小文字・区切り（: と -）・先頭の 0 の有無の違いを吸収して比べる。1〜2桁の16進数が6つでなければ空にする。
+hex() {
+  local o h= a=(${(s.:.)${${1:l}//-/:}})
+  (( $#a == 6 )) || return
+  for o in $a; do [[ $o == [0-9a-f](|[0-9a-f]) ]] || return; h+=${(l:2::0:)o}; done
+  print -r -- $h
+}
+hm=$(hex $mymac)
+if [[ -z $hm || $(hex $qm) != "$hm" || -z $qi || $qi != "$myip" ]]; then
+  fail "portal mismatch" "mac=$([[ -n $hm && $(hex $qm) == $hm ]] && print ok || print ng) ip=$([[ -n $qi && $qi == $myip ]] && print ok || print ng)" 0
 fi
 
 # 通信失敗・5xx は障害として失敗扱い（通知はしない）。Wi2 から想定外の応答が来たら、同意済みの網なら知らせる。
@@ -167,27 +202,36 @@ esac
 # 同じ MAC でもブランドが違えば別の網（ルーターの冗長化用の共通 MAC は店やブランドをまたいで重なる）。
 # 初めての接続先では同意を送らず、利用者が自分で同意するのを待つ。
 if ! grep -qxF -- "$net $brand" "$KN" 2>/dev/null; then
+  [[ ${pd[1,2]} == "$net $brand" ]] && { waiting; exit 0 }
   print -r -- "$net $brand" > "$PD"
+  rm -f "$SN"   # 利用者が同意したら、同じ接続のうちでもブランドを確かめて記録できるように
   log "consent pending net=$net $brand"
   exit 0
 fi
+# 拒否の回数はブランドごとに数える（共通 MAC で、別ブランドの拒否を持ち越さない）
+[[ -z $rb || $rb == "$brand" ]] || rej=0; rb=$brand
 grep -q session_id "$jar" || fail "redirect failed" "no session_id" 1
+same || { log "network changed net=$net $brand before login"; exit 0 }
 
 # 接続画面の JS（ランディングから呼ぶ XHR）と同じ要求を送る。
+t0=$EPOCHSECONDS
 res=$("${c[@]}" -w '\n%{http_code}' -H 'Content-Type: application/json' -H 'X-Requested-With: XMLHttpRequest' \
   -H "Origin: $WI2" -e "$WI2/freewifi/$brand/landing.html" \
   --data '{"login_method":"onetap","login_params":{"agree":"1"}}' "$WI2/wi2auth/xhr/login"); lrc=$?
 http=${res##*$'\n'} res=${res%$'\n'*}
-/usr/bin/jq -e '.result == true' <<< "$res" &>/dev/null && api=ok || api=ng
+# 通信が成功し、HTTP 2xx で、JSON の result が真偽値 true のときだけ ok
+(( lrc == 0 )) && [[ $http == 2?? ]] && /usr/bin/jq -e '.result == true' <<< "$res" &>/dev/null && api=ok || api=ng
 
-# 疎通の回復を最大10秒待つ（2秒ごとに確かめる）
+# 疎通の回復を2秒ごとに5回まで確かめる（1回の確認は最大5秒なので、最悪で約35秒）
 probe=ng
 for i in {1..5}; do sleep 2; state && { probe=ok; break }; done
 
-# API の結果と疎通回復を分けて記録する（OS の接続画面などによる復旧と区別できる）。
+# 途中で別の回線に切り替わっていたら、その疎通や失敗を元の接続先の結果として扱わない（次の回に確かめ直す）。
+same || { log "network changed net=$net $brand api=$api probe=$probe"; exit 0 }
+# API の結果と疎通回復を分けて記録する（OS の接続画面などによる復旧と区別できる）。t は同意を送り始めてから疎通が戻るまで。
 if [[ $api == ok && $probe == ok ]]; then
   rm -f "$ST"
-  log "re-authenticated api=ok probe=ok net=$net $brand t=$(( i * 2 ))s"
+  log "re-authenticated api=ok probe=ok net=$net $brand t=$(( EPOCHSECONDS - t0 ))s"
   exit 0
 fi
 # 疎通も戻っていなければ知らせる。
@@ -198,7 +242,7 @@ fi
 if (( lrc == 0 )) && [[ $api == ng && $probe == ng && $http == [1-4]?? ]] && (( ++rej >= REJECT )); then
   grep -vxF -- "$net $brand" "$KN" > "$KN.tmp"; mv -f "$KN.tmp" "$KN"
   print -r -- "$net $brand notified" > "$PD"
-  rm -f "$ST"
+  rm -f "$ST" "$SN"   # 利用者が同意し直したら、入店時の確認済みの記録に関係なく確かめて記録できるように
   log "auto stopped net=$net $brand rejected x$rej http=$http res=${res[1,200]}"
   notify "認証が続けて拒否されたため、この Wi-Fi での自動再接続を止めました。${HOWJA}確認してください。" \
     "Stopped reconnecting to this Wi-Fi automatically because the login was refused repeatedly. Check the login page (reconnect to the Wi-Fi, or open http://captive.apple.com in a browser)."

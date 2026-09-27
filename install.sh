@@ -16,7 +16,7 @@ case ${1-} in
   '') ;;
   uninstall)
     launchctl bootout gui/$UID/$label 2>/dev/null || true
-    rm -f $plist $bin $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen}
+    rm -f $plist $bin $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen,.probe}
     rm -rf "$HOME/Library/Application Support/cafe-wifi-okawari"   # 同意した接続先の記録
     msg "削除しました（ログは残しています: $log）" "Uninstalled (the log is kept: $log)"
     exit 0 ;;

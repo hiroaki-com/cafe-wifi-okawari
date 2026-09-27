@@ -16,20 +16,28 @@ mkdir -p "$HOME" $T/bin
 #       引数なしの redirect（認証済みでのブランド確認）は $BARE（ok/other/timeout）。
 #       login は本文 $LOGIN と HTTP コード $LHTTP（既定 200。000 ならタイムアウト）を返す。$RECOVER があれば認証済みにする
 #       （数なら、その回数の確認のあとで認証済みにする）。-H・-e の値は $M/headers に残す。
+#       login は、redirect で受け取った session_id を同じ jar から送り（-b）、本文が同意の JSON のときだけ受け付ける。
+#       違えば $M/badlogin に残し、拒否（HTTP 403・result:false）を返す。
+#       プローブは $PROBE=down なら通信失敗、$PROBEHTTP があればその HTTP コードを返す。
+#       $SWITCH があれば既定経路の接続先を別の MAC に切り替える（login なら送信後、pre なら redirect の時点）。
 cat > $T/bin/curl <<'EOS'
 #!/bin/zsh
-url=${@[-1]} jar=
+url=${@[-1]} jar= bjar= data=
 for ((i = 1; i <= $#; i++)); do
   [[ ${@[i]} == -c ]] && jar=${@[i+1]}
+  [[ ${@[i]} == -b ]] && bjar=${@[i+1]}
+  [[ ${@[i]} == --data ]] && data=${@[i+1]}
   [[ ${@[i]} == -[He] ]] && print -r -- "${@[i+1]}" >> $M/headers
 done
 print -r -- "$url" >> $M/calls
 W=https://service.wi2.ne.jp
 land() { printf '.service.wi2.ne.jp\tFALSE\t/\tTRUE\t0\tsession_id\tabc\n' > $jar
+         [[ ${SWITCH-} == pre ]] && touch $M/switched
          printf '302 %s/freewifi/%s/landing.html%s' $W "${BRAND-doutor}" "${1-}" }
 case $url in
   *hotspot-detect*)
-    [[ ${PROBE-} == down ]] && exit 7
+    [[ ${PROBE-} == down ]] && { printf '\n000 '; exit 7 }
+    [[ -n ${PROBEHTTP-} ]] && { printf 'x\n%s ' $PROBEHTTP; exit 0 }
     if [[ -s $M/late ]]; then   # 認証後、疎通が戻るまでに $M/late 回の確認がかかる
       n=$(<$M/late); (( n > 1 )) && print $((n - 1)) > $M/late || { rm $M/late; touch $M/authed }
     fi
@@ -51,13 +59,19 @@ case $url in
     other) printf '302 %s/wi2auth/error/ctrlapi_timeout.html' $W ;;
     timeout) printf '000 '; exit 28 ;;
   esac ;;
-  */xhr/login) [[ ${LHTTP-} == 000 ]] && { printf '\n000'; exit 28 }
+  $W/wi2auth/xhr/login) [[ ${LHTTP-} == 000 ]] && { printf '\n000'; exit 28 }
+    if [[ -z $bjar || $bjar != $jar ]] || ! grep -q $'\tsession_id\tabc$' $bjar ||
+       [[ $data != '{"login_method":"onetap","login_params":{"agree":"1"}}' ]]; then
+      print -r -- "cookie=$bjar data=$data" >> $M/badlogin; printf '{"result":false}\n403'; exit 0
+    fi
+    [[ ${SWITCH-} == 1 ]] && touch $M/switched
     printf '%s\n%s' "${LOGIN-}" "${LHTTP-200}"; if [[ ${RECOVER-} == <-> ]]; then print $RECOVER > $M/late; elif [[ -n ${RECOVER-} ]]; then touch $M/authed; fi; exit 0 ;;
 esac
 EOS
 # route: $NOROUTE があれば既定経路なし
 print '#!/bin/sh\n[ -n "$NOROUTE" ] && exit 1\necho "   route to: default"\necho "    gateway: 10.0.0.1"\necho "  interface: en0"' > $T/bin/route
-print '#!/bin/sh\necho "? ($2) at $MAC on en0 ifscope [ethernet]"' > $T/bin/arp
+# arp: 既定ゲートウェイの MAC は $MAC（$M/switched があれば別の回線 cc:cc:cc:cc:cc:03）
+print '#!/bin/sh\n[ -e $M/switched ] && MAC=cc:cc:cc:cc:cc:03\necho "? ($2) at $MAC on en0 ifscope [ethernet]"' > $T/bin/arp
 # ipconfig: DHCP のドメイン名は $DOM（既定は空）、自分の IP は $MYIP（既定 10.0.0.5）
 print '#!/bin/sh\ncase $1 in getoption) printf "%s\\n" "$DOM" ;; getifaddr) echo "${MYIP-10.0.0.5}" ;; esac' > $T/bin/ipconfig
 print '#!/bin/sh\nprintf "en0: flags=8863<UP>\\n\\tether %s\\n" "${MYMAC-aa:bb:cc:dd:ee:0f}"' > $T/bin/ifconfig
@@ -84,6 +98,7 @@ sed -e "s#/usr/bin/curl#$T/bin/curl#" -e "s#/sbin/route#$T/bin/route#" -e "s#/us
 ST=$HOME/Library/Caches/cafe-wifi-okawari
 PD=$ST.pending
 SN=$ST.seen
+DG=$ST.probe
 KN="$HOME/Library/Application Support/cafe-wifi-okawari/consented"
 mkdir -p ${ST:h}
 W=https://service.wi2.ne.jp
@@ -92,7 +107,7 @@ W=https://service.wi2.ne.jp
 pass=0 failed=0
 # run VAR=val...: 1回実行し、rc・out・通信回数を残す
 run() {
-  rm -f $M/calls $M/notify $M/headers
+  rm -f $M/calls $M/notify $M/headers $M/badlogin
   env "$@" zsh $T/s.sh > $M/out 2>&1; rc=$?
   out=$(<$M/out)
   posts=$(grep -c xhr/login $M/calls 2>/dev/null); redirs=$(grep -c wi2auth/redirect $M/calls 2>/dev/null)
@@ -103,7 +118,7 @@ ok() {  # ok <名前> <条件式...>
   if eval "$*"; then (( pass++ )); else (( failed++ )); print -r -- "NG: $name  [$*]  rc=$rc posts=$posts redirs=$redirs notes=$notes out=$out"; fi
 }
 # 既定は「接続してから時間が経っている」状態。joined で「今つないだ」状態にする。
-reset() { rm -rf $ST $PD $SN ${KN:h} $M/authed $M/late; touch -t 202001010000 $M/resolv }
+reset() { rm -rf $ST $PD $SN $DG ${KN:h} $M/authed $M/late $M/switched; touch -t 202001010000 $M/resolv }
 joined() { touch $M/resolv }
 A=aa:aa:aa:aa:aa:01 B=bb:bb:bb:bb:bb:02
 consent() { print -r -- "$1 ${2-doutor}" >> $KN }   # 同意済みの接続先を用意する
@@ -124,6 +139,15 @@ run MAC=$A DOM=wi2.ne.jp; ok 'Wi2 の網（DHCP のドメイン名）は時間�
 reset; run MAC=$A DOM=example.jp
                           ok '別のドメイン名の網では通信しない' '[[ ! -s $M/calls ]]'
 reset; run MAC=$A NOROUTE=1; ok '既定経路がない（OS が接続画面の同意を待っている）なら何もしない' '(( rc == 0 )) && [[ ! -s $M/calls ]]'
+reset; mkknown $A; logs=()
+for i in {1..4}; do run MAC=$A PROBE=down; [[ -n $out ]] && logs+=("${out#* * }"); done
+ok '同意済みの網で確かめられないことが続けば 1・2・4 回目だけ記録' '[[ "${(j:|:)logs}" == "probe failed x1 net=$A if=en0 curl=7 http=000|probe failed x2 net=$A if=en0 curl=7 http=000|probe failed x4 net=$A if=en0 curl=7 http=000" ]]'
+touch $M/authed; run MAC=$A
+ok '確かめられたら数え直す' '[[ ! -e $DG && -z $out ]]'
+reset; run MAC=$A DOM=wi2.ne.jp PROBEHTTP=511
+ok 'Wi2 の網で想定外の HTTP 応答なら記録（Wi2 には送らない）' '[[ $out == *"probe failed x1 net=$A if=en0 curl=0 http=511" ]] && (( redirs == 0 && posts == 0 ))'
+reset; joined; run MAC=$A PROBE=down
+ok '関係のない網では確かめられなくても記録しない' '[[ -z $out && ! -e $DG ]]'
 
 # --- 接続画面での同意（macOS が同意まで網を使わせないので、同意後の状態から記録する） ---
 reset; touch $M/authed
@@ -147,6 +171,16 @@ run MAC=$A DOM=wi2.ne.jp; ok '次の回にやり直す' '[[ $(<"$KN") == "$A dou
 reset; touch $M/authed
 run MAC=$A DOM=wi2.ne.jp BRAND='x y'
                           ok 'ブランド名が不正なら記録しない' '[[ ! -e "$KN" ]]'
+# 確かめるのは接続ごと（resolv.conf が確認の記録より新しければ、つなぎ直した）
+reconnect() { touch -t 202001010001 $SN; joined }
+reset; touch $M/authed
+for i in {1..3}; do run MAC=$A DOM=wi2.ne.jp BARE=timeout; done
+run MAC=$A DOM=wi2.ne.jp; ok '3回失敗した接続では確かめ直さない' '(( redirs == 0 ))'
+reconnect
+run MAC=$A DOM=wi2.ne.jp; ok 'つなぎ直せば確かめ直して記録' '[[ $(<"$KN") == "$A doutor" ]]'
+reconnect
+run MAC=$A DOM=wi2.ne.jp BRAND=starbucks
+                          ok '同じ MAC の別ブランドにつなぎ直しても確かめる' 'grep -qxF "$A starbucks" "$KN"'
 
 # --- 時間切れで初めて捕捉を見た網（同意を待つ） --------------------------------
 reset; joined
@@ -166,7 +200,7 @@ touch $M/authed
 run MAC=$A;               ok '自分で同意したら記録'           '[[ $(<"$KN") == "$A doutor" && ! -e $PD ]] && [[ $out == *"consent recorded net=$A doutor" ]]'
 rm $M/authed
 run MAC=$A $OKL RECOVER=1
-                          ok '同意済みの接続先は自動で再認証' '(( posts == 1 )) && [[ $out == *"re-authenticated api=ok probe=ok net=$A doutor t=2s" ]]'
+                          ok '同意済みの接続先は自動で再認証' '(( posts == 1 )) && [[ $out == *"re-authenticated api=ok probe=ok net=$A doutor t="<->s ]]'
 reset; joined
 run MAC=$A LANGS=en-US; run MAC=$A LANGS=en-US
                           ok '英語環境では英語で知らせる'     'grep -q "accept the terms yourself once" $M/notify'
@@ -182,6 +216,29 @@ reset; mkknown $A starbucks
 run MAC=$A;               ok '同じ MAC でもブランドが違えば送らない' '(( posts == 0 && redirs == 1 )) && [[ $(<$PD) == "$A doutor" ]]'
 reset; mkknown $A
 run MAC=$A BRAND='x y';   ok 'ブランド名が不正なら送らない'   '(( posts == 0 )) && [[ ! -e $PD && $out == *"redirect failed x1 http=302"* ]]'
+# ルーターの冗長化用の共通 MAC で、別ブランドの古い同意待ちが残っている
+reset; mkknown $A; print -r -- "$A starbucks notified" > $PD
+run MAC=$A $OKL RECOVER=1; ok '別ブランドの同意待ちがあっても、同意済みのブランドは再認証' '(( posts == 1 )) && [[ $out == *re-authenticated* ]]'
+run MAC=$A;               ok '再認証のあと、別ブランドを同意済みにしない' '[[ $(<"$KN") == "$A doutor" && ! -e $PD ]]'
+reset; print -r -- "$A starbucks" > $PD; touch $M/authed
+run MAC=$A;               ok '同意待ちと違うブランドで通信できたら、確かめたブランドで記録' '[[ $(<"$KN") == "$A doutor" && ! -e $PD && $out == *"consent recorded net=$A doutor (online)" ]]'
+reset; mkknown $A starbucks; joined
+run MAC=$A
+run MAC=$A;               ok '同じ MAC の別ブランドが同意済みでも、同意待ちなら送らず1回だけ知らせる' '(( posts == 0 && notes == 1 ))'
+run MAC=$A;               ok '知らせるのは1回だけ' '(( posts == 0 && notes == 0 ))'
+reset; touch $M/authed
+for i in {1..3}; do run MAC=$A DOM=wi2.ne.jp BARE=timeout; done
+rm $M/authed; run MAC=$A DOM=wi2.ne.jp
+touch $M/authed
+run MAC=$A DOM=wi2.ne.jp; ok 'ブランドの確認に3回失敗した接続でも、捕捉のあと自分で同意すれば記録' 'grep -qxF "$A doutor" "$KN"'
+# 同意待ちで通信できたが、ブランドの確認に失敗し続けた: 保留を消さず、間隔を空けて確かめ続ける
+ago() { touch -t $(strftime '%Y%m%d%H%M.%S' $(( EPOCHSECONDS - $1 ))) $2 }   # ago <秒> <ファイル>: 更新時刻を過去にする
+reset; joined; run MAC=$A; touch -t 202001010000 $M/resolv; touch $M/authed
+run MAC=$A BARE=timeout
+run MAC=$A;               ok '同意待ちでブランドの確認に失敗したら、すぐには確かめ直さない' '(( redirs == 0 )) && [[ -e $PD ]]'
+for i in 2 3 4 5; do ago 1800 $SN; run MAC=$A BARE=timeout; done
+                          ok '確認に5回失敗しても保留を消さない（5回目は記録しない）' '(( redirs == 1 )) && [[ -e $PD && $(<$SN) == "$A 5" && -z $out ]]'
+ago 1800 $SN; run MAC=$A; ok '間隔を空けて確かめ直し、通れば記録' '[[ $(<"$KN") == "$A doutor" && ! -e $PD && $out == *"consent recorded net=$A doutor" ]]'
 
 # --- 転送先の確かめ ------------------------------------------------------------
 reset; mkknown $A
@@ -193,6 +250,20 @@ run MAC=$A $OKL RECOVER=1 LIP=10.0.0.99
 reset; mkknown $A
 run MAC=$A $OKL RECOVER=1 LOC="$W/wi2auth/redirect?cmd=login"
                           ok '転送先に MAC・IP がなければ送らない' '(( posts == 0 )) && [[ $out == *"portal mismatch"* ]]'
+for lmac in aabb:cc:dd:ee:0f aa:bb:cc:dd:ee:0f0 aa:bb:cc:dd:ee:0g aa:bb:cc:dd:ee:0f:00; do
+  reset; mkknown $A
+  run MAC=$A $OKL RECOVER=1 LMAC=$lmac
+  ok "転送先の MAC が不正な形式（$lmac）なら送らない" '(( posts == 0 )) && [[ $out == *"portal mismatch x1 mac=ng ip=ok" ]]'
+done
+reset; mkknown $A
+run MAC=$A $OKL RECOVER=1 MYMAC= LMAC=zz
+                          ok '自分の MAC が取れなければ送らない' '(( posts == 0 )) && [[ $out == *"portal mismatch x1 mac=ng"* ]]'
+reset; mkknown $A
+run MAC=$A $OKL RECOVER=1 SWITCH=1
+                          ok '送信後に別の回線へ切り替わったら、成功として記録しない' '(( posts == 1 )) && [[ $out == *"network changed net=$A doutor api=ok probe=ok" && $out != *re-authenticated* ]]'
+reset; mkknown $A
+run MAC=$A $OKL RECOVER=1 SWITCH=pre
+                          ok '送信前に別の回線へ切り替わったら送らない' '(( posts == 0 )) && [[ $out == *"network changed net=$A doutor before login" ]]'
 reset; mkknown $A
 run MAC=$A $OKL RECOVER=1 LMAC=AA-BB-CC-DD-EE-F
                           ok 'MAC の表記の違いは吸収する' '(( posts == 1 )) && [[ $out == *re-authenticated* ]]'
@@ -212,8 +283,9 @@ run MAC=$A $OKL RECOVER=1 REDIR=error
 reset; mkknown $A
 run MAC=$A $OKL RECOVER=1
                           ok '認証要求はランディングからの XHR と同じ' 'grep -qx "Origin: $W" $M/headers && grep -qx "$W/freewifi/doutor/landing.html" $M/headers'
+                          ok '認証要求は redirect で受け取った Cookie と同意の本文を送る' '[[ ! -e $M/badlogin ]] && [[ $out == *re-authenticated* ]]'
 reset; mkknown $A
-run MAC=$A $OKL RECOVER=3; ok '疎通が数秒遅れて戻っても成功' '[[ $out == *"re-authenticated api=ok probe=ok net=$A doutor t=6s" ]]'
+run MAC=$A $OKL RECOVER=3; ok '疎通が数秒遅れて戻っても成功' '[[ $out == *"re-authenticated api=ok probe=ok net=$A doutor t="<->s ]] && (( $(grep -c hotspot-detect $M/calls) == 4 ))'
 reset; mkknown $A
 run MAC=$A $OKL RECOVER=9; ok '10秒で戻らなければ失敗' '[[ $out == *"login failed x1 api=ok probe=ng"* ]] && (( notes == 1 ))'
 
@@ -229,6 +301,9 @@ done
 reset; mkknown $A
 run MAC=$A 'LOGIN={"result":false}' RECOVER=1
                           ok 'API 失敗・疎通回復: 通知しない' '[[ $out == *"login failed x1 api=ng probe=ok"* ]] && (( notes == 0 ))'
+reset; mkknown $A
+run MAC=$A $OKL LHTTP=503 RECOVER=1
+                          ok 'HTTP 5xx なら result:true でも api=ng' '[[ $out == *"login failed x1 api=ng probe=ok http=503"* ]]'
 
 # --- 失敗の継続と待機 ----------------------------------------------------------
 reset; mkknown $A
@@ -269,6 +344,11 @@ reject;                   ok '拒否3回で自動を止める'     '[[ $(<"$KN")
 run MAC=$A;               ok '止めた後は送らない'         '(( posts == 0 && redirs == 0 && notes == 0 ))'
 touch $M/authed
 run MAC=$A;               ok '自分で同意し直せば再開'     'grep -qxF "$A doutor" "$KN" && [[ ! -e $PD ]]'
+reset; touch $M/authed
+run MAC=$A DOM=wi2.ne.jp; rm $M/authed   # 入店時にブランドを確かめた接続
+reject DOM=wi2.ne.jp; reject DOM=wi2.ne.jp; reject DOM=wi2.ne.jp; o3=$out
+touch $M/authed
+run MAC=$A DOM=wi2.ne.jp; ok '入店時に確かめた接続で自動を止めても、つなぎ直さずに同意し直せば再開' '[[ $o3 == *"auto stopped"* ]] && grep -qxF "$A doutor" "$KN" && [[ ! -e $PD ]]'
 reset; mkknown $A
 reject; reject; skip; run MAC=$A 'LOGIN={"result":true}' RECOVER=1; rm $M/authed
 reject; reject;           ok '成功を挟めば拒否を数え直す' 'grep -qxF "$A doutor" "$KN"'
@@ -280,6 +360,16 @@ reset; mkknown $A; consent $B
 reject; reject; skip
 run MAC=$B 'LOGIN={"result":false}'
                           ok '別の接続先では拒否を数え直す' 'grep -qxF "$B doutor" "$KN"'
+reset; mkknown $A; consent $A starbucks
+reject; reject; skip
+run MAC=$A BRAND=starbucks 'LOGIN={"result":false}'
+                          ok '同じ MAC の別ブランドでは拒否を数え直す' 'grep -qxF "$A starbucks" "$KN" && [[ $out != *"auto stopped"* ]]'
+reset; mkknown $A
+reject; reject; skip; run MAC=$A REDIR=timeout
+reject;                   ok 'ブランドが分かる前の失敗を挟んでも、同じブランドの拒否は持ち越す' '[[ $out == *"auto stopped"* ]]'
+reset; mkknown $A
+for i in 1 2 3; do skip; run MAC=$A 'LOGIN={"result":false}' SWITCH=1; rm -f $M/switched; done
+                          ok '別の回線に切り替わった失敗は拒否に数えない' 'grep -qxF "$A doutor" "$KN" && [[ ! -e $ST ]]'
 reset; mkknown $A
 for i in {1..4}; do reject LHTTP=000; done
                           ok 'タイムアウトは拒否に数えない' 'grep -qxF "$A doutor" "$KN"'
@@ -295,6 +385,10 @@ for mode detail in timeout 'curl=28 http=000' 503 'curl=0 http=503'; do
   run MAC=$A REDIR=$mode
   ok "redirect $mode: 待機する"                 '(( redirs == 0 ))'
 done
+reset; mkknown $A
+run MAC=$A REDIR=timeout; skip; run MAC=$A REDIR=error
+                           ok '通知しない失敗のあとでも、知らせる失敗なら1回知らせる' '(( notes == 1 ))'
+skip; run MAC=$A REDIR=error; ok '失敗が続く間は2回目を知らせない' '(( notes == 0 ))'
 reset; mkknown $A
 run MAC=$A REDIR=nocookie; ok 'session_id なし: 通知する' '(( posts == 0 && notes == 1 )) && [[ $out == *"no session_id"* ]]'
 reset; mkknown $A
@@ -323,7 +417,7 @@ rm -f $M/bootstrap_fail
 mkdir -p "$H/Library/Logs" "$H/Library/Application Support/cafe-wifi-okawari" "$H/Library/Caches"
 touch "$H/Library/Logs/cafe-wifi-okawari.log" "$H/Library/Application Support/cafe-wifi-okawari/consented" \
       "$H/Library/Caches/cafe-wifi-okawari" "$H/Library/Caches/cafe-wifi-okawari.pending" \
-      "$H/Library/Caches/cafe-wifi-okawari.seen"
+      "$H/Library/Caches/cafe-wifi-okawari.seen" "$H/Library/Caches/cafe-wifi-okawari.probe"
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh uninstall > $M/out 2>&1; rc=$?
 ok '削除: ログ以外は残らない'          '(( rc == 0 )) && [[ $(cd "$H" && find . -type f) == ./Library/Logs/cafe-wifi-okawari.log ]]'
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh bogus > $M/out 2>&1; rc=$?

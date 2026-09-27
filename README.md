@@ -8,7 +8,7 @@ English | [日本語](README.ja.md)
 
 Automatically re-accepts the captive portal terms when a free café Wi‑Fi in Japan sends you back to its login page after the time limit (e.g. 60 minutes). *Okawari* means "a refill" — like a coffee refill, but for Wi‑Fi.
 
-- On Wi2 Wi‑Fi where you have accepted the terms yourself, checks every 30 seconds and re-authenticates within about 30 seconds of being logged out
+- On Wi2 Wi‑Fi where you have accepted the terms yourself, checks every 30 seconds and notices a logout within 30 seconds and usually re-authenticates a few seconds later
 - Works with any time limit — it reacts to the login page, not a timer
 - No IDs, passwords, or email addresses. Nothing secret is stored
 - Nothing extra to install: runs on the zsh, curl, and launchd that ship with macOS
@@ -103,7 +103,8 @@ tail ~/Library/Logs/cafe-wifi-okawari.log
 | `consent recorded net=… (online)` | The Wi2 network worked although the tool had sent nothing, so it recorded that you accepted on the login page. It will re-accept automatically from now on |
 | `consent recorded net=…` | You accepted after the tool had seen the login page; recorded as above |
 | `consent pending net=…` | The tool saw the login page on a network it has not recorded. It waits for you to accept yourself |
-| `re-authenticated api=ok probe=ok net=… t=Ns` | Reconnected automatically (the connection came back N seconds after the acceptance) |
+| `re-authenticated api=ok probe=ok net=… t=Ns` | Reconnected automatically (the connection came back N seconds after it started sending the acceptance) |
+| `network changed net=…` | The Mac switched to another network (e.g. tethering) during the attempt. That attempt counts as neither a success nor a failure |
 | `login failed xN api=ng probe=ok` | The tool's attempt failed, but the connection came back another way (e.g. the macOS login window) |
 | `login failed xN api=… probe=ng` | Could not reconnect. You get a dialog. Also happens when a daily cap (e.g. Renoir) is reached |
 | `auto stopped net=… rejected x3` | The auth server refused the acceptance three times in a row, so automatic re-acceptance on this network was stopped (possibly a usage cap, a suspension, or changed conditions). You get a dialog. Check the login page; accepting yourself resumes it |
@@ -112,6 +113,7 @@ tail ~/Library/Logs/cafe-wifi-okawari.log
 | `portal unknown xN` | A Wi2 or recorded network showed a login page that is not Wi2's. The tool sends nothing |
 | `portal mismatch xN mac=… ip=…` | The login page was for a different device (MAC or IP address not this Mac's), so the tool sent nothing |
 | `not free wi-fi xN` | A Wi2 network that is not a free "accept the terms" Wi‑Fi. The tool does nothing there |
+| `probe failed xN net=… curl=… http=…` | On a Wi2, recorded, or pending network, the connection state could not be checked (non-zero `curl` means a network error; `http` is an unexpected response). The tool sends nothing |
 
 On repeated failures the retry interval backs off from 30 seconds up to 30 minutes, the log is written on the 1st, 2nd, 4th, 8th… failure, and you get a single dialog (plus one more if it stops after repeated refusals). Moving to another shop resets the backoff.
 
