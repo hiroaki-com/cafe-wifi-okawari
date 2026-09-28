@@ -173,7 +173,7 @@ fail() {
 }
 
 # captive.apple.com が Wi2 の認証サーバーへ転送したときだけ Wi2 に問い合わせる。それ以外のポータル（ホテルなど）には何も送らない。
-# 転送先には、Wi2 が見ている端末の MAC と IP が入る（<date omitted> 実測）。自分のものと違えば、他人の端末の認証になりうるので送らない。
+# 転送先には、Wi2 が見ている端末の MAC と IP が入る（現地で実測）。自分のものと違えば、他人の端末の認証になりうるので送らない。
 if [[ $loc != "$WI2/wi2auth/redirect?"* ]]; then
   (( wi2net || kmac )) && fail "portal unknown" "http=$code to=$(path $loc)" 0
   exit 0

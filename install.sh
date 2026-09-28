@@ -36,7 +36,7 @@ plutil -insert ProgramArguments -string $bin -append $plist
 plutil -insert StartInterval -integer 30 $plist
 plutil -insert RunAtLoad -bool true $plist
 # DNS の設定が変わるたびに書き換わるファイルを見て、そのときにも実行する。認証画面つきの網では、
-# 接続画面で同意して通信できるようになった時刻に書き換わる（<date omitted> 実測）ので、同意の直後に記録できる。
+# 接続画面で同意して通信できるようになった時刻に書き換わる（現地で実測）ので、同意の直後に記録できる。
 plutil -insert WatchPaths -array $plist
 plutil -insert WatchPaths -string /var/run/resolv.conf -append $plist
 plutil -insert ProcessType -string Background $plist

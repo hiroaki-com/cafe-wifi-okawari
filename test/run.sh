@@ -42,7 +42,7 @@ case $url in
       n=$(<$M/late); (( n > 1 )) && print $((n - 1)) > $M/late || { rm $M/late; touch $M/authed }
     fi
     [[ -e $M/authed ]] && printf '<HTML><TITLE>Success</TITLE></HTML>\n200 ' ||
-      printf 'x\n302 %s' "${LOC-$W/wi2auth/redirect?cmd=login&mac=${LMAC-aa:bb:cc:dd:ee:0f}&ip=${LIP-10.0.0.5}&essid=%20&apname=<AP>&apgroup=&url=http%3A%2F%2Fcaptive.apple.com%2F}" ;;
+      printf 'x\n302 %s' "${LOC-$W/wi2auth/redirect?cmd=login&mac=${LMAC-aa:bb:cc:dd:ee:0f}&ip=${LIP-10.0.0.5}&essid=%20&apname=tunnel%201&apgroup=&url=http%3A%2F%2Fcaptive.apple.com%2F}" ;;
   */wi2auth/redirect\?*) case ${REDIR-ok} in
     ok) land ;;
     query) land '?lang=ja' ;;

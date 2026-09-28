@@ -1,0 +1,12 @@
+# Local investigation reports and private agent workspace.
+/.claude/
+
+# Local credentials and captured network/session data.
+.env
+.env.*
+!.env.example
+*.log
+*.har
+*.pcap
+*.pcapng
+.DS_Store

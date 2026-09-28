@@ -7,34 +7,26 @@
 | 項目 | 内容 |
 |---|---|
 | 対象 PC | macOS 27.0 / Apple Silicon (arm64)。追加依存なし（`/bin/zsh`・`/usr/bin/curl`・`/usr/bin/jq`・launchd など OS 標準のみ） |
-| 対象 Wi‑Fi | ドトール「DOUTOR FREE Wi-Fi」= Wi2（Wire and Wireless, AS131160）。暗号化なし、1回60分。回数について、店頭の案内は日本語が「60分経過後は再認証で接続可能」、英語が「60min three times per day」で食い違う（[案内 PDF](https://www.doutor.co.jp/dcs/service/images/doutor_free_wi-fi.pdf)、<date omitted> 確認）。本ツールは回数を数えない |
+| 対象 Wi‑Fi | ドトール「DOUTOR FREE Wi-Fi」= Wi2（Wire and Wireless, AS131160）。暗号化なし、1回60分。回数について、店頭の案内は日本語が「60分経過後は再認証で接続可能」、英語が「60min three times per day」で食い違う（[案内 PDF](https://www.doutor.co.jp/dcs/service/images/doutor_free_wi-fi.pdf)、2026-09-27 確認）。本ツールは回数を数えない |
 | 時間制限 | 固定タイマーを持たず「ポータルに戻されたこと」を検知して再認証する。そのため30分・60分など任意の制限時間にそのまま対応する |
 | 同一方式 | スタバ・タリーズ・すかいらーく・ルノアールも同じ Wi2 ワンタップ認証（§1.1）。同じコードで動く見込み |
 | 前提 | 規約に同意するだけで使える網に限る。ID・パスワード・メールアドレスは扱わない。OSS として公開する |
 
-### 現地調査の結果（<date omitted>、ドトール店内で実測）
+### 現地調査で確認した認証 API
 
-- `https://service.wi2.ne.jp/wi2auth/redirect` → 302 で `/freewifi/doutor/landing.html` へ。`session_id` Cookie（Max-Age=3600）を発行。**このときの認証状態は記録していない**（<date omitted> の試験で、認証済みのときだけの応答だと分かった。下記）
-- ポータルの `login-min.js` で使われている認証 API:
-  `POST /wi2auth/xhr/login`、`Content-Type: application/json`、
-  本文 `{"login_method":"onetap","login_params":{"agree":"1"}}`
-- curl から実行した結果 `{"result":true,"licensed":null,"message":"AUTHENTICATED"}`。ブラウザがなくても認証できる
+- 認証済みの状態で `https://service.wi2.ne.jp/wi2auth/redirect` は `/freewifi/doutor/landing.html` へ302を返し、`session_id` Cookie（Max-Age=3600）を発行した。最初の調査では認証状態を記録しておらず、その後の試験で状態による応答の違いが分かった。
+- ポータルの `login-min.js` が呼ぶ認証 API は `POST /wi2auth/xhr/login`。Content-Type は `application/json`、本文は `{"login_method":"onetap","login_params":{"agree":"1"}}`。
+- curl から `{"result":true,"licensed":null,"message":"AUTHENTICATED"}` を受け取った。ただし、これだけでは時間切れからの復旧を実証しない。
 
-### 現地試験の結果（<date omitted>、ドトール店内。導入済みの版は 47f2d01）
+### 現地試験で判明した制約
 
-| 時刻 | 出来事 |
-|---|---|
-| <time omitted> | Wi‑Fi に接続し、利用者が接続画面で同意。本ツールは捕捉を見られず、`consent recorded` は出なかった（下記の「接続直後は見えない」） |
-| <time omitted> | 1回目の時間切れで捕捉（同意から約63分）。本ツールは同意待ちとして保留に記録 |
-| <time omitted> | 利用者がコントロールセンターから Wi‑Fi を切断（システムログに `user-requested disconnect`）。当初「時間切れの約80秒後に Wi2 が切った」と誤認していた |
-| <time omitted>〜26 | 利用者が接続し直して接続画面で同意 → `consent recorded`（捕捉を見たあとの同意なので記録できた） |
-| <time omitted> | 2回目の時間切れで捕捉。**自動の再認証は動かず、ログにも何も残らなかった**（下記の「原因」） |
-| <time omitted> | 利用者が iPhone のテザリングに切り替えた |
-| <time omitted> | 捕捉中の応答を実測（下記） |
-| <time omitted>〜57 | Doutor に接続し直す → macOS が `interface rank Never (cached captive network)` → 接続画面で同意 → `Online (websheet: success)`。`resolv.conf` の更新時刻も <time omitted> |
-| <time omitted>〜28 | 認証済みのまま応答を実測し、修正版を一時フォルダで実行して `consent recorded … doutor (online)` を確認 |
+公開する検証結果は、個別の来店日時・行動時刻・機器識別値を省いて記載する。
 
-**原因（自動の再認証が動かなかった）**: 捕捉中に引数なしの `/wi2auth/redirect` を呼ぶと、`302 /wi2auth/error/ctrlapi_timeout.html` が返る。47f2d01 はこれを「対象外の網」と判定し、何も記録せずに終了していた。初期調査時の実測は認証済みのときのもので、模擬試験もその応答を前提にしていたため、試験がすべて通っても実網での保証になっていなかった。想定外の応答を黙って捨てる作りだったため、失敗の跡も残らなかった。
+- 旧版（47f2d01）では入店時の手動同意を検知できなかった。時間切れ後に捕捉を観測し、その後の手動同意は記録できた。
+- 次の時間切れでは自動再認証が動かず、失敗ログも残らなかった。
+- 修正版を認証済みの網で実行すると、同意の記録を確認できた。時間切れからの自動復旧は別途検証が必要。
+
+**原因（自動の再認証が動かなかった）**: 捕捉中に引数なしの `/wi2auth/redirect` を呼ぶと、`302 /wi2auth/error/ctrlapi_timeout.html` が返る。47f2d01 はこれを「対象外の網」と判定し、何も記録せずに終了していた。初期の実測は認証済みのときのもので、模擬試験もその応答を前提にしていたため、試験がすべて通っても実網での保証になっていなかった。想定外の応答を黙って捨てる作りだったため、失敗の跡も残らなかった。
 
 実測した応答（`mac`・`ip` は Wi2 が見ているこの Mac の値。ログには残さない）:
 
@@ -48,11 +40,11 @@
 
 - **接続直後は見えない**: macOS は一度つないだことのある認証画面つきの網に接続すると、接続画面（Captive Network Assistant。ブラウザではなく単体のウィンドウ）で同意が済むまで、その網を他のアプリに使わせない（`interface rank Never`）。既定経路も DNS もないので、本ツールからは「無接続」に見え、接続直後の捕捉は観測できない。そのため「捕捉 → 回復」を見て同意を記録する方式では、入店時の同意を記録できない。同意後に `resolv.conf` が書き換わる
 - **時間切れのあと**: macOS は網を使わせたまま（rank を戻さない）なので、捕捉は本ツールから見える。接続画面は自動では開かない
-- **Wi2 は時間切れで Wi‑Fi を切らない**: <time omitted> と <time omitted> の切断は、どちらも利用者の操作だった
+- **Wi2 は時間切れで Wi‑Fi を切らない**: 観測した切断は利用者の操作によるものだった
 
-**修正（<date omitted>）**: 捕捉中は captive.apple.com の転送先（`redirect?cmd=login&mac=…&ip=…`）をたどる（§3 の 4）。入店時の同意は、Wi2 の網（DHCP のドメイン名）で本ツールが何も送っていないのに通信できていることから記録する（§3 の 1）。想定外の応答はログに残す。捕捉中に転送先をたどって認証できるかは、次の現地試験で確かめる（§7）。
+**修正（2026-09-27）**: 捕捉中は captive.apple.com の転送先（`redirect?cmd=login&mac=…&ip=…`）をたどる（§3 の 4）。入店時の同意は、Wi2 の網（DHCP のドメイン名）で本ツールが何も送っていないのに通信できていることから記録する（§3 の 1）。想定外の応答はログに残す。捕捉中に転送先をたどって認証できるかは、次の現地試験で確かめる（§7）。
 
-### 1.1 主要チェーンの認証方式（<date omitted> 調査）
+### 1.1 主要チェーンの認証方式（2026-09-26 調査）
 
 公式ページとプレスリリースで確認した。Wi2 の各店舗については、公開されているポータルの JS も取得し、同意ページが呼ぶ API を調べた（取得のみで、認証は送っていない）。
 
@@ -173,17 +165,17 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
 - **知らせ方**: `display alert … giving up after 120`（2分で自動的に閉じるダイアログ）。LaunchAgent からの `display notification` は表示されないため（§7）。ダイアログが開いている間（最大2分）は処理が止まるが、知らせるのは失敗や同意待ちのときだけなので支障はない。文言は固定（日本語と英語。macOS の優先言語で選ぶ）。ポータルの応答などの外部入力は含めない（AppleScript への文字列注入を防ぐ）。osascript の出力（`button returned:…`）はログに書かない
 - **一時ファイル**: Cookie は `mktemp`（ユーザー専用 0600）に保存し、終了時に `trap` で削除する
 - **利用規約**: サーバー側の利用時間・回数の制限を解除する機能はない。MAC アドレス偽装、多重セッションもしない。回数や合計時間に上限がある網（ルノアールの1日3時間など）で上限に達したときや、利用停止されたときは、API が拒否すると考えられる。拒否が3回続いたら、その接続先の自動の再同意をやめる（§3 の 6）。一時的な障害とは区別できないので、回数で判断する。規約との関係は下記
-- **接続先の見分け方**: ルーターの MAC だけでは足りない。ドトールで実測したゲートウェイの MAC は `<gateway-mac>`（VRRP の仮想 MAC）で、店やブランドをまたいで同じ値になりうる。規約本体は Wi2 共通だが、画面や利用条件（時間・回数）はブランドごとに違うので、Wi2 のランディング URL `/freewifi/<ブランド>/landing.html` のブランド名と組にして記録する。ブランド名が英数字・`_`・`-` 以外を含むときは対象外とする
+- **接続先の見分け方**: ルーターの MAC だけでは足りない。実測したゲートウェイは VRRP の仮想 MAC を使用しており、店やブランドをまたいで同じ値になりうる。規約本体は Wi2 共通だが、画面や利用条件（時間・回数）はブランドごとに違うので、Wi2 のランディング URL `/freewifi/<ブランド>/landing.html` のブランド名と組にして記録する。ブランド名が英数字・`_`・`-` 以外を含むときは対象外とする
 - **初回の同意は利用者自身が行う**: 本ツールが同意を送るのは、利用者がその店で一度自分で同意したと推定できた接続先だけ（§3 の 1・2・4）。推定の根拠は2つ。(a) 本ツールが捕捉を見た接続先で、その後に通信が戻った。(b) Wi2 の網で、本ツールが何も送っていないのに通信できている（macOS は接続画面で同意するまで網を使わせず、本ツールは記録していない接続先に同意を送らない。Wi2 の認証は端末の MAC ごと）。入店時の同意は (b)、時間切れで初めて捕捉を見た網は (a) で記録する。初めての店で規約を読まずに同意してしまうことはない。(b) は DHCP のドメイン名で Wi2 の網を見分けるので、ドメイン名が違う Wi2 の網では記録されず、最初の時間切れでもう1回だけ自分で同意することになる
 - 公衆 Wi‑Fi は暗号化されていない。通信内容の保護は本ツールの範囲外で、HTTPS や VPN で守る
 
-**既知の課題**（公開前のセキュリティ監査・レビュー、<date omitted>。未対応）
+**既知の課題**（公開前のセキュリティ監査・レビュー、2026-09-27。未対応）
 
 - **同意の推定は平文の応答に頼る**: 上の (a) は captive.apple.com の平文 HTTP の応答で「通信が戻った」と判断する。同意待ちの接続先があるときに同じ網の第三者がこの応答を偽ると、利用者が同意していなくても同意済みとして記録され、自動停止も解ける。同意待ちを作るには TLS 検証済みの Wi2 の応答が要るので、任意の偽 AP だけでは起こせない。根本的には、登録や停止の解除を利用者の明示的な操作に分ける必要がある
 - **応答のサイズに上限がない**: プローブと認証 API の応答本文を、サイズの上限なく変数へ取り込む（`-m` は時間の上限）。大きな応答で通信量・メモリが増えうる
 - **API の応答本文をログに書く**: 失敗時に先頭200文字をそのまま書くので、改行を含む応答が別のログ行に見えうる（ログの偽装）。正規の Wi2 の TLS 応答に含める必要があるので、影響は小さい
 
-### 規約・法令との関係（<date omitted> 確認。弁護士による確認ではない）
+### 規約・法令との関係（2026-09-27 確認。弁護士による確認ではない）
 
 [Wi2 フリーWi-Fiサービス利用規約](https://wi2.co.jp/rules/free-wifi.html)（最新改定 2025-12-17）と本ツールの動作を突き合わせた結果。
 
@@ -226,22 +218,22 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
 |---|---|
 | 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`） | OK |
 | 模擬試験 `zsh test/run.sh`（下記、117項目） | OK。GitHub Actions でも実行。模擬 curl は Cookie（redirect で受け取った jar からの送信）と同意の本文を確かめる。現行版から `-b "$jar"` を外す・本文を変える変異では、どちらも20項目が失敗する |
-| 実際の curl の Cookie の保存と送信（ローカルの HTTPS サーバー） | OK（<date omitted>）。空の jar（`mktemp`）で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る。捕捉中の Wi2 が実際に返す `Set-Cookie` とその送信は未確認（現地で確かめる） |
-| 試験が不具合を検出できるか（知らせる回数・同意の確認・JSON 判定・再登録のやり直し・通信の抑止・ブランド照合・接続し直しの判定、<date omitted> の修正分として転送先の利用・MAC と IP の照合・DHCP のドメイン名・確認の回数・Origin・疎通の待機・ランディングのクエリ・転送のたどり・ログの URL・ダイアログを、わざと壊して実行） | すべて NG として検出 |
-| LaunchAgent から知らせが表示されるか | `display notification` は **NG**（<date omitted>、macOS 27）。終了コード 0 を返すが表示されず、許可も求められない（通知設定にスクリプトエディタが登録されておらず、黙って捨てられる）。LaunchAgent から実行した `display alert … giving up after 120` は表示され、利用者が OK を押せた（`button returned:OK`）→ `display alert` に切り替えた |
-| Wi2 API に curl から認証できるか | OK（`AUTHENTICATED`、<date omitted>）。ただし当時の認証状態は不明 |
-| 捕捉を見たあとに自分で同意したとき `consent recorded` が出るか | OK（<date omitted> <time omitted>、ドトール。§1 の現地試験） |
-| 入店時に接続画面で同意したとき記録されるか | 47f2d01 では **NG**（macOS が同意まで網を使わせないため、捕捉が見えない。§1）。修正版を認証済みのドトールで一時フォルダから実行し、`consent recorded net=<gateway-mac> doutor (online)` を確認（<date omitted> <time omitted>）。導入した状態で入店から試すのは次の現地試験 |
+| 実際の curl の Cookie の保存と送信（ローカルの HTTPS サーバー） | OK（2026-09-27）。空の jar（`mktemp`）で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る。捕捉中の Wi2 が実際に返す `Set-Cookie` とその送信は未確認（現地で確かめる） |
+| 試験が不具合を検出できるか（知らせる回数・同意の確認・JSON 判定・再登録のやり直し・通信の抑止・ブランド照合・接続し直しの判定、2026-09-27 の修正分として転送先の利用・MAC と IP の照合・DHCP のドメイン名・確認の回数・Origin・疎通の待機・ランディングのクエリ・転送のたどり・ログの URL・ダイアログを、わざと壊して実行） | すべて NG として検出 |
+| LaunchAgent から知らせが表示されるか | `display notification` は **NG**（2026-09-27、macOS 27）。終了コード 0 を返すが表示されず、許可も求められない（通知設定にスクリプトエディタが登録されておらず、黙って捨てられる）。LaunchAgent から実行した `display alert … giving up after 120` は表示され、利用者が OK を押せた（`button returned:OK`）→ `display alert` に切り替えた |
+| Wi2 API に curl から認証できるか | OK（`AUTHENTICATED`）。ただし当時の認証状態は不明 |
+| 捕捉を見たあとに自分で同意したとき `consent recorded` が出るか | OK（§1 の現地試験） |
+| 入店時に接続画面で同意したとき記録されるか | 47f2d01 では **NG**（macOS が同意まで網を使わせないため、捕捉が見えない。§1）。修正版を認証済みのドトールで一時フォルダから実行し、`consent recorded net=<gateway-id> doutor (online)` を確認（識別値は省略）。導入した状態で入店から試すのは次の現地試験 |
 | **実際の時間切れ時**に自動で再認証されるか | 47f2d01 では **NG**（引数なしの redirect が捕捉中は `ctrlapi_timeout` を返す。§1）。修正版は未確認。次の現地試験で `re-authenticated api=ok probe=ok` が出るかを見る。`api=ng probe=ok` なら OS の接続画面など別の経路で復旧したことを、`redirect failed … to=…`・`login failed … res=…` なら Wi2 の応答が想定と違うことを意味する |
-| 捕捉中に転送先の URL（`redirect?cmd=login&mac=…&ip=…`）がランディングと `session_id` を返すか | 未確認（捕捉中は未実測）。認証済みでは返ることを確認（<date omitted> <time omitted>） |
-| 転送先の `mac`・`ip` がこの Mac の値と一致するか | OK（捕捉中の転送先と `ifconfig en0` の ether・`ipconfig getifaddr en0` が一致。<date omitted>） |
-| Wi2 の網の DHCP のドメイン名 | `wi2.ne.jp`（ドトール、<date omitted>）。他の Wi2 ブランドは未確認 |
-| 時間切れまでの時間 | 約63分（同意 <time omitted> → 捕捉 <time omitted>）。同意した時刻から60分と見られる |
-| 時間切れ時に Wi2 が接続を切るか | 切らない。<time omitted> と <time omitted> の切断は、どちらも利用者の操作（システムログで確認）。当初「約80秒で切る」と誤認していた |
-| 実際の店でゲートウェイの MAC が取れるか | OK（ドトール、<date omitted>）。ただし VRRP の仮想 MAC `<gateway-mac>` だったため、ブランド名と組にして記録する作りに変えた |
+| 捕捉中に転送先の URL（`redirect?cmd=login&mac=…&ip=…`）がランディングと `session_id` を返すか | 未確認（捕捉中は未実測）。認証済みでは返ることを確認 |
+| 転送先の `mac`・`ip` がこの Mac の値と一致するか | OK（捕捉中の転送先と `ifconfig en0` の ether・`ipconfig getifaddr en0` が一致） |
+| Wi2 の網の DHCP のドメイン名 | `wi2.ne.jp`（ドトールで確認）。他の Wi2 ブランドは未確認 |
+| 時間切れまでの時間 | 約63分（手動同意から捕捉までの経過時間）。同意した時刻から60分と見られる |
+| 時間切れ時に Wi2 が接続を切るか | 切らない。観測した切断は利用者の操作（システムログで確認）。当初「約80秒で切る」と誤認していた |
+| 実際の店でゲートウェイの MAC が取れるか | OK。実測値は非掲載。VRRP の仮想 MAC だったため、ブランド名と組にして記録する作りに変えた |
 | 実際の `launchctl` で再導入が成功するか（bootout 直後の bootstrap） | OK（3回続けて成功） |
 | launchd が30秒ごとに起動するか | OK（6分で12回） |
-| `/var/run/resolv.conf` が書き換わる時刻 | 接続画面で同意して通信できるようになった時刻（`Online (websheet: success)`）と一致（<date omitted> <time omitted>） |
+| `/var/run/resolv.conf` が書き換わる時刻 | 接続画面で同意して通信できるようになった時刻（`Online (websheet: success)`）と一致 |
 | ドトール以外の Wi2 店舗（スタバ等）で動くか | 未確認（JS 上は同じ API、§1.1）。現地でログを確認する |
 
 次の現地試験（ドトール）で見ること:
