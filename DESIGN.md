@@ -157,7 +157,7 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | ファイル | 役割 |
 |---|---|
 | `cafe-wifi-okawari.sh` | 検知と再認証（唯一のロジック）。導入先は `~/.local/bin/cafe-wifi-okawari`。API 応答の判定に macOS 標準の `/usr/bin/jq` を使う |
-| `install.sh` | 導入・更新・状態の確認（`status`。最後の認証の時刻と、60分後の時間切れの目安も出す）・削除。`StartInterval=10` に加え、`WatchPaths=/var/run/resolv.conf` で DNS の設定が変わったときにも起動する（接続画面で同意して通信できるようになった時刻に書き換わるので、同意の直後に記録できる）。LaunchAgent の plist を `$HOME` に合わせて `plutil` で生成する（リポジトリに絶対パスを持たない。パスに `&` などがあっても壊れない）。`bootout` 直後の `bootstrap` の一時失敗は最大10回やり直す |
+| `install.sh` | 導入・更新・状態の確認（メッセージは英語のみ。`status` は登録と最後の終了コード・今の接続先が同意済みか・最後の認証の時刻と経過・60分後の時間切れの目安も出す。今の接続先は本体の `netid` と同じく経路表と ARP キャッシュから読み、通信しない）・削除。`StartInterval=10` に加え、`WatchPaths=/var/run/resolv.conf` で DNS の設定が変わったときにも起動する（接続画面で同意して通信できるようになった時刻に書き換わるので、同意の直後に記録できる）。LaunchAgent の plist を `$HOME` に合わせて `plutil` で生成する（リポジトリに絶対パスを持たない。パスに `&` などがあっても壊れない）。`bootout` 直後の `bootstrap` の一時失敗は最大10回やり直す |
 | `test/run.sh` | 模擬の curl・route・arp・ipconfig・ifconfig・defaults・osascript・launchctl による分岐試験。GitHub Actions（macOS）で push ごとに実行 |
 | `~/Library/LaunchAgents/local.cafe-wifi-okawari.plist` | LaunchAgent 定義（`install.sh` が生成） |
 | `~/Library/Logs/cafe-wifi-okawari.log` | 同意の記録・保留と、再認証の成功・失敗・想定外の応答だけを記録（通常時は何も書かない） |
@@ -222,18 +222,18 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 
 ```sh
 ./install.sh             # 導入・更新（スクリプトを複製し、plist を生成して登録）
-./install.sh status      # 動作の確認（登録の有無・同意済みのブランド・最後の認証と次の時間切れの目安・ログの最新5行。通信しない。未登録なら 1 で終わる）
+./install.sh status      # 動作の確認（英語。登録の有無と終了コード・今の接続先が同意済みか・同意済みのブランド・最後の認証と次の時間切れの目安・ログの最新5行。通信しない。未登録なら 1 で終わる）
 ./install.sh uninstall   # 停止・削除（同意の記録も消す。ログは残す）
 ```
 
-スクリプトは `~/.local/bin` へ複製して登録するので、導入後にリポジトリを移動・削除しても動き続ける。利用者向けの説明は README.md（英語）と README.ja.md（日本語）。ダイアログと `install.sh` のメッセージは macOS の優先言語（`defaults read -g AppleLanguages` の先頭）が日本語なら日本語、それ以外は英語。
+スクリプトは `~/.local/bin` へ複製して登録するので、導入後にリポジトリを移動・削除しても動き続ける。利用者向けの説明は README.md（英語）と README.ja.md（日本語）。ダイアログは macOS の優先言語（`defaults read -g AppleLanguages` の先頭）が日本語なら日本語、それ以外は英語。`install.sh` のメッセージ（導入・状態・削除）は英語のみ。
 
 ## 7. 検証
 
 | 確認項目 | 結果 |
 |---|---|
 | 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`） | OK |
-| 模擬試験 `zsh test/run.sh`（下記、145項目） | OK。GitHub Actions でも実行。模擬 curl は Cookie（redirect で受け取った jar からの送信）と同意の本文を確かめる。現行版から `-b "$jar"` を外す・本文を変える変異では、どちらも23項目が失敗する |
+| 模擬試験 `zsh test/run.sh`（下記、148項目） | OK。GitHub Actions でも実行。模擬 curl は Cookie（redirect で受け取った jar からの送信）と同意の本文を確かめる。現行版から `-b "$jar"` を外す・本文を変える変異では、どちらも23項目が失敗する |
 | 実際の curl の Cookie の保存と送信（ローカルの HTTPS サーバー） | OK（2026-09-27）。空の jar（`mktemp`）で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る。捕捉中の Wi2 でも `session_id` を受け取って送り、再認証できた |
 | 試験が不具合を検出できるか（知らせる回数・同意の確認・JSON 判定・再登録のやり直し・通信の抑止・ブランド照合・接続し直しの判定、2026-09-27 の修正分として転送先の利用・MAC と IP の照合・DHCP のドメイン名・確認の回数・Origin・疎通の待機・ランディングのクエリ・転送のたどり・ログの URL・ダイアログ、2026-09-29 の修正分として同意ページの扱い・失敗の記録・curl の終了値・本文の伏せ字、周期の短縮に伴う修正分として知らせるまでの時間・転送先のたどり直しの間隔とその更新・ブランドの確認のやり直しの間隔・疎通の確認の回数・導入の間隔・状態の確認の集計と終了値、状態の確認に加えた目安として認証の行の選び方・最後の行・60分・60分を過ぎたときの扱いを、わざと壊して実行） | すべて NG として検出 |
 | LaunchAgent から知らせが表示されるか | `display notification` は **NG**（2026-09-27、macOS 27）。終了コード 0 を返すが表示されず、許可も求められない（通知設定にスクリプトエディタが登録されておらず、黙って捨てられる）。LaunchAgent から実行した `display alert … giving up after 120` は表示され、利用者が OK を押せた（`button returned:OK`）→ `display alert` に切り替えた |
@@ -324,11 +324,12 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | 通知しない失敗（タイムアウト）のあとに、知らせる失敗（エラーページ） | 1回知らせる。続く間は2回目を知らせない |
 | 知らせ方 | `display alert … giving up after 120`。優先言語が英語なら英語 |
 | `install.sh`: HOME に `&`・`<`・`>` | 正しい plist を生成し、パスも正しい。`StartInterval` は10、`WatchPaths` に `/var/run/resolv.conf` |
-| `install.sh status`: 登録済み / 未登録 / 記録なし | 0 で終わり、動作中・同意済みの件数とブランド（重複なし）・ログの最新5行を表示 / 1 で終わる / 0 件と表示 |
-| `install.sh status`: 最後の認証（`re-authenticated`・`consent recorded` の最後の行）が60分以内 / 60分より前 / 認証の行がない | その時刻と60分後の目安を表示（あとの失敗の行は数えない）/ 時刻だけ表示 / どちらも出さない |
+| `install.sh status`: 登録済み / 未登録 / 記録なし | 0 で終わり、登録・終了コードと実行回数・同意済みの件数とブランド（重複なし・整列）・ログの最新5行（字下げ。5行以下なら全行）を英語で表示 / 1 で終わり、登録の詳細は出さない / `none yet` と表示 |
+| `install.sh status`: 今の接続先が同意済み / 未同意 / 既定経路なし | ブランドと自動再認証 on / 自動再認証 off / `none` と表示 |
+| `install.sh status`: 最後の認証（`re-authenticated`・`consent recorded` の最後の行）が60分以内 / 60分より前 / 認証の行がない | その時刻・経過・種類（とブランド）と60分後の目安を表示（あとの失敗の行は数えない）/ 時刻を出し、目安は `unknown` / `none logged yet` と表示し、目安は出さない |
 | `install.sh`: bootstrap が2回失敗 | やり直して成功。失敗が続けば 0 以外で終わる |
 | `install.sh`: 再導入・引数誤り・削除 | 成功 / 2 で終了 / ログ以外は残らない（`.seen`・`.probe` も消す） |
-| 優先言語が日本語 / 英語 | ダイアログと `install.sh` のメッセージがそれぞれの言語になる |
+| 優先言語が日本語 / 英語 | ダイアログがそれぞれの言語になる（`install.sh` のメッセージは常に英語） |
 
 ## 8. やらないこと（YAGNI）
 

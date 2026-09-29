@@ -73,15 +73,21 @@ A successful reconnection shows nothing. What can happen while the connection is
 ./install.sh status
 ```
 
-You will see something like this ("Last authenticated" is when your own acceptance was recorded or the tool last re-accepted):
+You will see something like this. "Current network" tells whether the network you are on now is one you accepted (the tool identifies a network by its gateway's MAC address). "Last auth" is when your own acceptance was recorded or the tool last re-accepted, and "Next time-out" is an estimate based on it:
 
 ```text
-Running (every 10 seconds): /Users/you/.local/bin/cafe-wifi-okawari
-Accepted networks: 1 (doutor)
-Last authenticated: 2026-10-01 10:05:12
-Next time-out: around 11:05 (at shops with a 60-minute limit)
-Log (last 5 lines): /Users/you/Library/Logs/cafe-wifi-okawari.log
-2026-10-01 10:05:12 consent recorded net=… doutor (online)
+Service          loaded (LaunchAgent local.cafe-wifi-okawari)
+Schedule         every 10 s, and whenever the network settings change
+Program          /Users/you/.local/bin/cafe-wifi-okawari
+Last exit code   0 (412 runs since loaded)
+Current network  gateway 0:0:5e:0:1:46 (doutor), accepted: auto re-authentication on
+Accepted         1 network (brand: doutor)
+Last auth        2026-10-01 10:05:12 (12 min ago), consent recorded on doutor
+Next time-out    around 11:05, in 47 min (if the shop's limit is 60 minutes)
+Log              /Users/you/Library/Logs/cafe-wifi-okawari.log (1 line)
+
+Recent log:
+  2026-10-01 10:05:12 consent recorded net=… doutor (online)
 ```
 
 What each log line means is listed in [Troubleshooting](#troubleshooting).
@@ -98,7 +104,7 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 
 - Networks are identified by the router's MAC address together with the brand (e.g. `doutor`). Shops of the same brand may share the same value, so it cannot always tell shops apart.
 - It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`), without sending anything. On other networks (e.g. at home) it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does, and sends nothing to Wi2.
-- Dialogs and installer messages follow your macOS language (Japanese or English).
+- Dialogs follow your macOS language (Japanese or English). Messages from `install.sh` are in English.
 
 ## Before you use it
 
@@ -173,7 +179,7 @@ This also removes the list of networks you accepted. The log at `~/Library/Logs/
 
 ## Troubleshooting
 
-To check that it is running (shows whether it is registered, the brands of the networks you accepted, when it last authenticated and the estimated next time-out, and the last 5 log lines; exits with 1 if it is not registered):
+To check that it is running (shows whether it is registered and its last exit code, whether the current network is one you accepted, the brands of the networks you accepted, when it last authenticated and the estimated next time-out, and the last 5 log lines; it sends nothing over the network, and exits with 1 if it is not registered):
 
 ```sh
 ./install.sh status

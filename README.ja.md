@@ -73,15 +73,21 @@ cd cafe-wifi-okawari
 ./install.sh status
 ```
 
-次のように表示されます（最後の認証は、ご自身の同意が記録されたときか、自動で同意し直したときの時刻です）。
+次のように表示されます（表示は英語です）。`Current network` は今つないでいる接続先が同意済みかどうか（接続先はゲートウェイの MAC アドレスで見分けます）、`Last auth` はご自身の同意が記録されたときか自動で同意し直したときの時刻、`Next time-out` はそこから求めた次の時間切れの目安です。
 
 ```text
-動作中（10秒ごと）: /Users/you/.local/bin/cafe-wifi-okawari
-同意済みの接続先: 1 件（doutor）
-最後の認証: 2026-10-01 10:05:12
-次の時間切れの目安: 11:05 頃（制限時間が60分の店の場合）
-ログ（最新5行）: /Users/you/Library/Logs/cafe-wifi-okawari.log
-2026-10-01 10:05:12 consent recorded net=… doutor (online)
+Service          loaded (LaunchAgent local.cafe-wifi-okawari)
+Schedule         every 10 s, and whenever the network settings change
+Program          /Users/you/.local/bin/cafe-wifi-okawari
+Last exit code   0 (412 runs since loaded)
+Current network  gateway 0:0:5e:0:1:46 (doutor), accepted: auto re-authentication on
+Accepted         1 network (brand: doutor)
+Last auth        2026-10-01 10:05:12 (12 min ago), consent recorded on doutor
+Next time-out    around 11:05, in 47 min (if the shop's limit is 60 minutes)
+Log              /Users/you/Library/Logs/cafe-wifi-okawari.log (1 line)
+
+Recent log:
+  2026-10-01 10:05:12 consent recorded net=… doutor (online)
 ```
 
 ログの各行の意味は「[困ったとき](#困ったとき)」にあります。
@@ -98,7 +104,7 @@ cd cafe-wifi-okawari
 
 - 接続先は、店内の Wi‑Fi ルーターの MAC アドレスとブランド（`doutor` など）の組で見分けます。同じブランドの店どうしで同じ値になることがあるため、店舗を一意に見分けられるとは限りません
 - Wi2 の網かどうかは、網から配られるドメイン名（`wi2.ne.jp`）で判別します（通信はしません）。自宅など Wi2 以外の Wi‑Fi では、つないでから5分間だけ macOS と同じく Apple の `captive.apple.com` で認証画面の有無を確かめ、Wi2 には何も送りません
-- ダイアログと `install.sh` のメッセージは、macOS の言語設定に合わせて日本語か英語で表示されます
+- ダイアログは、macOS の言語設定に合わせて日本語か英語で表示されます。`install.sh` のメッセージは英語です
 
 ## 利用前に確認してください
 
@@ -173,7 +179,7 @@ Wi‑Fi は切れず、IP アドレスも変わりません。多くのアプリ
 
 ## 困ったとき
 
-動作の確認（登録の有無・同意したお店のブランド・最後に認証した時刻と次の時間切れの目安・ログの最新5行を表示します。登録されていなければ終了コード 1 で終わります）:
+動作の確認（登録の有無と最後の終了コード・今の接続先が同意済みか・同意したお店のブランド・最後に認証した時刻と次の時間切れの目安・ログの最新5行を英語で表示します。通信はしません。登録されていなければ終了コード 1 で終わります）:
 
 ```sh
 ./install.sh status

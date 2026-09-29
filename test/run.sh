@@ -84,6 +84,7 @@ cat > $T/bin/launchctl <<'EOF'
 #!/bin/zsh
 print -r -- "$*" >> $M/launchctl
 [[ $1 == print && -e $M/notloaded ]] && exit 113
+[[ $1 == print ]] && print '\truns = 7\n\tlast exit code = 0'
 if [[ $1 == bootstrap && -s $M/bootstrap_fail ]]; then
   n=$(<$M/bootstrap_fail); (( n > 0 )) && { print $((n - 1)) > $M/bootstrap_fail; exit 5 }
 fi
@@ -453,17 +454,17 @@ plist="$H/Library/LaunchAgents/local.cafe-wifi-okawari.plist"
 print 2 > $M/bootstrap_fail
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '導入: HOME に & < > があっても成功' '(( rc == 0 )) && plutil -lint -s "$plist"'
-ok '導入: 日本語環境では日本語で表示'  '[[ $out == 導入しました:* ]]'
+ok '導入: 初回は Installed と表示'   '[[ $out == "Installed: $H/.local/bin/cafe-wifi-okawari"$'"'"'\n'"'"'* ]]'
 ok '導入: plist のパスが正しい'        '[[ $(plutil -extract ProgramArguments.0 raw "$plist") == "$H/.local/bin/cafe-wifi-okawari" ]]'
 ok '導入: 接続したときにも起動する'   '[[ $(plutil -extract WatchPaths.0 raw "$plist") == /var/run/resolv.conf ]]'
 ok '導入: 10秒ごとに起動する'           '[[ $(plutil -extract StartInterval raw "$plist") == 10 ]]'
 ok '導入: bootstrap の一時失敗をやり直す' '(( $(grep -c ^bootstrap $M/launchctl) == 3 ))'
-LANGS=en-US HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$? out=$(<$M/out)
+HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '再導入も成功'                      '(( rc == 0 ))'
-ok '導入: 英語環境では英語で表示'      '[[ $out == Installed:* ]]'
+ok '導入: 2回目は Updated と表示'    '[[ $out == Updated:* ]]'
 print 99 > $M/bootstrap_fail
-HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$?
-ok '登録できなければ失敗で終わる'      '(( rc != 0 ))'
+HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '登録できなければ失敗で終わる'      '(( rc != 0 )) && [[ $out == "Error: could not register "* ]]'
 rm -f $M/bootstrap_fail
 mkdir -p "$H/Library/Logs" "$H/Library/Application Support/cafe-wifi-okawari" "$H/Library/Caches"
 touch "$H/Library/Logs/cafe-wifi-okawari.log" "$H/Library/Application Support/cafe-wifi-okawari/consented" \
@@ -471,30 +472,36 @@ touch "$H/Library/Logs/cafe-wifi-okawari.log" "$H/Library/Application Support/ca
       "$H/Library/Caches/cafe-wifi-okawari.seen" "$H/Library/Caches/cafe-wifi-okawari.probe"
 print -r -- "$A doutor"$'\n'"$B starbucks"$'\n'"$B doutor" > "$H/Library/Application Support/cafe-wifi-okawari/consented"
 print -rl -- L{1..6} > "$H/Library/Logs/cafe-wifi-okawari.log"
-HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
-ok '状態: 登録済みなら 0 で終わり、動作中と表示' '(( rc == 0 )) && [[ $out == 動作中（10秒ごと）:* ]]'
-ok '状態: 同意済みの件数とブランドを表示' '[[ $out == *$'"'"'\n'"'"'"同意済みの接続先: 3 件（doutor starbucks）"$'"'"'\n'"'"'* ]]'
-ok '状態: ログの最新5行を表示'          '[[ $out == *$'"'"'\nL2\n'"'"'*L6 && $out != *L1* ]]'
-ok '状態: 認証の記録がなければ時刻を出さない' '[[ $out != *最後の認証* && $out != *目安* ]]'
+MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '状態: 登録済みなら 0 で終わり、英語で登録の詳細を表示' \
+  '(( rc == 0 )) && [[ $out == "Service          loaded (LaunchAgent local.cafe-wifi-okawari)"$'"'"'\n'"'"'"Schedule "*$'"'"'\n'"'"'"Last exit code   0 (7 runs since loaded)"$'"'"'\n'"'"'* ]]'
+ok '状態: 今の接続先が同意済みならブランドと自動再認証を表示' '[[ $out == *"Current network  gateway $A (doutor), accepted: auto re-authentication on"* ]]'
+ok '状態: 同意済みの件数とブランド（重複なし・整列）を表示' '[[ $out == *$'"'"'\n'"'"'"Accepted         3 networks (brands: doutor, starbucks)"$'"'"'\n'"'"'* ]]'
+ok '状態: ログの最新5行を字下げして表示' '[[ $out == *"Log              "*"(6 lines)"$'"'"'\n\nRecent log (last 5 lines):\n  L2\n'"'"'*"  L6" && $out != *L1* ]]'
+ok '状態: 認証の記録がなければそう表示し、目安は出さない' '[[ $out == *"Last auth        none logged yet"* && $out != *Next\ time-out* ]]'
+MAC=cc:cc:cc:cc:cc:09 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 今の接続先が未同意ならそう表示' '[[ $out == *"Current network  gateway cc:cc:cc:cc:cc:09, not accepted: auto re-authentication off"* ]]'
+NOROUTE=1 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 既定経路がなければ接続先なしと表示' '[[ $out == *"Current network  none ("* ]]'
 t1=$(date -v-70M '+%F %T') t2=$(date -v-10M '+%F %T') t3=$(date -v-5M '+%F %T')
 print -rl -- "$t1 consent recorded net=$A doutor (online)" "$t2 re-authenticated api=ok probe=ok net=$A doutor t=3s" \
   "$t3 login failed x1 api=ng probe=ng" > "$H/Library/Logs/cafe-wifi-okawari.log"
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
-ok '状態: 最後の認証の時刻と、60分後の目安を出す（失敗の行は数えない）' \
-  '(( rc == 0 )) && [[ $out == *$'"'"'\n'"'"'"最後の認証: $t2"$'"'"'\n'"'"'"次の時間切れの目安: $(date -j -v+60M -f "%F %T" "$t2" +%H:%M) 頃"* ]]'
-LANGS=en-US HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; out=$(<$M/out)
-ok '状態: 目安（英語）'                 '[[ $out == *"Last authenticated: $t2"$'"'"'\n'"'"'"Next time-out: around $(date -j -v+60M -f "%F %T" "$t2" +%H:%M) "* ]]'
+ok '状態: 最後の認証の時刻・経過・種類と、60分後の目安を出す（失敗の行は数えない）' \
+  '(( rc == 0 )) && [[ $out == *$'"'"'\n'"'"'"Last auth        $t2 (10 min ago), re-authenticated on doutor"$'"'"'\n'"'"'"Next time-out    around $(date -j -v+60M -f "%F %T" "$t2" +%H:%M), in "*" min (if "* ]]'
+ok '状態: ログが5行以下なら全行を表示' '[[ $out == *"(3 lines)"$'"'"'\n\nRecent log:\n'"'"'* ]]'
 print -rl -- "$t1 consent recorded net=$A doutor (online)" > "$H/Library/Logs/cafe-wifi-okawari.log"
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
-ok '状態: 60分を過ぎていれば時刻だけ出し、目安は出さない' '(( rc == 0 )) && [[ $out == *"最後の認証: $t1"* && $out != *目安* ]]'
+ok '状態: 60分を過ぎていれば目安は不明と表示' \
+  '(( rc == 0 )) && [[ $out == *"Last auth        $t1 (1 h 10 min ago), consent recorded on doutor"* && $out == *"Next time-out    unknown ("* ]]'
 touch $M/notloaded
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
-ok '状態: 未登録なら 1 で終わる'        '(( rc == 1 )) && [[ $out == 登録されていません* ]]'
+ok '状態: 未登録なら 1 で終わる'        '(( rc == 1 )) && [[ $out == "Service          not loaded "* && $out != *Program* ]]'
 rm -f $M/notloaded
-HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh uninstall > $M/out 2>&1; rc=$?
-ok '削除: ログ以外は残らない'          '(( rc == 0 )) && [[ $(cd "$H" && find . -type f) == ./Library/Logs/cafe-wifi-okawari.log ]]'
-LANGS=en-US HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
-ok '状態: 記録がなければ 0 件（英語）'  '[[ $out == *$'"'"'\nAccepted networks: 0\n'"'"'* ]]'
+HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh uninstall > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '削除: ログ以外は残らない'          '[[ $out == Uninstalled:* ]] && (( rc == 0 )) && [[ $(cd "$H" && find . -type f) == ./Library/Logs/cafe-wifi-okawari.log ]]'
+HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '状態: 記録がなければ同意済みなしと表示' '[[ $out == *$'"'"'\nAccepted         none yet\n'"'"'* ]]'
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh bogus > $M/out 2>&1; rc=$?
 ok '引数誤りは 2 で終わる'             '(( rc == 2 ))'
 

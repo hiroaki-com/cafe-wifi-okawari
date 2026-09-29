@@ -9,43 +9,95 @@ plist=$HOME/Library/LaunchAgents/$label.plist
 log=$HOME/Library/Logs/cafe-wifi-okawari.log
 kn="$HOME/Library/Application Support/cafe-wifi-okawari/consented"
 every=10   # 起動の間隔（秒）。launchd は既定で10秒より短い間隔ではジョブを起動しない
-
-# メッセージは macOS の優先言語が日本語なら日本語、それ以外は英語。$1=日本語 $2=英語
-[[ $(defaults read -g AppleLanguages 2>/dev/null | awk -F'"' 'NF > 1 { print $2; exit }') == ja* ]] && ja=1 || ja=0
-msg() { (( ja )) && print -r -- "$1" || print -r -- "$2" }
+# メッセージは英語のみ。
 
 case ${1-} in
   '') ;;
   status)
-    # 登録されているか・同意済みの接続先（ブランド名だけ）・最後の認証と次の時間切れの目安・ログの最新5行を表示する。通信はしない。登録がなければ 1 で終わる。
-    launchctl print gui/$UID/$label >/dev/null 2>&1 && on=1 || on=0
-    (( on )) && msg "動作中（${every}秒ごと）: $bin" "Running (every $every seconds): $bin" \
-             || msg "登録されていません（./install.sh で導入）" "Not registered (run ./install.sh to install)"
+    # 登録の状態・今の接続先・同意済みの接続先・最後の認証と次の時間切れの目安・ログの最新5行を表示する（英語のみ）。
+    # 通信はしない（今の接続先は経路表と ARP キャッシュから、本体の netid と同じ方法で読む）。登録がなければ 1 で終わる。
+    zmodload zsh/datetime   # EPOCHSECONDS
+    row() { printf '%-17s%s\n' "$1" "$2" }
+    # 経過時間を短く表す（45 s / 52 min / 3 h 12 min / 4 days）
+    dur() {
+      local s=$(( $1 > 0 ? $1 : 0 ))
+      if (( s < 60 )); then print -r -- "$s s"
+      elif (( s < 3600 )); then print -r -- "$(( s / 60 )) min"
+      elif (( s < 172800 )); then print -r -- "$(( s / 3600 )) h $(( s % 3600 / 60 )) min"
+      else print -r -- "$(( s / 86400 )) days"; fi
+    }
+    now=$EPOCHSECONDS
+
+    if lc=$(launchctl print gui/$UID/$label 2>/dev/null); then
+      on=1
+      row Service "loaded (LaunchAgent $label)"
+      row Schedule "every $every s, and whenever the network settings change"
+      row Program "$bin"
+      ec=$(print -r -- "$lc" | awk -F' = ' '$1 ~ /^[ \t]*last exit code$/ { print $2; exit }')
+      runs=$(print -r -- "$lc" | awk -F' = ' '$1 ~ /^[ \t]*runs$/ { print $2; exit }')
+      [[ -n $ec ]] && row 'Last exit code' "$ec${runs:+ ($runs runs since loaded)}"
+    else
+      on=0
+      row Service "not loaded (run ./install.sh to install or re-register)"
+    fi
+
+    r=$(route -n get default 2>/dev/null) || r=
+    gw=${${(M)${(f)r}:#*gateway:*}##* } net=
+    if [[ -n $gw ]]; then
+      net=$(arp -n "$gw" 2>/dev/null | awk '{ print $4 }')
+      [[ $net == *:*:* ]] || net=$gw
+    fi
+    if [[ -z $net ]]; then
+      row 'Current network' 'none (offline, or macOS is waiting for you to accept on the login page)'
+    elif kb=$(awk -v n="$net" '$1 == n { f = 1; if (NF > 1) b = b (b == "" ? "" : ", ") $2 } END { print b; exit !f }' "$kn" 2>/dev/null); then
+      row 'Current network' "gateway $net${kb:+ ($kb)}, accepted: auto re-authentication on"
+    else
+      row 'Current network' "gateway $net, not accepted: auto re-authentication off"
+    fi
+
     n=$(grep -c . "$kn" 2>/dev/null) || n=0
-    b=$(awk '{ print $2 }' "$kn" 2>/dev/null | sort -u | paste -sd ' ' -) || b=
-    msg "同意済みの接続先: $n 件${b:+（$b）}" "Accepted networks: $n${b:+ ($b)}"
-    # 最後の認証（自動の再認証・同意の記録）の時刻と、次の時間切れの目安。制限時間は店で違うので60分の店の場合として示し、
-    # 60分を過ぎていれば目安は出さない。つなぎ直して自分で同意し直した分はログに残らないので、目安に入らない。
+    b=(${(ou)${(f)"$(awk 'NF > 1 { print $2 }' "$kn" 2>/dev/null || :)"}})
+    if (( n == 0 )); then row Accepted 'none yet'
+    else row Accepted "$n network$( (( n > 1 )) && print s)${b:+ (brand$( (( $#b > 1 )) && print s): ${(j:, :)b})}"; fi
+
+    # 最後の認証（自動の再認証・同意の記録）と、次の時間切れの目安。制限時間は店で違うので60分の店の場合として示す。
+    # つなぎ直して自分で同意し直した分はログに残らないので、目安に入らない。
     a=$(grep -E '^[0-9-]{10} [0-9:]{8} (re-authenticated|consent recorded) ' "$log" 2>/dev/null | tail -n 1) || a=
     if [[ -n $a ]] && t=$(date -j -f '%F %T' "${a[1,19]}" +%s 2>/dev/null); then
-      msg "最後の認証: ${a[1,19]}" "Last authenticated: ${a[1,19]}"
-      if (( t + 3600 > $(date +%s) )); then
-        e=$(date -r $(( t + 3600 )) +%H:%M)
-        msg "次の時間切れの目安: $e 頃（制限時間が60分の店の場合）" "Next time-out: around $e (at shops with a 60-minute limit)"
+      w=(${=a[21,-1]}) i=${w[(i)net=*]}
+      ev=${${w[1]}/consent/consent recorded} br=${w[i+1]-}
+      [[ $br == *[=\(]* ]] && br=
+      row 'Last auth' "${a[1,19]} ($(dur $(( now - t ))) ago), $ev${br:+ on $br}"
+      if (( t + 3600 > now )); then
+        row 'Next time-out' "around $(date -r $(( t + 3600 )) +%H:%M), in $(dur $(( t + 3600 - now ))) (if the shop's limit is 60 minutes)"
+      else
+        row 'Next time-out' 'unknown (more than 60 minutes since the last logged authentication)'
       fi
+    else
+      row 'Last auth' 'none logged yet'
     fi
-    [[ -s $log ]] && { msg "ログ（最新5行）: $log" "Log (last 5 lines): $log"; tail -n 5 "$log" }
+
+    if [[ -s $log ]]; then
+      nl=$(wc -l < "$log") nl=${nl// }
+      row Log "$log ($nl line$( (( nl > 1 )) && print s))"
+      print; print -r -- "Recent log$( (( nl > 5 )) && print ' (last 5 lines)'):"
+      tail -n 5 "$log" | sed 's/^/  /'
+    else
+      row Log "$log (empty; lines are written only when something happens)"
+    fi
     exit $(( ! on )) ;;
   uninstall)
     launchctl bootout gui/$UID/$label 2>/dev/null || true
     rm -f $plist $bin $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen,.probe}
     rm -rf "${kn:h}"   # 同意した接続先の記録
-    msg "削除しました（ログは残しています: $log）" "Uninstalled (the log is kept: $log)"
+    print -r -- "Uninstalled: removed the LaunchAgent ($label), the program and the list of accepted networks"
+    print -r -- "  Log kept: $log (delete it by hand if you no longer need it)"
     exit 0 ;;
   *) print -u2 -r -- "usage: $0 [status|uninstall]"; exit 2 ;;
 esac
 
 # スクリプトを固定の場所へ複製する（リポジトリを移動・削除しても動き続ける）。
+[[ -e $bin ]] && verb=Updated || verb=Installed
 mkdir -p ${bin:h} ${plist:h} ${log:h}
 install -m 755 ${0:A:h}/cafe-wifi-okawari.sh $bin
 
@@ -70,9 +122,10 @@ launchctl bootout gui/$UID/$label 2>/dev/null || true
 # bootout の直後は登録解除が終わっておらず bootstrap が失敗することがある（error 5）ので、少し待ってやり直す。
 for i in {1..10}; do
   launchctl bootstrap gui/$UID $plist 2>/dev/null && break
-  (( i < 10 )) || { msg "登録に失敗しました: launchctl bootstrap gui/$UID $plist" \
-                         "Failed to register: launchctl bootstrap gui/$UID $plist" >&2; exit 1 }
+  (( i < 10 )) || { print -u2 -r -- "Error: could not register the LaunchAgent after 10 attempts (launchctl bootstrap gui/$UID $plist)"; exit 1 }
   sleep 0.5
 done
-msg "導入しました: $bin（${every}秒ごとに実行。ログ: $log。確認: ./install.sh status）" \
-    "Installed: $bin (runs every $every seconds; log: $log; check: ./install.sh status)"
+print -r -- "$verb: $bin"
+print -r -- "  Runs every $every s, and whenever the network settings change (LaunchAgent $label)"
+print -r -- "  Log: $log"
+print -r -- "  Check it with: ./install.sh status"
