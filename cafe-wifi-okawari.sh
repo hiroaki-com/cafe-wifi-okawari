@@ -78,9 +78,11 @@ netid
 # DHCP で配られたドメイン名が wi2.ne.jp なら Wi2 の網（ドトールで実測。手元の情報で、通信はしない）
 [[ -n $ifc && $(/usr/sbin/ipconfig getoption "$ifc" domain_name 2>/dev/null) == wi2.ne.jp ]] && wi2net=1 || wi2net=0
 zstat -A joined +mtime $RC 2>/dev/null || joined=(0)
-pd=(); [[ -r $PD ]] && pd=(${=$(<"$PD")})
+# 同意待ちの記録と、その更新からの秒数（pda）。起動の間隔（10秒）に依らず、知らせる・確かめ直す間隔を時間で決める。
+pd=() pda=0; [[ -r $PD ]] && { pd=(${=$(<"$PD")}); zstat -A m +mtime $PD 2>/dev/null && pda=$(( EPOCHSECONDS - m[1] )) }
 # 関係のない網（自宅など）では通信しない。確かめるのは、Wi2 の網・同意済みの網・同意待ちのとき・接続した直後だけ。
 (( wi2net || kmac || $#pd || EPOCHSECONDS - joined[1] < JOIN )) || exit 0
+myip=$(/usr/sbin/ipconfig getifaddr "$ifc" 2>/dev/null)   # 始めたときの端末の IP（same で途中の回線の切り替わりを見分ける）
 
 jar=$(mktemp) || exit 1
 trap 'rm -f "$jar"' EXIT
@@ -125,21 +127,22 @@ if (( s == 0 )); then
   (( $#pd >= 2 )) && [[ $pd[1] == "$net" ]] && pdn=1 || { pdn=0; rm -f "$PD" }
   # Wi2 の無料 Wi‑Fi に、本ツールが同意を送っていないのに通信できている = 利用者が接続画面で同意した
   # （macOS は同意するまでこの網を使わせないので、接続直後の捕捉は本ツールからは見えない）。
-  # ブランドを確かめるのは接続ごとに1回（失敗したら3回まで）。つなぎ直したら（resolv.conf が新しい）確かめ直す。
+  # ブランドを確かめるのは接続ごとに1回（失敗したら 30秒・60秒 と空けて3回まで）。つなぎ直したら（resolv.conf が新しい）確かめ直す。
   # 同意待ちのときは、確認に失敗しても保留を消さず、30秒→60秒→…→最大30分 と間隔を空けて確かめ続ける
   # （保留を書くとき・自動を止めるときに確認の記録を消すので、入店時の確認済みの記録には妨げられない）。
   sn=(); [[ -r $SN ]] && sn=(${=$(<"$SN")})
   t=0; [[ ${sn[1]-} == "$net" && ! $RC -nt $SN ]] && t=${sn[2]-3}
-  if (( pdn && t )); then
+  (( ! pdn && (! wi2net || t >= 3) )) && exit 0
+  if (( t )); then
     zstat -A m +mtime $SN 2>/dev/null || m=(0)
     (( EPOCHSECONDS - m[1] >= (t > 6 ? 1800 : 30 << (t - 1)) )) || exit 0
-  elif (( ! pdn && (! wi2net || t >= 3) )); then
-    exit 0
   fi
   k=$(( t + 1 ))
   wi2 "$WI2/wi2auth/redirect"; w=$?
   # 疎通できていても同意ページへ転送されたら、Wi2 ではまだ認証されていない（時間切れの境目など）。同意の証拠にしない。
   (( w == 0 )) && [[ $page != landing.html ]] && w=1
+  # 確かめている間に別の回線（認証済みの別の Wi2 など）へ切り替わっていたら、その答えを元の接続先の同意や失敗として記録しない。
+  same || { log "network changed net=$net before recording"; exit 0 }
   case $w in
     0) print -r -- "$net 3" > "$SN"; rm -f "$PD"
        grep -qxF -- "$net $brand" "$KN" 2>/dev/null && exit 0
@@ -151,16 +154,21 @@ if (( s == 0 )); then
   exit 0
 fi
 
-# 同意待ち。捕捉が2回続いたら（OS の接続画面で済ませていなければ）1回だけ知らせる。
+# 同意待ち。保留を書いてから30秒以上たっても捕捉が続いていたら（OS の接続画面で済ませていなければ）1回だけ知らせる。
 waiting() {
-  (( $#pd == 2 )) || return 0
+  (( $#pd == 2 && pda >= 30 )) || return 0
   print -r -- "$pd[1,2] notified" > "$PD"
   notify "この Wi-Fi では最初の1回だけ、${HOWJA}規約を読んで同意してください。次からは自動で再接続します。" \
     "For this Wi-Fi, read and accept the terms yourself once, $HOWEN. After that, it reconnects automatically."
 }
 # 同意待ちの接続先では通信しない。ただし同じ MAC で同意済みのブランドがあるときは、どのブランドかを Wi2 に確かめる
-# （ルーターの冗長化用の共通 MAC では、別ブランドの古い同意待ちが残っていることがある）。
-[[ ${pd[1]-} == "$net" ]] && (( ! kmac )) && { waiting; exit 0 }
+# （ルーターの冗長化用の共通 MAC では、別ブランドの古い同意待ちが残っていることがある）。確かめるのは30秒に1回まで
+# （保留の更新時刻で測る。古い保留なら待たずに確かめるので、同意済みのブランドの再認証は遅れない）。
+if [[ ${pd[1]-} == "$net" ]]; then
+  (( kmac )) || { waiting; exit 0 }
+  (( pda >= 30 )) || exit 0
+  touch "$PD"
+fi
 
 # 失敗が続いているときは 30秒→60秒→…→最大30分 と間隔を空ける。店を移った・つなぎ直したら前の待機状態は持ち越さない。
 # 拒否の回数（rej）は、つなぎ直しても同じ接続先・同じブランド（rb）なら持ち越す。知らせたか（told）は、失敗が続く間は持ち越す。
@@ -192,7 +200,6 @@ fi
 q=${loc#*\?}; q=${q//\%3[Aa]/:}
 qm=${${(M)${(s:&:)q}:#mac=*}#mac=} qi=${${(M)${(s:&:)q}:#ip=*}#ip=}
 mymac=$(/sbin/ifconfig "$ifc" 2>/dev/null | /usr/bin/awk '$1 == "ether" { print $2; exit }')
-myip=$(/usr/sbin/ipconfig getifaddr "$ifc" 2>/dev/null)
 # MAC は大文字小文字・区切り（: と -）・先頭の 0 の有無の違いを吸収して比べる。1〜2桁の16進数が6つでなければ空にする。
 hex() {
   local o h= a=(${(s.:.)${${1:l}//-/:}})
@@ -233,9 +240,9 @@ http=${res##*$'\n'} res=${res%$'\n'*}
 # 通信が成功し、HTTP 2xx で、JSON の result が真偽値 true のときだけ ok
 (( lrc == 0 )) && [[ $http == 2?? ]] && /usr/bin/jq -e '.result == true' <<< "$res" &>/dev/null && api=ok || api=ng
 
-# 疎通の回復を2秒ごとに5回まで確かめる（1回の確認は最大5秒なので、最悪で約35秒）
-probe=ng
-for i in {1..5}; do sleep 2; state && { probe=ok; break }; done
+# 疎通の回復を1秒ごとに、確かめ始めてから約10秒まで確かめる（1回の確認は最大5秒なので、最悪でも約16秒）
+probe=ng t1=$EPOCHSECONDS
+for i in {1..10}; do sleep 1; state && { probe=ok; break }; (( EPOCHSECONDS - t1 < 10 )) || break; done
 
 # 途中で別の回線に切り替わっていたら、その疎通や失敗を元の接続先の結果として扱わない（次の回に確かめ直す）。
 same || { log "network changed net=$net $brand api=$api probe=$probe"; exit 0 }

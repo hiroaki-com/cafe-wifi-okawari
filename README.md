@@ -8,7 +8,7 @@ English | [日本語](README.ja.md)
 
 Automatically re-accepts the captive portal terms when a free café Wi‑Fi in Japan sends you back to its login page after the time limit (e.g. 60 minutes). *Okawari* means "a refill" — like a coffee refill, but for Wi‑Fi.
 
-- On Wi2 Wi‑Fi where you have accepted the terms yourself, checks every 30 seconds and notices a logout within 30 seconds and usually re-authenticates a few seconds later
+- On Wi2 Wi‑Fi where you have accepted the terms yourself, checks every 10 seconds, so it notices a logout within about 10 seconds and usually re-authenticates a few seconds later
 - Works with any time limit — it reacts to the login page, not a timer
 - No IDs, passwords, or email addresses. Nothing secret is stored
 - Nothing extra to install: runs on the zsh, curl, and launchd that ship with macOS
@@ -86,10 +86,10 @@ This also removes the list of networks you accepted. The log at `~/Library/Logs/
 
 ## Troubleshooting
 
-Is it running?
+Is it running? This shows whether it is registered, the brands of the networks you accepted, and the last 5 log lines (exits with 1 if it is not registered):
 
 ```sh
-launchctl print gui/$UID/local.cafe-wifi-okawari | grep -E 'state|last exit code'
+./install.sh status
 ```
 
 The log is written only when something happens:
@@ -104,7 +104,7 @@ tail ~/Library/Logs/cafe-wifi-okawari.log
 | `consent recorded net=…` | You accepted after the tool had seen the login page; recorded as above |
 | `consent pending net=…` | The tool saw the login page on a network it has not recorded. It waits for you to accept yourself |
 | `re-authenticated api=ok probe=ok net=… t=Ns` | Reconnected automatically (the connection came back N seconds after it started sending the acceptance) |
-| `network changed net=…` | The Mac switched to another network (e.g. tethering) during the attempt. That attempt counts as neither a success nor a failure |
+| `network changed net=…` | The Mac switched to another network (e.g. tethering) during a re-authentication or a brand check. That attempt counts as neither a success nor a failure, and nothing is recorded as accepted |
 | `login failed xN api=ng probe=ok` | The tool's attempt failed, but the connection came back another way (e.g. the macOS login window) |
 | `login failed xN api=… probe=ng` | Could not reconnect. You get a dialog. Also happens when a daily cap (e.g. Renoir) is reached |
 | `auto stopped net=… rejected x3` | The auth server refused the acceptance three times in a row, so automatic re-acceptance on this network was stopped (possibly a usage cap, a suspension, or changed conditions). You get a dialog. Check the login page; accepting yourself resumes it |
