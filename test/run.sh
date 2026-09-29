@@ -13,7 +13,8 @@ mkdir -p "$HOME" $T/bin
 # curl: captive.apple.com は $M/authed があれば Success、なければ 302 で $LOC へ
 #       （既定は Wi2 の redirect?…。クエリの mac・ip は $LMAC・$LIP）。
 #       redirect?… は $REDIR（ok/nocookie/503/other/timeout/error/chain/query）、ブランドは $BRAND（既定 doutor）。
-#       引数なしの redirect（認証済みでのブランド確認）は $BARE（ok/other/timeout）。
+#       着くページは $PAGE（既定 index.html。捕捉中の実測は同意ページ index.html、認証済みはランディング landing.html）。
+#       引数なしの redirect（認証済みでのブランド確認）は $BARE（ok/other/timeout）、着くページは $BAREPAGE（既定 landing.html）。
 #       login は本文 $LOGIN と HTTP コード $LHTTP（既定 200。000 ならタイムアウト）を返す。$RECOVER があれば認証済みにする
 #       （数なら、その回数の確認のあとで認証済みにする）。-H・-e の値は $M/headers に残す。
 #       login は、redirect で受け取った session_id を同じ jar から送り（-b）、本文が同意の JSON のときだけ受け付ける。
@@ -33,7 +34,7 @@ print -r -- "$url" >> $M/calls
 W=https://service.wi2.ne.jp
 land() { printf '.service.wi2.ne.jp\tFALSE\t/\tTRUE\t0\tsession_id\tabc\n' > $jar
          [[ ${SWITCH-} == pre ]] && touch $M/switched
-         printf '302 %s/freewifi/%s/landing.html%s' $W "${BRAND-doutor}" "${1-}" }
+         printf '302 %s/freewifi/%s/%s%s' $W "${BRAND-doutor}" "${2-landing.html}" "${1-}" }
 case $url in
   *hotspot-detect*)
     [[ ${PROBE-} == down ]] && { printf '\n000 '; exit 7 }
@@ -44,18 +45,18 @@ case $url in
     [[ -e $M/authed ]] && printf '<HTML><TITLE>Success</TITLE></HTML>\n200 ' ||
       printf 'x\n302 %s' "${LOC-$W/wi2auth/redirect?cmd=login&mac=${LMAC-aa:bb:cc:dd:ee:0f}&ip=${LIP-10.0.0.5}&essid=%20&apname=tunnel%201&apgroup=&url=http%3A%2F%2Fcaptive.apple.com%2F}" ;;
   */wi2auth/redirect\?*) case ${REDIR-ok} in
-    ok) land ;;
-    query) land '?lang=ja' ;;
+    ok) land '' "${PAGE-index.html}" ;;
+    query) land '?lang=ja' "${PAGE-index.html}" ;;
     chain) printf '302 %s/wi2auth/next' $W ;;
-    nocookie) printf '302 %s/freewifi/doutor/landing.html' $W ;;
+    nocookie) printf '302 %s/freewifi/doutor/index.html' $W ;;
     503) printf '503 ' ;;
     other) printf '302 https://example.com/' ;;
     error) printf '302 %s/wi2auth/error/ctrlapi_timeout.html?mac=%s&ip=%s' $W ${LMAC-aa:bb:cc:dd:ee:0f} ${LIP-10.0.0.5} ;;
     timeout) printf '000 '; exit 28 ;;
   esac ;;
-  */wi2auth/next) land ;;
+  */wi2auth/next) land '' index.html ;;
   */wi2auth/redirect) case ${BARE-ok} in
-    ok) land ;;
+    ok) land '' "${BAREPAGE-landing.html}" ;;
     other) printf '302 %s/wi2auth/error/ctrlapi_timeout.html' $W ;;
     timeout) printf '000 '; exit 28 ;;
   esac ;;
@@ -182,6 +183,17 @@ reconnect
 run MAC=$A DOM=wi2.ne.jp BRAND=starbucks
                           ok '同じ MAC の別ブランドにつなぎ直しても確かめる' 'grep -qxF "$A starbucks" "$KN"'
 
+# 疎通できても Wi2 が同意ページへ転送するなら、まだ認証されていない（時間切れの境目など）
+reset; touch $M/authed
+run MAC=$A DOM=wi2.ne.jp BAREPAGE=index.html
+                          ok '疎通できても同意ページなら同意済みにしない' '(( posts == 0 )) && [[ ! -e "$KN" && $out == *"not free wi-fi x1 net=$A http=302 to=$W/freewifi/doutor/index.html" ]]'
+rm $M/authed
+run MAC=$A DOM=wi2.ne.jp $OKL RECOVER=1
+                          ok '続いて捕捉されても同意を送らない' '(( posts == 0 )) && [[ ! -e "$KN" && $(<$PD) == "$A doutor" ]]'
+reset; print -r -- "$A doutor" > $PD; touch $M/authed
+run MAC=$A BAREPAGE=index.html
+                          ok '同意待ちで疎通できても、同意ページなら記録せず待ち続ける' '[[ ! -e "$KN" && $(<$PD) == "$A doutor" ]]'
+
 # --- 時間切れで初めて捕捉を見た網（同意を待つ） --------------------------------
 reset; joined
 run MAC=$A;               ok '初回の Wi2: 同意を送らない'     '(( posts == 0 && redirs == 1 ))'
@@ -275,14 +287,20 @@ run MAC=$A $OKL RECOVER=1 REDIR=chain
                           ok 'Wi2 の中の転送はたどる' '(( posts == 1 )) && grep -q /wi2auth/next $M/calls'
 reset; mkknown $A
 run MAC=$A $OKL RECOVER=1 REDIR=query
-                          ok 'ランディングにクエリがあってもよい' '(( posts == 1 ))'
+                          ok '同意ページにクエリがあってもよい' '(( posts == 1 )) && grep -qx "$W/freewifi/doutor/index.html" $M/headers'
+reset; mkknown $A
+run MAC=$A $OKL RECOVER=1 PAGE=landing.html
+                          ok '転送先がランディングでも再認証し、Referer はランディング' '(( posts == 1 )) && grep -qx "$W/freewifi/doutor/landing.html" $M/headers && [[ $out == *re-authenticated* ]]'
+reset; mkknown $A
+run MAC=$A $OKL RECOVER=1 PAGE=agreement.html
+                          ok '同意ページ・ランディング以外のページには送らない' '(( posts == 0 && notes == 1 )) && [[ $out == *"redirect failed x1 http=302 to=$W/freewifi/doutor/agreement.html" ]]'
 reset; mkknown $A
 run MAC=$A $OKL RECOVER=1 REDIR=error
                           ok 'エラーページなら送らずに記録して知らせる' '(( posts == 0 && notes == 1 )) && [[ $out == *"redirect failed x1 http=302 to=$W/wi2auth/error/ctrlapi_timeout.html" ]]'
                           ok 'ログに端末の MAC・IP を残さない' '[[ $out != *aa:bb:cc* && $out != *10.0.0.5* ]]'
 reset; mkknown $A
 run MAC=$A $OKL RECOVER=1
-                          ok '認証要求はランディングからの XHR と同じ' 'grep -qx "Origin: $W" $M/headers && grep -qx "$W/freewifi/doutor/landing.html" $M/headers'
+                          ok '認証要求は同意ページからの XHR と同じ' 'grep -qx "Origin: $W" $M/headers && grep -qx "$W/freewifi/doutor/index.html" $M/headers'
                           ok '認証要求は redirect で受け取った Cookie と同意の本文を送る' '[[ ! -e $M/badlogin ]] && [[ $out == *re-authenticated* ]]'
 reset; mkknown $A
 run MAC=$A $OKL RECOVER=3; ok '疎通が数秒遅れて戻っても成功' '[[ $out == *"re-authenticated api=ok probe=ok net=$A doutor t="<->s ]] && (( $(grep -c hotspot-detect $M/calls) == 4 ))'
@@ -304,6 +322,11 @@ run MAC=$A 'LOGIN={"result":false}' RECOVER=1
 reset; mkknown $A
 run MAC=$A $OKL LHTTP=503 RECOVER=1
                           ok 'HTTP 5xx なら result:true でも api=ng' '[[ $out == *"login failed x1 api=ng probe=ok http=503"* ]]'
+reset; mkknown $A
+run MAC=$A LHTTP=000;     ok 'login の通信失敗は curl の終了値を記録' '[[ $out == *"login failed x1 api=ng probe=ng http=000 curl=28 res=" ]]'
+reset; mkknown $A
+run MAC=$A 'LOGIN={"result":false,"message":"LOGIN_LIMIT","url":"https://service.wi2.ne.jp/wi2auth/redirect?cmd=login&mac=aa:bb:cc:dd:ee:0f&ip=10.0.0.5","ip":"10.0.0.5","mac":"AA-BB-CC-DD-EE-0F"}'
+                          ok '応答の本文は MAC・IP・クエリを伏せて記録' '[[ $out == *LOGIN_LIMIT* && $out == *"/wi2auth/redirect?\","* && $out == *"\"ip\":\"<ip>\""* && $out == *"\"mac\":\"<mac>\""* && $out != *10.0.0.5* && $out != *(#i)aa?bb?cc* && $out != *cmd=login* ]]'
 
 # --- 失敗の継続と待機 ----------------------------------------------------------
 reset; mkknown $A
@@ -316,7 +339,7 @@ for i in {1..9}; do
 done
 w9=$(( ${$(<$ST)[(w)2]} - EPOCHSECONDS ))
 ok '9回失敗しても通知は1回'        '(( total == 1 ))'
-ok 'ログは x1・x2・x4・x8 だけ'     '[[ "$logs" == "login failed x1 login failed x2 login failed x4 login failed x8" ]]'
+ok '失敗は毎回記録する'            '[[ "$logs" == "login failed x1 login failed x2 login failed x3 login failed x4 login failed x5 login failed x6 login failed x7 login failed x8 login failed x9" ]]'
 ok '待機は 30秒から最大30分'       '(( w1 >= 29 && w1 <= 30 && w9 >= 1799 && w9 <= 1800 ))'
 ok 'サーバー障害（5xx）では自動を止めない' '[[ $(<"$KN") == "$A doutor" ]]'
 run MAC=$A 'LOGIN={"result":false}'
@@ -389,6 +412,9 @@ reset; mkknown $A
 run MAC=$A REDIR=timeout; skip; run MAC=$A REDIR=error
                            ok '通知しない失敗のあとでも、知らせる失敗なら1回知らせる' '(( notes == 1 ))'
 skip; run MAC=$A REDIR=error; ok '失敗が続く間は2回目を知らせない' '(( notes == 0 ))'
+reset; mkknown $A
+run MAC=$A REDIR=nocookie; skip; run MAC=$A REDIR=nocookie; skip; run MAC=$A 'LOGIN={"result":false}'
+                          ok '失敗の種類が変われば、その回も記録する' '[[ $out == *"login failed x3 api=ng"* ]]'
 reset; mkknown $A
 run MAC=$A REDIR=nocookie; ok 'session_id なし: 通知する' '(( posts == 0 && notes == 1 )) && [[ $out == *"no session_id"* ]]'
 reset; mkknown $A

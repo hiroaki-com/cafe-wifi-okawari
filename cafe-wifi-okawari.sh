@@ -56,6 +56,13 @@ netid() {
 }
 # URL のうち、ホストとパスだけ（ログ用。クエリには端末の MAC・IP が入るので残さない）
 path() { print -r -- "${1%%\?*}" }
+# 応答の本文（ログ用）。URL のクエリと、MAC・IPv4 アドレスに見える部分を伏せ、200文字までにする
+mask() {
+  local s=${1//\?[^\"\'[:space:]]#/?}
+  s=${s//[[:xdigit:]](#c1,2)((:|-|%3[Aa])[[:xdigit:]](#c1,2))(#c5)/<mac>}
+  s=${s//<0-255>.<0-255>.<0-255>.<0-255>/<ip>}
+  print -r -- "${s[1,200]}"
+}
 # 接続先・インターフェース・端末の IP が、始めたときのままか（テザリングへの切り替えなどで途中で変わっていないか）
 same() {
   local n0=$net i0=$ifc r
@@ -80,16 +87,17 @@ trap 'rm -f "$jar"' EXIT
 # ポータルとの通信は HTTPS のみ・証明書検証あり・リダイレクト非追従。
 c=("${curl[@]}" -m 10 --proto '=https' -b "$jar" -c "$jar")
 
-# Wi2 の正規サーバーが無料 Wi‑Fi のランディングへ 302 を返すまで、Wi2 の認証サーバー内（/wi2auth/）の 302 だけをたどる（最大3回）。
-# 0=ランディングに着いた（brand にブランド名） 1=想定外の応答（to に転送先） 2=通信失敗・5xx
+# Wi2 の正規サーバーが無料 Wi‑Fi のページへ 302 を返すまで、Wi2 の認証サーバー内（/wi2auth/）の 302 だけをたどる（最大3回）。
+# 着くページは、捕捉中なら同意ページ（index.html）、認証済みならランディング（landing.html）（どちらも現地で実測）。
+# 0=どちらかに着いた（brand にブランド名、page にページ名） 1=想定外の応答（to に転送先） 2=通信失敗・5xx
 wi2() {
   local u=$1 p i
   for i in 1 2 3; do
     r=$("${c[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "$u"); rc=$?
     (( rc )) || [[ $r == 5* ]] && return 2
     to=${r#* } p=${to#"$WI2/freewifi/"}
-    if [[ $r == "302 $WI2/freewifi/"* && $p == [A-Za-z0-9_-]##/landing.html(|\?*) ]]; then
-      brand=${p%%/*}
+    if [[ $r == "302 $WI2/freewifi/"* && $p == [A-Za-z0-9_-]##/(landing|index).html(|\?*) ]]; then
+      brand=${p%%/*} page=${${p#*/}%%\?*}
       return 0
     fi
     [[ $r == "302 $WI2/wi2auth/"* && $to != "$WI2/wi2auth/error/"* ]] || return 1
@@ -129,7 +137,10 @@ if (( s == 0 )); then
     exit 0
   fi
   k=$(( t + 1 ))
-  wi2 "$WI2/wi2auth/redirect"; case $? in
+  wi2 "$WI2/wi2auth/redirect"; w=$?
+  # 疎通できていても同意ページへ転送されたら、Wi2 ではまだ認証されていない（時間切れの境目など）。同意の証拠にしない。
+  (( w == 0 )) && [[ $page != landing.html ]] && w=1
+  case $w in
     0) print -r -- "$net 3" > "$SN"; rm -f "$PD"
        grep -qxF -- "$net $brand" "$KN" 2>/dev/null && exit 0
        [[ ${pd[1,2]} == "$net $brand" ]] && how= || how=' (online)'
@@ -159,14 +170,14 @@ n=0 next=0 prev= rej=0 told=0 rb=
 [[ $prev == "$net" && ! $RC -nt $ST ]] || n=0 next=0 told=0
 (( EPOCHSECONDS < next )) && exit 0
 
-# 失敗回数を増やして次の試行を遅らせる。同じ失敗の繰り返しは 1,2,4,8,… 回目だけ記録する。
+# 失敗回数を増やして次の試行を遅らせる。試行の間隔が空いていくので、失敗は毎回記録する（途中で失敗の種類が変わっても分かる）。
 # $1=事象 $2=詳細 $3=1 なら、失敗が続く間に1回だけ知らせる（通知しない失敗が先にあっても、まだなら知らせる）
 fail() {
   local tell=0
   (( n++, wait = 30 << (n > 7 ? 6 : n - 1), wait > 1800 && (wait = 1800) ))
   (( $3 && ! ${told:-0} )) && tell=1 told=1
   print -r -- "$n $(( EPOCHSECONDS + wait )) $net ${rej:-0} ${told:-0} $rb" > "$ST"
-  (( n & (n - 1) )) || log "$1 x$n $2"
+  log "$1 x$n $2"
   (( tell )) && notify "Wi-Fi に自動で再接続できませんでした。${HOWJA}確認してください。" \
     "Could not reconnect to Wi-Fi automatically. Check the login page (reconnect to the Wi-Fi, or open http://captive.apple.com in a browser)."
   exit 1
@@ -213,10 +224,10 @@ fi
 grep -q session_id "$jar" || fail "redirect failed" "no session_id" 1
 same || { log "network changed net=$net $brand before login"; exit 0 }
 
-# 接続画面の JS（ランディングから呼ぶ XHR）と同じ要求を送る。
+# 接続画面の JS（同意ページの「同意する」ボタンから呼ぶ XHR）と同じ要求を送る。Referer は着いたページ。
 t0=$EPOCHSECONDS
 res=$("${c[@]}" -w '\n%{http_code}' -H 'Content-Type: application/json' -H 'X-Requested-With: XMLHttpRequest' \
-  -H "Origin: $WI2" -e "$WI2/freewifi/$brand/landing.html" \
+  -H "Origin: $WI2" -e "$WI2/freewifi/$brand/$page" \
   --data '{"login_method":"onetap","login_params":{"agree":"1"}}' "$WI2/wi2auth/xhr/login"); lrc=$?
 http=${res##*$'\n'} res=${res%$'\n'*}
 # 通信が成功し、HTTP 2xx で、JSON の result が真偽値 true のときだけ ok
@@ -243,9 +254,9 @@ if (( lrc == 0 )) && [[ $api == ng && $probe == ng && $http == [1-4]?? ]] && (( 
   grep -vxF -- "$net $brand" "$KN" > "$KN.tmp"; mv -f "$KN.tmp" "$KN"
   print -r -- "$net $brand notified" > "$PD"
   rm -f "$ST" "$SN"   # 利用者が同意し直したら、入店時の確認済みの記録に関係なく確かめて記録できるように
-  log "auto stopped net=$net $brand rejected x$rej http=$http res=${res[1,200]}"
+  log "auto stopped net=$net $brand rejected x$rej http=$http curl=$lrc res=$(mask "$res")"
   notify "認証が続けて拒否されたため、この Wi-Fi での自動再接続を止めました。${HOWJA}確認してください。" \
     "Stopped reconnecting to this Wi-Fi automatically because the login was refused repeatedly. Check the login page (reconnect to the Wi-Fi, or open http://captive.apple.com in a browser)."
   exit 1
 fi
-fail "login failed" "api=$api probe=$probe http=$http res=${res[1,200]}" $notify
+fail "login failed" "api=$api probe=$probe http=$http curl=$lrc res=$(mask "$res")" $notify
