@@ -1,5 +1,5 @@
 #!/bin/zsh
-# 模擬の curl・route・arp・osascript・launchctl で分岐を確かめる。実際の網には一切つながない。
+# 模擬の curl・route・arp・ipconfig・ifconfig・defaults・osascript・launchctl で分岐を確かめる。実際の網には一切つながない。
 # 使い方: zsh test/run.sh
 set -u
 zmodload zsh/datetime   # EPOCHSECONDS

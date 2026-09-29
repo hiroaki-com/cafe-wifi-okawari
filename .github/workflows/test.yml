@@ -10,6 +10,6 @@ jobs:
       - name: 構文検査
         run: |
           zsh -n cafe-wifi-okawari.sh install.sh test/run.sh
-          osacompile -o /dev/null -e 'display notification "x" with title "cafe-wifi-okawari"'
+          osacompile -o /dev/null -e 'display alert "cafe-wifi-okawari" message "x" giving up after 120'
       - name: 模擬試験
         run: zsh test/run.sh
