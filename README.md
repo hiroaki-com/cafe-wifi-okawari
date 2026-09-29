@@ -19,7 +19,7 @@ Free Wi‑Fi from Wire and Wireless (Wi2) where you only need to accept the term
 
 | Shop | SSID | Status |
 |---|---|---|
-| Doutor / Excelsior Caffé | `DOUTOR_FREE_Wi-Fi` | Being tested (recording your acceptance works; automatic re-acceptance not yet confirmed) |
+| Doutor / Excelsior Caffé | `DOUTOR_FREE_Wi-Fi` | Tested (recording your acceptance and automatic re-acceptance after the time limit each confirmed at one shop) |
 | Starbucks | `at_STARBUCKS_Wi2` | Expected to work (same portal) |
 | Tully's Coffee | `tullys_Wi-Fi` | Expected to work (same portal) |
 | Skylark group (Gusto, etc.) | `.Wi2_Free_at_【SK.GROUP】` | Expected to work (same portal) |
@@ -115,7 +115,7 @@ tail ~/Library/Logs/cafe-wifi-okawari.log
 | `not free wi-fi xN` | A Wi2 network that is not a free "accept the terms" Wi‑Fi. The tool does nothing there |
 | `probe failed xN net=… curl=… http=…` | On a Wi2, recorded, or pending network, the connection state could not be checked (non-zero `curl` means a network error; `http` is an unexpected response). The tool sends nothing |
 
-On repeated failures the retry interval backs off from 30 seconds up to 30 minutes, the log is written on the 1st, 2nd, 4th, 8th… failure, and you get a single dialog (plus one more if it stops after repeated refusals). Moving to another shop resets the backoff.
+On repeated failures the retry interval backs off from 30 seconds up to 30 minutes, every failure is logged (failed status checks only on the 1st, 2nd, 4th, 8th…), and you get a single dialog (plus one more if it stops after repeated refusals). Moving to another shop resets the backoff.
 
 ## Notes
 

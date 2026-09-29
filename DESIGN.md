@@ -15,6 +15,7 @@
 ### 現地調査で確認した認証 API
 
 - 認証済みの状態で `https://service.wi2.ne.jp/wi2auth/redirect` は `/freewifi/doutor/landing.html` へ302を返し、`session_id` Cookie（Max-Age=3600）を発行した。最初の調査では認証状態を記録しておらず、その後の試験で状態による応答の違いが分かった。
+- 捕捉中に captive.apple.com の転送先をたどると、ランディングではなく同意ページ `/freewifi/doutor/index.html` へ302を返し、`session_id` も発行した。
 - ポータルの `login-min.js` が呼ぶ認証 API は `POST /wi2auth/xhr/login`。Content-Type は `application/json`、本文は `{"login_method":"onetap","login_params":{"agree":"1"}}`。
 - curl から `{"result":true,"licensed":null,"message":"AUTHENTICATED"}` を受け取った。ただし、これだけでは時間切れからの復旧を実証しない。
 
@@ -24,7 +25,9 @@
 
 - 旧版（47f2d01）では入店時の手動同意を検知できなかった。時間切れ後に捕捉を観測し、その後の手動同意は記録できた。
 - 次の時間切れでは自動再認証が動かず、失敗ログも残らなかった。
-- 修正版を認証済みの網で実行すると、同意の記録を確認できた。時間切れからの自動復旧は別途検証が必要。
+- 修正版を認証済みの網で実行すると、同意の記録を確認できた。
+- 導入した修正版（0b3db39）で時間切れを迎えると、捕捉中の転送先が同意ページ（`index.html`）だったため `redirect failed … to=…/index.html` で止まり、利用者が手動で同意した。
+- 同意ページも受け付ける版（0d0a996）では、次の時間切れで `re-authenticated api=ok probe=ok … t=3s` が出た。捕捉から約20秒で通信が戻り、IP・ゲートウェイは変わらず、macOS の接続画面も出なかった。自動再認証を実網で確認できたのはこの1回。
 
 **原因（自動の再認証が動かなかった）**: 捕捉中に引数なしの `/wi2auth/redirect` を呼ぶと、`302 /wi2auth/error/ctrlapi_timeout.html` が返る。47f2d01 はこれを「対象外の網」と判定し、何も記録せずに終了していた。初期の実測は認証済みのときのもので、模擬試験もその応答を前提にしていたため、試験がすべて通っても実網での保証になっていなかった。想定外の応答を黙って捨てる作りだったため、失敗の跡も残らなかった。
 
@@ -34,6 +37,7 @@
 |---|---|---|
 | 捕捉中 | `http://captive.apple.com/hotspot-detect.html` | `302 https://service.wi2.ne.jp/wi2auth/redirect?cmd=login&mac=<MAC>&ip=<IP>&essid=%20&apname=<AP>&apgroup=&url=…` |
 | 捕捉中 | 引数なしの `/wi2auth/redirect` | `302 /wi2auth/error/ctrlapi_timeout.html` |
+| 捕捉中 | 上の `redirect?cmd=login&mac=…&ip=…`（自分の MAC・IP） | `302 /freewifi/doutor/index.html`（同意ページ）＋ `session_id` |
 | 認証済み | 引数なしの `/wi2auth/redirect` | `302 /freewifi/doutor/landing.html` ＋ `session_id` |
 | 認証済み | 上の `redirect?cmd=login&mac=…&ip=…`（自分の MAC・IP） | `302 /freewifi/doutor/landing.html` ＋ `session_id` |
 | 認証済み | DHCP（`ipconfig getpacket en0`） | `domain_name: wi2.ne.jp`、DNS `103.5.140.1/2`、リース300秒 |
@@ -43,6 +47,8 @@
 - **Wi2 は時間切れで Wi‑Fi を切らない**: 観測した切断は利用者の操作によるものだった
 
 **修正（2026-09-27）**: 捕捉中は captive.apple.com の転送先（`redirect?cmd=login&mac=…&ip=…`）をたどる（§3 の 4）。入店時の同意は、Wi2 の網（DHCP のドメイン名）で本ツールが何も送っていないのに通信できていることから記録する（§3 の 1）。想定外の応答はログに残す。捕捉中に転送先をたどって認証できるかは、次の現地試験で確かめる（§7）。
+
+**修正（2026-09-29）**: 捕捉中の転送先は同意ページ `index.html` だった（認証済みでは `landing.html`）。再認証では両方を受け付け、同意の要求の `Referer` は実際に着いたページにする（ポータルの同意ボタンは `index.html` から `xhr/login` を送る）。一方、通信できているときのブランド確認（§3 の 1b）では `landing.html` だけを同意の証拠とし、`index.html` はまだ認証されていないものとして扱う。この版で時間切れからの自動再認証を確認した（§7）。
 
 ### 1.1 主要チェーンの認証方式（2026-09-26 調査）
 
@@ -63,7 +69,7 @@
 | モスバーガー | 0001docomo ほか | ドコモ等 | d アカウント等 | — | 対象外（認証情報が必要） |
 | デニーズ | Dennys_Free_Wifi | — | パスワード（WPA） | — | 対象外（ポータルがない） |
 
-Wi2 の5ブランドはどれも、同意ページ（`/freewifi/<店舗>/agreement.html` または `index.html`）の JS に `xhr/login`・`login_method:"onetap"`・`agree:"1"` があり、ランディングは `/freewifi/<店舗>/landing.html` の共通雛形だった。本スクリプトはランディングの店舗名を固定していないので、変更なしで動くはず。実機での確認はドトールだけ。
+Wi2 の5ブランドはどれも、同意ページ（`/freewifi/<店舗>/agreement.html` または `index.html`）の JS に `xhr/login`・`login_method:"onetap"`・`agree:"1"` があり、ランディングは `/freewifi/<店舗>/landing.html` の共通雛形だった。本スクリプトはランディングの店舗名を固定していないので、変更なしで動くはず。実機での確認はドトールだけ。ただしドトールでは、捕捉中の転送先が同意ページ `index.html` だった（§1）。同意ページが `agreement.html` のブランドで捕捉中にそちらへ転送されるなら、本スクリプトは `redirect failed … to=…/agreement.html` で止まる（未確認。現地のログで確かめてから対応する）。
 
 **判断**: 同意だけで使えて時間制限もある主要チェーンは、ほとんどが Wi2 に集まっている。そのため、対応は Wi2 のみのまま据え置く。次の候補はコメダ（USEN）だが、現地で通信を確かめるまでは実装しない（§8）。
 
@@ -94,7 +100,8 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
                     ただし共通 MAC では別ブランドの古い保留のこともあるので、b と同じくブランドを確かめてから記録する
                     （保留と同じブランドなら consent recorded、違えば consent recorded … (online)）
                  b. Wi2 の網で、この接続でまだブランドを確かめていなければ、引数なしの /wi2auth/redirect で
-                    ランディング（/freewifi/<ブランド>/landing.html）を確かめ、「MAC ブランド」を記録する
+                    ランディング（/freewifi/<ブランド>/landing.html）を確かめ、「MAC ブランド」を記録する。
+                    同意ページ（index.html）へ転送されたら、まだ認証されていないとみなして記録しない（not free wi-fi）
                     （consent recorded … (online)）。本ツールは記録していない接続先に同意を送らないので、
                     通信できている = 利用者が接続画面で同意した。確かめるのは接続ごとに1回（失敗したら3回まで）。
                     つなぎ直した（resolv.conf が確認の記録より新しい）ら確かめ直す。同じ MAC で別ブランドの店に移ったときも同じ
@@ -112,7 +119,8 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
             それ以外（ホテルなど別のポータル）→ Wi2 の網か同意済みの MAC なら portal unknown を記録。何も送らない
             転送先の mac・ip がこの Mac のもの（ifconfig の ether と ipconfig の IP）と違う → portal mismatch。送らない
             転送先を HTTPS でたどる（/wi2auth/ 内の 302 は3回まで。error ページは除く）。
-            302 かつ Location が https://service.wi2.ne.jp/freewifi/<ブランド>/landing.html（クエリ可）なら、
+            302 かつ Location が https://service.wi2.ne.jp/freewifi/<ブランド>/ の landing.html か index.html（クエリ可）なら、
+            （捕捉中の実測は同意ページ index.html、認証済みでは landing.html）
             「MAC ブランド」が同意済みか照合する。転送先の mac は、1〜2桁の16進数が6つでなければ一致しないとみなす。
               同意済みでない → 同意は送らずに保留として記録し（consent pending）、終了（ブランドの確認記録は消す）
             同意済みで、かつ session_id を受け取ったときだけ 5へ
@@ -121,7 +129,7 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
             session_id がない → 失敗扱い（redirect failed。通知あり）
        5. 接続先・インターフェース・端末の IP が 0 のときのままか確かめる（変わっていたら network changed を記録して送らない）。
           HTTPS service.wi2.ne.jp/wi2auth/xhr/login (onetap agree)。redirect で受け取った session_id を同じ Cookie jar から送る。
-          ランディングの XHR と同じく Origin と Referer を付ける
+          ポータルの XHR と同じく Origin と Referer（着いたページ）を付ける
        6. 2秒ごとに5回まで 1 を再判定（1回の確認は最大5秒なので、最悪で約35秒）。API 結果（通信成功・HTTP 2xx で、
             JSON の result が真偽値 true なら api=ok）と
             疎通回復（probe=ok/ng）を分けて記録。その前に接続先・インターフェース・IP をもう一度確かめ、途中で別の回線に
@@ -137,7 +145,7 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
             共通 MAC で別ブランドの拒否を持ち越さないよう、拒否したブランドを状態ファイルに持つ
 ```
 
-ログの URL は、クエリ（端末の MAC・IP が入る）を除いたホストとパスだけを書く。失敗は種類ごとに 1・2・4・8… 回目だけ書く。
+ログの URL は、クエリ（端末の MAC・IP が入る）を除いたホストとパスだけを書く。再認証の失敗は毎回書く（試行の間隔が 30秒→…→最大30分 と空くので、行数は増えすぎない。途中で失敗の種類が変わっても分かる）。状態を確かめられない probe failed だけは 1・2・4・8… 回目に間引く。失敗時の応答本文は、クエリ・MAC・IPv4 アドレスを伏せた先頭200文字だけを書く。
 
 | ファイル | 役割 |
 |---|---|
@@ -173,7 +181,7 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
 
 - **同意の推定は平文の応答に頼る**: 上の (a) は captive.apple.com の平文 HTTP の応答で「通信が戻った」と判断する。同意待ちの接続先があるときに同じ網の第三者がこの応答を偽ると、利用者が同意していなくても同意済みとして記録され、自動停止も解ける。同意待ちを作るには TLS 検証済みの Wi2 の応答が要るので、任意の偽 AP だけでは起こせない。根本的には、登録や停止の解除を利用者の明示的な操作に分ける必要がある
 - **応答のサイズに上限がない**: プローブと認証 API の応答本文を、サイズの上限なく変数へ取り込む（`-m` は時間の上限）。大きな応答で通信量・メモリが増えうる
-- **API の応答本文をログに書く**: 失敗時に先頭200文字をそのまま書くので、改行を含む応答が別のログ行に見えうる（ログの偽装）。正規の Wi2 の TLS 応答に含める必要があるので、影響は小さい
+- **API の応答本文をログに書く**: 失敗時に先頭200文字を書く（クエリ・MAC・IP は伏せる）が改行は除かないので、改行を含む応答が別のログ行に見えうる（ログの偽装）。正規の Wi2 の TLS 応答に含める必要があるので、影響は小さい
 
 ### 規約・法令との関係（2026-09-27 確認。弁護士による確認ではない）
 
@@ -201,7 +209,7 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
 - `WatchPaths` で `resolv.conf` が書き換わったときにも起動する。接続画面で同意して通信できるようになった時刻（システムログの `Online (websheet: success)`）に書き換わることを実測で確認したので、入店時の同意をすぐに記録できる
 - `ProcessType=Background` で低優先度・省電力のスケジューリングにする。スリープ中は動かず、復帰後の最初の周期で自動的に判定する
 - 切断に気づくまで最大30秒（+ 再認証に数秒。疎通の回復は2秒ごとに5回まで確かめる。Wi2 や captive.apple.com の応答が遅いときは、各通信の上限（5〜10秒）の分だけ延びる）。間隔を短くするより、この程度で十分と判断した
-- **継続障害時**: 失敗（認証 API の失敗に加え、`/wi2auth/redirect` の通信失敗・5xx も含む）のたびに次の試行を 30秒→60秒→…→最大30分 と遅らせる（状態は1行のファイルだけ）。待機状態は接続先ごとで、別の店に移ればすぐに試す。認証 API の呼び出しは最大でも1日約48回。ログは同じ失敗の 1・2・4・8… 回目だけ書き、1日あたり数行に収まる。ダイアログは失敗が続く間に1回だけ（拒否が3回続いて自動をやめるときは、もう1回出す）。認証済みを確認したら状態を消し、次の時間切れからは再び即座に反応する
+- **継続障害時**: 失敗（認証 API の失敗に加え、`/wi2auth/redirect` の通信失敗・5xx も含む）のたびに次の試行を 30秒→60秒→…→最大30分 と遅らせる（状態は1行のファイルだけ）。待機状態は接続先ごとで、別の店に移ればすぐに試す。認証 API の呼び出しは最大でも1日約48回。ログは失敗のたびに書くが、試行の間隔が空くので障害が続いても1日あたり約50行に収まる。ダイアログは失敗が続く間に1回だけ（拒否が3回続いて自動をやめるときは、もう1回出す）。認証済みを確認したら状態を消し、次の時間切れからは再び即座に反応する
 
 ## 6. 導入・停止
 
@@ -217,15 +225,15 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
 | 確認項目 | 結果 |
 |---|---|
 | 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`） | OK |
-| 模擬試験 `zsh test/run.sh`（下記、117項目） | OK。GitHub Actions でも実行。模擬 curl は Cookie（redirect で受け取った jar からの送信）と同意の本文を確かめる。現行版から `-b "$jar"` を外す・本文を変える変異では、どちらも20項目が失敗する |
-| 実際の curl の Cookie の保存と送信（ローカルの HTTPS サーバー） | OK（2026-09-27）。空の jar（`mktemp`）で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る。捕捉中の Wi2 が実際に返す `Set-Cookie` とその送信は未確認（現地で確かめる） |
+| 模擬試験 `zsh test/run.sh`（下記、125項目） | OK。GitHub Actions でも実行。模擬 curl は Cookie（redirect で受け取った jar からの送信）と同意の本文を確かめる。現行版から `-b "$jar"` を外す・本文を変える変異では、どちらも20項目が失敗する |
+| 実際の curl の Cookie の保存と送信（ローカルの HTTPS サーバー） | OK（2026-09-27）。空の jar（`mktemp`）で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る。捕捉中の Wi2 でも `session_id` を受け取って送り、再認証できた |
 | 試験が不具合を検出できるか（知らせる回数・同意の確認・JSON 判定・再登録のやり直し・通信の抑止・ブランド照合・接続し直しの判定、2026-09-27 の修正分として転送先の利用・MAC と IP の照合・DHCP のドメイン名・確認の回数・Origin・疎通の待機・ランディングのクエリ・転送のたどり・ログの URL・ダイアログを、わざと壊して実行） | すべて NG として検出 |
 | LaunchAgent から知らせが表示されるか | `display notification` は **NG**（2026-09-27、macOS 27）。終了コード 0 を返すが表示されず、許可も求められない（通知設定にスクリプトエディタが登録されておらず、黙って捨てられる）。LaunchAgent から実行した `display alert … giving up after 120` は表示され、利用者が OK を押せた（`button returned:OK`）→ `display alert` に切り替えた |
 | Wi2 API に curl から認証できるか | OK（`AUTHENTICATED`）。ただし当時の認証状態は不明 |
 | 捕捉を見たあとに自分で同意したとき `consent recorded` が出るか | OK（§1 の現地試験） |
-| 入店時に接続画面で同意したとき記録されるか | 47f2d01 では **NG**（macOS が同意まで網を使わせないため、捕捉が見えない。§1）。修正版を認証済みのドトールで一時フォルダから実行し、`consent recorded net=<gateway-id> doutor (online)` を確認（識別値は省略）。導入した状態で入店から試すのは次の現地試験 |
-| **実際の時間切れ時**に自動で再認証されるか | 47f2d01 では **NG**（引数なしの redirect が捕捉中は `ctrlapi_timeout` を返す。§1）。修正版は未確認。次の現地試験で `re-authenticated api=ok probe=ok` が出るかを見る。`api=ng probe=ok` なら OS の接続画面など別の経路で復旧したことを、`redirect failed … to=…`・`login failed … res=…` なら Wi2 の応答が想定と違うことを意味する |
-| 捕捉中に転送先の URL（`redirect?cmd=login&mac=…&ip=…`）がランディングと `session_id` を返すか | 未確認（捕捉中は未実測）。認証済みでは返ることを確認 |
+| 入店時に接続画面で同意したとき記録されるか | 47f2d01 では **NG**（macOS が同意まで網を使わせないため、捕捉が見えない。§1）。修正版を認証済みのドトールで一時フォルダから実行し、`consent recorded net=<gateway-id> doutor (online)` を確認（識別値は省略）。導入した LaunchAgent の実行でも、同意の数分後に `(online)` の記録を確認 |
+| **実際の時間切れ時**に自動で再認証されるか | **OK**（0d0a996。ドトールで1回）。`re-authenticated api=ok probe=ok … t=3s`、捕捉から約20秒で通信が戻り、HTTPS の通信が続くことも確認。IP・ゲートウェイは変わらず、macOS の接続画面も出なかった。47f2d01 は引数なしの redirect が捕捉中に `ctrlapi_timeout` を返して **NG**、0b3db39 は捕捉中の転送先が同意ページ `index.html` で **NG**（§1） |
+| 捕捉中に転送先の URL（`redirect?cmd=login&mac=…&ip=…`）が何を返すか | 同意ページ `index.html` と `session_id`（ドトール）。認証済みではランディング `landing.html` と `session_id` |
 | 転送先の `mac`・`ip` がこの Mac の値と一致するか | OK（捕捉中の転送先と `ifconfig en0` の ether・`ipconfig getifaddr en0` が一致） |
 | Wi2 の網の DHCP のドメイン名 | `wi2.ne.jp`（ドトールで確認）。他の Wi2 ブランドは未確認 |
 | 時間切れまでの時間 | 約63分（手動同意から捕捉までの経過時間）。同意した時刻から60分と見られる |
@@ -236,11 +244,11 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
 | `/var/run/resolv.conf` が書き換わる時刻 | 接続画面で同意して通信できるようになった時刻（`Online (websheet: success)`）と一致 |
 | ドトール以外の Wi2 店舗（スタバ等）で動くか | 未確認（JS 上は同じ API、§1.1）。現地でログを確認する |
 
-次の現地試験（ドトール）で見ること:
+次の現地試験で見ること:
 
-1. 入店して接続画面で同意した直後に `consent recorded net=… doutor (online)` が出る
-2. 約60分後の時間切れのあと、次の起動（最大30秒後）で `re-authenticated api=ok probe=ok … t=…s` が出て、通信が戻る。30秒は起動の間隔で、再認証にかかる時間（t、最悪で約35秒）は別。ログの1行だけで合格にせず、同じ Wi‑Fi のまま（テザリングなどに切り替わっていない）で、ブラウザの通常の HTTPS 閲覧も戻ったことを確かめる
-3. 失敗したときは、ログの `redirect failed`・`portal …`・`login failed … res=…`・`probe failed`・`network changed` の内容で原因を切り分ける（黙って終わる経路は、Wi2 の網でも同意済みでも同意待ちでもない網のポータル・判定不能と、既定経路がないときだけ）
+1. ドトール以外の Wi2 店舗（スタバ等）で、入店時の `consent recorded … (online)` と時間切れ後の `re-authenticated` が出るか。捕捉中の転送先が `index.html` 以外（`agreement.html` など）なら `redirect failed … to=…` に出る（§1.1）
+2. 入店して接続画面で同意した直後から、導入済みの状態で `consent recorded net=… doutor (online)` が出る（今回は同意の数分後に導入して確認）
+3. 失敗したときは、ログの `redirect failed`・`portal …`・`login failed … curl=… res=…`・`probe failed`・`network changed` の内容で原因を切り分ける（黙って終わる経路は、Wi2 の網でも同意済みでも同意待ちでもない網のポータル・判定不能と、既定経路がないときだけ）
 
 `test/run.sh` で確認している分岐:
 
@@ -251,6 +259,7 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
 | 既定経路がない（macOS が接続画面での同意を待っている） | 一切通信しない |
 | 接続した直後 / Wi2 のドメイン名の網 | プローブで確かめる |
 | Wi2 の網で通信できている（記録なし） | 引数なしの redirect でブランドを確かめ、`consent recorded … (online)`。同じ接続先では確かめ直さない。別の接続先へ移れば確かめる |
+| 同上で、引数なしの redirect が同意ページ（index.html）へ転送 | まだ認証されていないとみなし、記録しない（`not free wi-fi`）。同意待ちなら保留を消さない。続いて捕捉されても同意を送らない |
 | 同上で、ランディング以外の応答 / 通信失敗 | 記録しない。`not free wi-fi` / `redirect failed` を記録し、3回まで確かめ直す |
 | 3回失敗した接続 / つなぎ直した / 同じ MAC の別ブランドにつなぎ直した | 確かめ直さない / 確かめ直して記録 / 確かめて別ブランドとして記録 |
 | Wi2 のドメイン名でない網で通信できている | 記録しない |
@@ -259,6 +268,8 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
 | 保留中の再実行で捕捉が続いている | 通信なし（プローブのみ）。「最初の1回は自分で同意」を1回だけダイアログで知らせる（`captive.apple.com` の開き方を含む） |
 | 保留中の接続先で認証済みになる（利用者が同意） | 同意済みとして記録（`consent recorded`） |
 | 同意済みの接続先で時間切れ | `re-authenticated api=ok probe=ok net=… t=<秒>` |
+| 転送先が同意ページ（index.html。捕捉中の実測）/ ランディング（landing.html） | どちらも再認証する。`Referer` は着いたページ |
+| 転送先がそれ以外のページ（agreement.html など） | 送らない。`redirect failed … to=<パス>`、通知 |
 | Wi2 以外のポータル（初めての網） | Wi2 に何も送らない。記録もしない |
 | Wi2 以外のポータル（同意済みの網） | Wi2 に何も送らない。`portal unknown`（URL はクエリを除く） |
 | 転送先が HTTP | たどらない |
@@ -278,14 +289,15 @@ launchd (LaunchAgent, ユーザー権限, 30秒ごと ＋ resolv.conf が書き�
 | 認証要求の前 / 後に既定経路の接続先が別の回線に変わる | 送らない / 成功と記録しない。どちらも `network changed`。拒否にも数えない |
 | 同意済みの網でプローブが通信失敗×4 / Wi2 の網で HTTP 511 | `probe failed` を x1・x2・x4 だけ記録。Wi2 には送らない。確かめられたら数え直す |
 | 関係のない網でプローブが通信失敗 | 記録しない |
-| 認証要求のヘッダ | `Origin` とランディングの `Referer` を付ける |
+| 認証要求のヘッダ | `Origin` と、着いたページ（同意ページ）の `Referer` を付ける |
 | 疎通が数秒遅れて戻る / 5回の確認で戻らない | 成功（確認は3回）/ `login failed api=ok probe=ng`、通知 |
 | 認証要求の Cookie と本文 | redirect で受け取った session_id を同じ jar から送り、本文は onetap の同意。違えば模擬サーバーが拒否する |
 | API が `{"result": true}`（空白あり）・プローブ回復 | `re-authenticated api=ok probe=ok` |
 | API が `{"result":"true"}`（文字列）や HTML | `api=ng` |
 | API `result:false`・その後プローブ回復 | `login failed x1 api=ng probe=ok`、通知なし |
 | API が HTTP 503 で `{"result":true}`・プローブ回復 | `api=ng`（成功と記録しない） |
-| 9回連続失敗（API が 503） | 待機時間は 30→…→1800秒で頭打ち。ログは x1・x2・x4・x8、通知は1回だけ。自動は止めない |
+| 9回連続失敗（API が 503） | 待機時間は 30→…→1800秒で頭打ち。ログは x1〜x9 の毎回（途中で失敗の種類が変われば分かる）、通知は1回だけ。自動は止めない |
+| login の通信失敗 / 失敗時の応答本文 | curl の終了値を記録（`curl=28`）/ クエリ・MAC・IP を伏せて先頭200文字を記録 |
 | API が同意を拒否（`result:false`・HTTP 200・疎通なし）×3 | 2回目までは続け、3回目で同意済みから外して保留（notified）に戻す。`auto stopped` を記録し通知。以後は送らず、自分で同意し直せば再開 |
 | 拒否2回 → 成功 → 拒否2回 | 止めない（成功で数え直す） |
 | 拒否2回 → つなぎ直し → 拒否1回 | 止める（つなぎ直しでは数え直さない） |
