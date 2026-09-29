@@ -135,7 +135,7 @@ The license of this tool does not grant any right to use a Wi‑Fi service, nor 
 
 ### Each time-out briefly interrupts your connection
 
-At each time-out (at Doutor, about 60 minutes after you accept or the tool re-authenticates), your connection is down until re-authentication completes: up to 10 seconds for the tool to notice, plus a few seconds after it sends the acceptance (measured: about 6 seconds at Gusto with the current version; about 21 seconds at Doutor with an earlier version that checked every 30 seconds).
+At each time-out (at Doutor, about 60 minutes after you accept or the tool re-authenticates), your connection is down until re-authentication completes: up to 10 seconds for the tool to notice, plus a few seconds after it sends the acceptance, so expect at most a dozen or so seconds (latest measurement: about 6 seconds at Gusto).
 
 The Wi‑Fi stays connected and your IP address does not change. Many apps carry on once the connection is back, but the effect of the gap varies by app. For example:
 
