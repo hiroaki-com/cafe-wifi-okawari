@@ -8,7 +8,7 @@ English | [日本語](README.ja.md)
 
 Automatically re-accepts the captive portal terms when a free café Wi‑Fi in Japan sends you back to its login page after the time limit (e.g. 60 minutes). *Okawari* means "a refill" — like a coffee refill, but for Wi‑Fi.
 
-- On Wi2 Wi‑Fi where you have accepted the terms yourself, checks every 10 seconds, so it notices a logout within about 10 seconds and usually re-authenticates a few seconds later
+- On Wi2 Wi‑Fi where you have accepted the terms yourself, checks every 10 seconds, so it notices a logout within about 10 seconds and usually re-authenticates a few seconds later (your connection is down in between; see [Caveats](#caveats))
 - Works with any time limit — it reacts to the login page, not a timer
 - No IDs, passwords, or email addresses. Nothing secret is stored
 - Nothing extra to install: runs on the zsh, curl, and launchd that ship with macOS
@@ -74,7 +74,45 @@ No `sudo`. The installer copies the script to `~/.local/bin/cafe-wifi-okawari` a
 - Networks are identified by the router's MAC address together with the brand (e.g. `doutor`). On a network not yet recorded, it waits for your manual acceptance. It cannot guarantee to tell shops apart, though (shops of the same brand may share the same value).
 - It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`), without sending anything. On other networks (e.g. at home) it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does, and sends nothing to Wi2.
 
-Messages are shown as dialogs that close by themselves after 2 minutes (macOS does not show notifications from background jobs). They and the installer messages follow your macOS language (Japanese or English).
+Dialogs and installer messages follow your macOS language (Japanese or English).
+
+## Caveats
+
+### Each time-out briefly interrupts your connection
+
+At each time-out (about every 60 minutes after you accept or the tool re-authenticates, at Doutor), your connection is down until re-authentication completes. The tool checks every 10 seconds, so it takes up to 10 seconds to notice, plus a few seconds for the connection to come back after it sends the acceptance (measured at Doutor: about 21 seconds, with an earlier version that checked every 30 seconds).
+
+The Wi‑Fi stays connected and your IP address does not change. Many apps carry on by themselves once the connection is back, but how an app handles the gap varies. For example:
+
+- **Video calls and online meetings**: video or audio may freeze or show "reconnecting". You may be dropped from the call
+- **Screen sharing and live streaming**: what others see stops. A stream may end
+- **Large uploads and downloads**: may fail (apps that cannot resume start over)
+- **SSH, remote desktop, online games**: the session may disconnect
+
+Before an important call, stream, or presentation, check the next time-out with `./install.sh status` and plan around it, or use another connection such as tethering. The tool acts only after it detects a time-out; it does not re-authenticate ahead of time.
+
+### Dialogs appear only when you are offline
+
+A successful automatic reconnection shows nothing (it is only logged; see `./install.sh status`), so the tool does not interrupt your screen every hour. A dialog appears only in these cases, all of them while you have no internet connection:
+
+- You need to accept the terms yourself the first time
+- Automatic reconnection failed (once while failures continue)
+- The login was refused repeatedly and automatic re-acceptance was stopped
+
+Dialogs appear in the middle of the screen and close by themselves after 2 minutes (macOS does not show notifications from background jobs, so the usual top-right notifications are not available). Because they are not notifications, Focus modes (such as Do Not Disturb) do not hold them back, and they show up in screen sharing and screen recordings.
+
+### When it cannot reconnect for you
+
+- **Rejoining the Wi‑Fi after a time-out**: if the Mac rejoins the Wi‑Fi (waking from sleep, losing the signal, turning Wi‑Fi off and on) after the session has already timed out, macOS opens its login window and keeps other apps off that Wi‑Fi until you accept. The tool cannot do anything in the meantime, so accept in the login window yourself. It reconnects automatically again from the next time-out (this acceptance is not logged, so the estimate in `./install.sh status` does not include it)
+- **While the Mac sleeps**: the tool does not run. If the session has timed out when the Mac wakes and the Wi‑Fi is still connected, it re-authenticates within about 10 seconds. If the Mac rejoins the Wi‑Fi, see above
+- **When a daily usage cap is reached** (e.g. Renoir): re-authentication is refused and the connection does not come back
+- **VPN / iCloud Private Relay** can prevent the tool from detecting the login page
+
+### Other notes
+
+- **Free Wi‑Fi is unencrypted.** This tool only reconnects; protect your traffic with HTTPS or a VPN.
+- **Terms of use.** After your first manual acceptance, the tool sends the acceptance directly to the authentication API without showing the terms page. It has no way to lift server-side time or usage limits, and it does not spoof MAC addresses or open multiple sessions. Read [Before you use it](#before-you-use-it) first.
+- Unofficial and not affiliated with any of the companies above. It may break if a portal changes. How it relates to the terms and the law is reviewed in [DESIGN.md](DESIGN.md) §4 (Japanese).
 
 ## Uninstall
 
@@ -86,7 +124,7 @@ This also removes the list of networks you accepted. The log at `~/Library/Logs/
 
 ## Troubleshooting
 
-Is it running? This shows whether it is registered, the brands of the networks you accepted, and the last 5 log lines (exits with 1 if it is not registered):
+Is it running? This shows whether it is registered, the brands of the networks you accepted, when it last authenticated and the estimated next time-out, and the last 5 log lines (exits with 1 if it is not registered):
 
 ```sh
 ./install.sh status
@@ -116,13 +154,6 @@ tail ~/Library/Logs/cafe-wifi-okawari.log
 | `probe failed xN net=… curl=… http=…` | On a Wi2, recorded, or pending network, the connection state could not be checked (non-zero `curl` means a network error; `http` is an unexpected response). The tool sends nothing |
 
 On repeated failures the retry interval backs off from 30 seconds up to 30 minutes, every failure is logged (failed status checks only on the 1st, 2nd, 4th, 8th…), and you get a single dialog (plus one more if it stops after repeated refusals). Moving to another shop resets the backoff.
-
-## Notes
-
-- **VPN / iCloud Private Relay** can prevent the tool from detecting the login page.
-- **Free Wi‑Fi is unencrypted.** This tool only reconnects; protect your traffic with HTTPS or a VPN.
-- **Terms of use.** After your first manual acceptance, the tool sends the acceptance directly to the authentication API without showing the terms page. It has no way to lift server-side time or usage limits, and it does not spoof MAC addresses or open multiple sessions. Read [Before you use it](#before-you-use-it) first.
-- Unofficial and not affiliated with any of the companies above. It may break if a portal changes. How it relates to the terms and the law is reviewed in [DESIGN.md](DESIGN.md) §4 (Japanese).
 
 ## Development
 

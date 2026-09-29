@@ -24,6 +24,16 @@ case ${1-} in
     n=$(grep -c . "$kn" 2>/dev/null) || n=0
     b=$(awk '{ print $2 }' "$kn" 2>/dev/null | sort -u | paste -sd ' ' -) || b=
     msg "同意済みの接続先: $n 件${b:+（$b）}" "Accepted networks: $n${b:+ ($b)}"
+    # 最後の認証（自動の再認証・同意の記録）の時刻と、次の時間切れの目安。制限時間は店で違うので60分の店の場合として示し、
+    # 60分を過ぎていれば目安は出さない。つなぎ直して自分で同意し直した分はログに残らないので、目安に入らない。
+    a=$(grep -E '^[0-9-]{10} [0-9:]{8} (re-authenticated|consent recorded) ' "$log" 2>/dev/null | tail -n 1) || a=
+    if [[ -n $a ]] && t=$(date -j -f '%F %T' "${a[1,19]}" +%s 2>/dev/null); then
+      msg "最後の認証: ${a[1,19]}" "Last authenticated: ${a[1,19]}"
+      if (( t + 3600 > $(date +%s) )); then
+        e=$(date -r $(( t + 3600 )) +%H:%M)
+        msg "次の時間切れの目安: $e 頃（制限時間が60分の店の場合）" "Next time-out: around $e (at shops with a 60-minute limit)"
+      fi
+    fi
     [[ -s $log ]] && { msg "ログ（最新5行）: $log" "Log (last 5 lines): $log"; tail -n 5 "$log" }
     exit $(( ! on )) ;;
   uninstall)

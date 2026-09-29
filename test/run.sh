@@ -475,6 +475,18 @@ HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$
 ok '状態: 登録済みなら 0 で終わり、動作中と表示' '(( rc == 0 )) && [[ $out == 動作中（10秒ごと）:* ]]'
 ok '状態: 同意済みの件数とブランドを表示' '[[ $out == *$'"'"'\n'"'"'"同意済みの接続先: 3 件（doutor starbucks）"$'"'"'\n'"'"'* ]]'
 ok '状態: ログの最新5行を表示'          '[[ $out == *$'"'"'\nL2\n'"'"'*L6 && $out != *L1* ]]'
+ok '状態: 認証の記録がなければ時刻を出さない' '[[ $out != *最後の認証* && $out != *目安* ]]'
+t1=$(date -v-70M '+%F %T') t2=$(date -v-10M '+%F %T') t3=$(date -v-5M '+%F %T')
+print -rl -- "$t1 consent recorded net=$A doutor (online)" "$t2 re-authenticated api=ok probe=ok net=$A doutor t=3s" \
+  "$t3 login failed x1 api=ng probe=ng" > "$H/Library/Logs/cafe-wifi-okawari.log"
+HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '状態: 最後の認証の時刻と、60分後の目安を出す（失敗の行は数えない）' \
+  '(( rc == 0 )) && [[ $out == *$'"'"'\n'"'"'"最後の認証: $t2"$'"'"'\n'"'"'"次の時間切れの目安: $(date -j -v+60M -f "%F %T" "$t2" +%H:%M) 頃"* ]]'
+LANGS=en-US HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 目安（英語）'                 '[[ $out == *"Last authenticated: $t2"$'"'"'\n'"'"'"Next time-out: around $(date -j -v+60M -f "%F %T" "$t2" +%H:%M) "* ]]'
+print -rl -- "$t1 consent recorded net=$A doutor (online)" > "$H/Library/Logs/cafe-wifi-okawari.log"
+HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '状態: 60分を過ぎていれば時刻だけ出し、目安は出さない' '(( rc == 0 )) && [[ $out == *"最後の認証: $t1"* && $out != *目安* ]]'
 touch $M/notloaded
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '状態: 未登録なら 1 で終わる'        '(( rc == 1 )) && [[ $out == 登録されていません* ]]'
