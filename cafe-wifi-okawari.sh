@@ -75,7 +75,7 @@ netid
 [[ -n $net ]] || exit 0
 # 同じ MAC の網を同意済みとして持っているか。ブランドまでの照合は Wi2 に問い合わせてから行う。
 /usr/bin/awk -v n="$net" '$1 == n { f = 1 } END { exit !f }' "$KN" 2>/dev/null && kmac=1 || kmac=0
-# DHCP で配られたドメイン名が wi2.ne.jp なら Wi2 の網（ドトールで実測。手元の情報で、通信はしない）
+# DHCP で配られたドメイン名が wi2.ne.jp なら Wi2 の網（ドトール・ガストで実測。手元の情報で、通信はしない）
 [[ -n $ifc && $(/usr/sbin/ipconfig getoption "$ifc" domain_name 2>/dev/null) == wi2.ne.jp ]] && wi2net=1 || wi2net=0
 zstat -A joined +mtime $RC 2>/dev/null || joined=(0)
 # 同意待ちの記録と、その更新からの秒数（pda）。起動の間隔（10秒）に依らず、知らせる・確かめ直す間隔を時間で決める。

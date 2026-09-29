@@ -20,9 +20,9 @@ Free Wi‑Fi from Wire and Wireless (Wi2) where you only need to accept the term
 | Shop | SSID | Status |
 |---|---|---|
 | Doutor / Excelsior Caffé | `DOUTOR_FREE_Wi-Fi` | Tested (recording your acceptance and automatic re-acceptance after the time limit each confirmed at one shop) |
+| Skylark group (Gusto, etc.) | `.Wi2_Free_at_【SK.GROUP】` | Tested (recording your acceptance and automatic re-acceptance after the time limit each confirmed at one shop) |
 | Starbucks | `at_STARBUCKS_Wi2` | Expected to work (same portal) |
 | Tully's Coffee | `tullys_Wi-Fi` | Expected to work (same portal) |
-| Skylark group (Gusto, etc.) | `.Wi2_Free_at_【SK.GROUP】` | Expected to work (same portal) |
 | Renoir / Miyama Coffee | `Renoir_Miyama_Wi-Fi` | Expected to work (same portal). The 3-hour daily cap cannot be extended |
 
 Networks that need a sign-up, an email address, or a survey (McDonald's, Saizeriya, etc.) are not supported. The survey is in [DESIGN.md](DESIGN.md) (Japanese).
@@ -135,7 +135,7 @@ The license of this tool does not grant any right to use a Wi‑Fi service, nor 
 
 ### Each time-out briefly interrupts your connection
 
-At each time-out (at Doutor, about 60 minutes after you accept or the tool re-authenticates), your connection is down until re-authentication completes: up to 10 seconds for the tool to notice, plus a few seconds after it sends the acceptance (measured at Doutor: about 21 seconds, with an earlier version that checked every 30 seconds).
+At each time-out (at Doutor, about 60 minutes after you accept or the tool re-authenticates), your connection is down until re-authentication completes: up to 10 seconds for the tool to notice, plus a few seconds after it sends the acceptance (measured: about 6 seconds at Gusto with the current version; about 21 seconds at Doutor with an earlier version that checked every 30 seconds).
 
 The Wi‑Fi stays connected and your IP address does not change. Many apps carry on once the connection is back, but the effect of the gap varies by app. For example:
 
