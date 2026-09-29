@@ -25,7 +25,7 @@ notify() {
   /usr/bin/osascript -e "display alert \"cafe-wifi-okawari\" message \"$m\" giving up after 120" >/dev/null
 }
 HOWJA='Wi-Fi に接続し直すと出る接続画面か、ブラウザで http://captive.apple.com を開くと出る画面で'
-HOWEN='on the login page (reconnect to the Wi-Fi, or open http://captive.apple.com in a browser)'
+HOWEN='the login page (reconnect to the Wi-Fi, or open http://captive.apple.com in a browser)'
 
 # -q で ~/.curlrc を無視し、実行条件（証明書検証・リダイレクト非追従）を固定する。-q は先頭必須。
 curl=(/usr/bin/curl -q -s)
@@ -159,7 +159,7 @@ waiting() {
   (( $#pd == 2 && pda >= 30 )) || return 0
   print -r -- "$pd[1,2] notified" > "$PD"
   notify "この Wi-Fi では最初の1回だけ、${HOWJA}規約を読んで同意してください。次からは自動で再接続します。" \
-    "For this Wi-Fi, read and accept the terms yourself once, $HOWEN. After that, it reconnects automatically."
+    "For this Wi-Fi, read and accept the terms yourself once, on $HOWEN. After that, it reconnects automatically."
 }
 # 同意待ちの接続先では通信しない。ただし同じ MAC で同意済みのブランドがあるときは、どのブランドかを Wi2 に確かめる
 # （ルーターの冗長化用の共通 MAC では、別ブランドの古い同意待ちが残っていることがある）。確かめるのは30秒に1回まで
@@ -187,7 +187,7 @@ fail() {
   print -r -- "$n $(( EPOCHSECONDS + wait )) $net ${rej:-0} ${told:-0} $rb" > "$ST"
   log "$1 x$n $2"
   (( tell )) && notify "Wi-Fi に自動で再接続できませんでした。${HOWJA}確認してください。" \
-    "Could not reconnect to Wi-Fi automatically. Check the login page (reconnect to the Wi-Fi, or open http://captive.apple.com in a browser)."
+    "Could not reconnect to Wi-Fi automatically. Check $HOWEN."
   exit 1
 }
 
@@ -263,7 +263,7 @@ if (( lrc == 0 )) && [[ $api == ng && $probe == ng && $http == [1-4]?? ]] && (( 
   rm -f "$ST" "$SN"   # 利用者が同意し直したら、入店時の確認済みの記録に関係なく確かめて記録できるように
   log "auto stopped net=$net $brand rejected x$rej http=$http curl=$lrc res=$(mask "$res")"
   notify "認証が続けて拒否されたため、この Wi-Fi での自動再接続を止めました。${HOWJA}確認してください。" \
-    "Stopped reconnecting to this Wi-Fi automatically because the login was refused repeatedly. Check the login page (reconnect to the Wi-Fi, or open http://captive.apple.com in a browser)."
+    "Stopped reconnecting to this Wi-Fi automatically because the login was refused repeatedly. Check $HOWEN."
   exit 1
 fi
 fail "login failed" "api=$api probe=$probe http=$http curl=$lrc res=$(mask "$res")" $notify

@@ -17,7 +17,7 @@ msg() { (( ja )) && print -r -- "$1" || print -r -- "$2" }
 case ${1-} in
   '') ;;
   status)
-    # 登録されているか・同意済みの接続先（ブランド名だけ）・ログの最新5行を表示する。通信はしない。登録がなければ 1 で終わる。
+    # 登録されているか・同意済みの接続先（ブランド名だけ）・最後の認証と次の時間切れの目安・ログの最新5行を表示する。通信はしない。登録がなければ 1 で終わる。
     launchctl print gui/$UID/$label >/dev/null 2>&1 && on=1 || on=0
     (( on )) && msg "動作中（${every}秒ごと）: $bin" "Running (every $every seconds): $bin" \
              || msg "登録されていません（./install.sh で導入）" "Not registered (run ./install.sh to install)"
