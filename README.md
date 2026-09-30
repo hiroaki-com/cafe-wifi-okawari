@@ -11,7 +11,8 @@ Automatically re-accepts the captive portal terms when a free café Wi‑Fi in J
 - On Wi2 Wi‑Fi where you have accepted the terms yourself (USEN is only partly tested at a shop; see [About USEN](#about-usen)), it checks every 10 seconds, notices a logout within about 10 seconds, and usually reconnects a few seconds later (your connection is down in between; see [Caveats](#caveats))
 - Works with any time limit — it reacts to the login page, not a timer
 - Uses no IDs, passwords, or email addresses, and stores nothing secret
-- Nothing extra to install: it runs on the zsh, curl, and launchd that ship with macOS
+- Shows its status as a coffee cup icon in the menu bar, without interrupting you
+- Nothing extra to install: it runs on the zsh, curl, launchd, and JavaScript for Automation that ship with macOS
 
 ## Supported networks
 
@@ -63,6 +64,8 @@ cd cafe-wifi-okawari
 
 No `sudo` needed. The installer copies the script to `~/.local/bin/cafe-wifi-okawari` and registers a user LaunchAgent. From then on it runs in the background every 10 seconds, so you can close Terminal. After a restart, it starts again automatically when you log in.
 
+It also adds a coffee cup icon to the menu bar ([The menu bar icon](#the-menu-bar-icon)). To install without it, run `./install.sh --no-menubar` instead (this also removes the icon if it is already installed).
+
 ### 2. Accept the terms yourself once at the shop
 
 When you join the shop's Wi‑Fi (e.g. `DOUTOR_FREE_Wi-Fi`), macOS opens its login window. Please read the terms and press "accept" as usual.
@@ -81,7 +84,23 @@ You accept (first time only)
   → the same happens at every time-out
 ```
 
-A successful reconnection shows nothing. What can happen while the connection is down is described in [Caveats](#caveats).
+A successful reconnection shows no dialog; the menu bar icon shows ✓ for 10 minutes. What can happen while the connection is down is described in [Caveats](#caveats).
+
+### The menu bar icon
+
+The coffee cup in the menu bar shows the tool's state. It only reads the tool's files; it sends nothing over the network.
+
+| Icon | Meaning |
+|---|---|
+| Cup | Running |
+| Cup ✓ | Reconnected automatically within the last 10 minutes |
+| Cup ! | You need to act on this Wi‑Fi: accept the terms yourself once, or check the login page because reconnecting failed. The menu says which |
+| Cup … | macOS is waiting for you to accept on the login page (on any network with a login page, not only supported ones). If the login page does not appear, open `http://captive.apple.com` in a browser |
+| Faded outline cup | Stopped (the background job is not registered). Run `./install.sh` to restart |
+
+Click it to see whether automatic reconnection is on for this Wi‑Fi, the estimated next time-out, and the last three events (reconnected, terms accepted, could not reconnect, stopped). The menu is in English only. It shows no MAC or IP addresses or SSIDs, so it is safe to show in screen sharing. The estimate is shown only when the last authentication was on the current network within 60 minutes, and not after you rejoined the Wi‑Fi. It assumes the shop's limit is 60 minutes.
+
+"Hide from Menu Bar" quits the icon; it comes back the next time you log in or run `./install.sh`. The tool itself keeps running either way.
 
 ### Check that it is working
 
@@ -89,13 +108,14 @@ A successful reconnection shows nothing. What can happen while the connection is
 ./install.sh status
 ```
 
-You will see something like this. "Current network" tells whether the network you are on now is one you accepted (the tool identifies a network by its gateway's MAC address). "Last auth" is when your own acceptance was recorded or the tool last re-accepted, and "Next time-out" is an estimate based on it. While the tool is watching a USEN network, "Current network" says so:
+You will see something like this. "Menu bar" tells whether the menu bar icon is running (`running`, `not running`, or `not installed`). "Current network" tells whether the network you are on now is one you accepted (the tool identifies a network by its gateway's MAC address). "Last auth" is when your own acceptance was recorded or the tool last re-accepted, on any network. "Next time-out" is an estimate from the last authentication on the current network, shown under the same conditions as in the menu bar. While the tool is watching a USEN network, "Current network" says so:
 
 ```text
 Service          loaded (LaunchAgent local.cafe-wifi-okawari)
 Schedule         every 10 s, and whenever the network settings change
 Program          /Users/you/.local/bin/cafe-wifi-okawari
 Last exit code   0 (412 runs since loaded)
+Menu bar         running
 Current network  gateway 0:0:5e:0:1:46 (doutor), accepted: auto re-authentication on
 Accepted         1 network (brand: doutor)
 Last auth        2026-10-01 10:05:12 (12 min ago), consent recorded on doutor
@@ -120,7 +140,7 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 
 - Networks are identified by the router's MAC address together with the brand (e.g. `doutor`). Shops of the same brand may share the same value, so it cannot always tell shops apart.
 - It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`), without sending anything. On other networks (e.g. at home) it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does, and sends nothing to Wi2. During that time it also checks the Mac's system log once for an acceptance on the login page (to find USEN networks; it sends nothing).
-- Dialogs follow your macOS language (Japanese or English). Messages from `install.sh` are in English.
+- Dialogs follow your macOS language (Japanese or English). Messages from `install.sh` and the menu bar are in English.
 
 ## Before you use it
 
@@ -160,11 +180,11 @@ The Wi‑Fi stays connected and your IP address does not change. Many apps carry
 - **Large uploads and downloads**: may fail (apps that cannot resume start over)
 - **SSH, remote desktop, online games**: the session may disconnect
 
-Before an important call, stream, or presentation, please check the next time-out with `./install.sh status` and plan around it, or use another connection such as tethering. The tool re-authenticates only after a time-out; it does not renew ahead of time.
+Before an important call, stream, or presentation, please check the next time-out in the menu bar or with `./install.sh status` and plan around it, or use another connection such as tethering. The tool re-authenticates only after a time-out; it does not renew ahead of time.
 
 ### Dialogs appear only when you are offline
 
-A successful reconnection shows nothing (it is only logged; see `./install.sh status`), so the tool does not interrupt your screen every hour. A dialog appears only in these cases, all of them while you have no internet connection:
+A successful reconnection shows no dialog (the menu bar icon shows ✓, and it is logged; see `./install.sh status`), so the tool does not interrupt your screen every hour. A dialog appears only in these cases, all of them while you have no internet connection:
 
 - You need to accept the terms yourself the first time
 - Automatic reconnection failed (once while failures continue)
@@ -175,7 +195,7 @@ Dialogs appear in the middle of the screen and close by themselves after 2 minut
 
 ### When it cannot reconnect for you
 
-- **Rejoining the Wi‑Fi after a time-out** (waking from sleep, losing the signal, turning Wi‑Fi off and on): macOS opens its login window and keeps other apps off that Wi‑Fi until you accept, so the tool cannot help. Please accept in the login window yourself. It reconnects automatically again from the next time-out (this acceptance is not logged, so the estimate in `./install.sh status` does not include it)
+- **Rejoining the Wi‑Fi after a time-out** (waking from sleep, losing the signal, turning Wi‑Fi off and on): macOS opens its login window and keeps other apps off that Wi‑Fi until you accept, so the tool cannot help. Please accept in the login window yourself. It reconnects automatically again from the next time-out (this acceptance is not logged, so the next time-out estimate in the menu bar and `./install.sh status` is not shown until the next automatic reconnection)
 - **On USEN, when macOS opens its login window first**: the tool can no longer send anything. Please accept in the login window yourself (see [About USEN](#about-usen))
 - **While the Mac sleeps**: the tool does not run. If the session has timed out when the Mac wakes and the Wi‑Fi is still connected, it re-authenticates within about 10 seconds
 - **When a daily usage cap is reached** (e.g. Renoir): re-authentication is refused and the connection does not come back
@@ -193,11 +213,11 @@ Dialogs appear in the middle of the screen and close by themselves after 2 minut
 ./install.sh uninstall
 ```
 
-This also removes the list of networks you accepted and the USEN networks being watched. The log at `~/Library/Logs/cafe-wifi-okawari.log` is kept; delete it by hand if you no longer need it.
+This also removes the menu bar icon, the list of networks you accepted, and the USEN networks being watched. The log at `~/Library/Logs/cafe-wifi-okawari.log` is kept; delete it by hand if you no longer need it.
 
 ## Troubleshooting
 
-To check that it is running (shows whether it is registered and its last exit code, whether the current network is one you accepted, the brands of the networks you accepted, when it last authenticated and the estimated next time-out, and the last 5 log lines; it sends nothing over the network, and exits with 1 if it is not registered):
+To check that it is running (shows whether it is registered and its last exit code, whether the menu bar icon is running, whether the current network is one you accepted, the brands of the networks you accepted, when it last authenticated and the estimated next time-out, and the last 5 log lines; it sends nothing over the network, and exits with 1 if it is not registered):
 
 ```sh
 ./install.sh status

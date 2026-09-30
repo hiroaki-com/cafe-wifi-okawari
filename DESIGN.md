@@ -203,8 +203,8 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | ファイル | 役割 |
 |---|---|
 | `cafe-wifi-okawari.sh` | 検知と再認証（唯一のロジック）。導入先は `~/.local/bin/cafe-wifi-okawari` |
-| `install.sh` | 導入・更新・状態の確認・削除（メッセージは英語のみ）。plist を `$HOME` に合わせて `plutil` で生成する（パスに `&` などがあっても壊れない）。`StartInterval=10`、`WatchPaths=/var/run/resolv.conf`（接続画面で同意して通信できるようになった時刻に書き換わる）、`ProcessType=Background`。`bootout` 直後の `bootstrap` の一時失敗は最大10回やり直す。`status` は通信せずに、登録と最後の終了コード・今の接続先（本体の `netid` と同じく経路表と ARP から）が同意済みか・同意済みの件数とブランド・最後の認証の時刻と60分後の時間切れの目安・ログの最新5行を出す。見張り中の網（24時間以内）は別に表示する（§3.1） |
-| `test/run.sh` | 模擬の curl・route・arp・ipconfig・ifconfig・defaults・osascript・launchctl による分岐試験。GitHub Actions（macOS）で push ごとに実行 |
+| `install.sh` | 導入・更新・状態の確認・削除（メッセージは英語のみ）。既定でメニューバーの表示（§3.2）も入れる（`--no-menubar` なら入れず、入っていれば消す）。plist を `$HOME` に合わせて `plutil` で生成する（パスに `&` などがあっても壊れない）。`StartInterval=10`、`WatchPaths=/var/run/resolv.conf`（接続画面で同意して通信できるようになった時刻に書き換わる）、`ProcessType=Background`。`bootout` 直後の `bootstrap` の一時失敗は最大10回やり直す。`status` は通信せずに、登録と最後の終了コード・メニューバーの表示の状態・今の接続先（本体の `netid` と同じく経路表と ARP から）が同意済みか・同意済みの件数とブランド・最後の認証の時刻と次の時間切れの目安（§3.2 と同じ条件を満たすときだけ）・ログの最新5行を出す。見張り中の網（24時間以内）は別に表示する（§3.1） |
+| `test/run.sh` | 模擬の curl・route・arp・ipconfig・ifconfig・defaults・osascript・launchctl・networksetup・scutil による分岐試験。GitHub Actions（macOS）で push ごとに実行 |
 | `~/Library/LaunchAgents/local.cafe-wifi-okawari.plist` | LaunchAgent 定義（`install.sh` が生成） |
 | `~/Library/Logs/cafe-wifi-okawari.log` | 同意の記録・同意待ちと、再認証の成功・失敗・想定外の応答だけ（通常時は何も書かない） |
 | `~/Library/Caches/cafe-wifi-okawari` | 「連続失敗回数 次回試行時刻 接続先 拒否の回数 知らせたか 拒否したブランド」（1行）。成功時・認証済み時・自動の停止時に削除 |
@@ -214,7 +214,7 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | `~/Library/Application Support/cafe-wifi-okawari/consented` | 利用者が自分で同意した接続先「MAC ブランド」（1行1つ）。USEN は「MAC usen [<規約のハッシュ>]」。ここにある接続先だけ自動で再認証する |
 | `~/Library/Application Support/cafe-wifi-okawari/watched` | （USEN で追加）接続画面での同意をシステムログで確かめた網「MAC 記録した時刻」（1行1つ、新しい50件まで）。24時間で無効（読むときに捨てる）。同意を記録したとき・対象外と確かめたとき・Wi2 の網と分かったときに外す。確かめられなかった（通信失敗など）だけでは外さない |
 
-`install.sh uninstall` は plist・本体・`~/Library/Caches` の4ファイル・`Application Support/cafe-wifi-okawari`（`watched` を含む）を消し、ログは残す。
+`install.sh uninstall` は2つの plist・本体・メニューバーの2ファイル・`~/Library/Caches` の4ファイル・`Application Support/cafe-wifi-okawari`（`watched` を含む）を消し、ログは残す。
 
 ### 3.1 USEN の分岐
 
@@ -288,9 +288,9 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 
 **curl の実行条件**: USEN の機器へは `--proto '=http'`・リダイレクト非追従・各5秒まで・`--max-filesize`（HTML 64KB、page.js 1MB）。共通の curl に `--noproxy '*'` を加える（Wi2 も一緒に変わる）。`-q` は `~/.curlrc` を読まないが、環境変数のプロキシ（`http_proxy`・`ALL_PROXY` など。`launchctl setenv` で LaunchAgent にも渡る）は読むので、平文の要求（端末の MAC を含む）がプロキシへ届き、プローブの判定も狂うため。
 
-### 3.2 メニューバーの表示（設計。未実装）
+### 3.2 メニューバーの表示
 
-本ツールが動いていること、再認証できたこと、利用者の対応が要ることを、割り込まずに見せる。成功時の通知（§8）の代わり。2026-09-30 に試作し、実機で表示と各状態を確かめた（§7）。
+本ツールが動いていること、再認証できたこと、利用者の対応が要ることを、割り込まずに見せる。成功時の通知（§8）の代わり。2026-09-30 に試作して実機で表示と各状態を確かめ、同日に実装した（§7）。
 
 **方式**: macOS 標準の `osascript -l JavaScript`（JXA）から Cocoa の `NSStatusItem` を使う。追加のソフトもビルドも要らない。通知センターは使えない（アプレット経由でも拒否される。§7）。
 
@@ -299,7 +299,7 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | ファイル（リポジトリ → 導入先） | 役割 |
 |---|---|
 | `menubar.sh` → `~/.local/bin/cafe-wifi-okawari-menubar.sh` | 状態を判定し、1行目にアイコンの種類、2行目以降にメニューの行を出す（下の「出力」）。通信しない。ファイルは読むだけ |
-| `menubar.js` → `~/.local/bin/cafe-wifi-okawari-menubar.js` | 10秒ごとと、メニューを開く直前（`menuNeedsUpdate:`）に `menubar.sh` を実行して、アイコンとメニューを作り直す |
+| `menubar.js` → `~/.local/bin/cafe-wifi-okawari-menubar.js` | 10秒ごとと、メニューを開く直前（`menuNeedsUpdate:`）に `menubar.sh` を実行して、アイコンとメニューを作り直す。`menubar.sh` は自分のパスの `.js` を `.sh` に替えて求める（導入先でもリポジトリでも同じ名前の組） |
 | `~/Library/LaunchAgents/local.cafe-wifi-okawari.menubar.plist` | `ProgramArguments=/usr/bin/osascript -l JavaScript <js>`、`RunAtLoad`、`LimitLoadToSessionType=Aqua`。`KeepAlive` は付けない（下の「止まったとき」） |
 
 **アイコン**（優先の高い順。SF Symbols のテンプレート画像なので、ライト・ダーク・色付きのメニューバーに合わせて色が変わる）
@@ -351,7 +351,7 @@ Hide from Menu Bar
 | 未接続 | `This Wi‑Fi: Offline` |
 | 見張り中（§3.1） | `This Wi‑Fi: Auto Reconnect from Next Time-out` |
 | 接続画面待ち（…） | `This Wi‑Fi: Waiting for Login Page` と、続けて `If the login page doesn't appear, open http://captive.apple.com.` |
-| 注意: 再接続に失敗し、知らせたあと（!） | `Couldn't reconnect automatically. Check the login page.` |
+| 注意: 再接続に失敗し、知らせたあと（!） | `Couldn't reconnect automatically. Check the login page.`（This Wi‑Fi の行の直後。下も同じ） |
 | 注意: 同意が要る（!。初めての網・自動の停止のあと） | `Accept the terms once on the login page. After that, it reconnects automatically.` |
 | 次の時間切れ | `Next Time-out: ~15:12`。項目にマウスを載せると `Estimated from the last authentication, if the shop's limit is 60 minutes.`（ツールチップ）。下の条件を満たさなければ行を出さない |
 
@@ -359,11 +359,14 @@ Hide from Menu Bar
 |---|---|
 | `re-authenticated` | `Reconnected · <ブランド> · <t> s` |
 | `consent recorded` | `Terms Accepted · <ブランド>` |
-| `login failed`・`redirect failed` | `Couldn't Reconnect · <ブランド>`（ブランドがない行は省く） |
+| `login failed`・`redirect failed` | `Couldn't Reconnect`（本体の失敗の行はブランドを書かないので付けない）。通信できている間のブランドの確認の失敗（`redirect failed … net=…`）は再接続の失敗ではないので出さない |
 | `auto stopped` | `Auto Reconnect Stopped · <ブランド>` |
 
-- 日付は、今日なら `Today`、昨日なら `Yesterday`、それより前は `09-28`。時刻は24時間制の `HH:MM`
-- ブランド名は先頭だけ大文字（`skylark` → `Skylark`）。`usen` は `USEN`。本体は英字・数字・`-`・`_` だけのブランド名しか記録しないので、そのほかの文字は出てこない
+- 直近の出来事は、上の4種類の行を新しい順に3件。1件もなければ区切り線ごと出さない
+- 日付は、今日なら `Today`、昨日なら `Yesterday`、それより前は `09-28`。時刻は24時間制の `HH:MM`。日時と中身は2列にそろえる
+- ブランド名は先頭だけ大文字（`skylark` → `Skylark`）。`usen` は `USEN`。同じ MAC で同意済みのブランドが複数あれば `Doutor, Starbucks` と並べる（`install.sh status` と同じ）。本体は英字・数字・`-`・`_` だけのブランド名しか記録しないが、そのほかの文字を含む語は出さない（MAC・IP を出さないため）
+- 停止中は、1行目と `Run ./install.sh to Restart` と直近の出来事だけ。This Wi‑Fi・次の時間切れ・案内は出さない（自動再接続が動いていないのに `Auto Reconnect On` と読めるため）
+- 末尾の `Open Log`（ログを既定のアプリで開く。ログがなければ押せない）と `Hide from Menu Bar` は操作なので、`menubar.js` が付ける
 - 案内の行（!・…）は押せない行として出す。接続画面を開くボタンは付けない（操作を増やさない）
 
 - 画面共有や録画に写るので、端末とゲートウェイの MAC・IP・SSID は出さない（時刻・種類・ブランド・秒数だけ）
@@ -373,30 +376,40 @@ Hide from Menu Bar
   - `net=` が今の接続先。店 A で再認証したあと店 B へ移ったときに、A の時刻から B の時間切れを出さないため
   - 行の時刻から30秒より後に `resolv.conf` が書き換わっていない。本体は、同意済みの網で利用者が自分で同意し直してもログを書かない（記録済みなら何もしない）ので、1時間以内に同じ店へ戻って同意し直すと、今の接続先の古い行しか残らない。`resolv.conf` はつなぎ直したときと接続画面で同意したときに書き換わる（§7）ので、行より後に書き換わっていれば、その行は今の接続の認証ではない。30秒は、再認証に続いて書き換わる場合の幅。再認証やリースの更新で実際に書き換わるかは未確認で、書き換わるなら目安が途中で消える（現地の項目 7）
   - 行の時刻から60分以内
-- `install.sh status` の「Last auth」「Next time-out」も今は接続先を絞らず、`(captive login)` も数えている。実装のときに、同じ条件に揃える（ログの最後の行としての「Last auth」の表示は残し、「Next time-out」だけ条件を満たすときに出す）
+- `install.sh status` の「Next time-out」も同じ条件にした（満たさなければ行を出さない）。「Last auth」は今までどおり、接続先を問わずログの最後の認証の行
 
-**出力**（`menubar.sh` の標準出力。1行目がアイコンの種類、以降が行、空行が区切り線）
+**出力**（`menubar.sh` の標準出力。1行目がアイコンの種類、以降が行、空行が区切り線。行はタブで区切った「表示 [右の列] [ツールチップ]」）
 
 ```
 warn
 cafe-wifi-okawari — Running
 This Wi‑Fi: Skylark · Auto Reconnect On
-…
+Couldn't reconnect automatically. Check the login page.
+Next Time-out: ~15:12<TAB><TAB>Estimated from the last authentication, if the shop's limit is 60 minutes.
+
+Today 13:19<TAB>Reconnected · Skylark · 2 s
 ```
 
-アイコンの種類は `off`・`warn`・`wait`・`check`・`on` のどれか。JXA 側はこれ以外の値や実行の失敗を `off` として扱う。
+アイコンの種類は `off`・`warn`・`wait`・`check`・`on` のどれか。JXA 側はこれ以外の値や実行の失敗を `off` として扱う。右の列はタブ位置でそろえる。状態と案内の行はどれも押せない行にする。
 
 **導入・削除**（`install.sh`）
 
 - `./install.sh` で本体と一緒に導入・更新する（既定で入れる）。`./install.sh --no-menubar` なら入れず、入っていれば LaunchAgent と2つのファイルを消す
-- `./install.sh uninstall` は両方を消す。`status` に「Menu bar: running / not running / not installed」の行を足す
+- `./install.sh uninstall` は両方を消す。`status` に「Menu bar: running / not running / not installed」の行を足す（plist がなければ not installed。`launchctl print` の `state` が `running` なら running）
 - 本体の動作は、メニューバーの有無・状態に関係しない（メニューバー側はファイルを読むだけで、本体からは何も呼ばない）
 
 **止まったとき**: `KeepAlive` を付けないので、落ちても自動では立ち上げ直さない。将来の macOS で JXA の Cocoa の橋渡しが使えなくなった場合に、10秒ごとの起動と失敗を繰り返さないため。落ちたら、次のログインか `./install.sh` で戻る。「メニューバーから隠す」も同じ扱い（終了するだけ）。
 
-**負荷**: 10秒ごとに zsh を1回起動し、`launchctl print`・`route`・`arp` と小さなファイルの読み取りだけを行う（通信しない）。既定経路がないときだけ `networksetup`（手元で約0.03秒）・`ipconfig`・`scutil` も読む。常駐の `osascript` の CPU・メモリは実装時に測って §5 に書く。
+**負荷**: 10秒ごとに zsh を1回起動し、`launchctl print`・`route`・`arp` と小さなファイルの読み取りだけを行う（通信しない）。既定経路がないときだけ `networksetup`（手元で約0.03秒）・`ipconfig`・`scutil` も読む。実測は §5。
 
-**試験**（`test/run.sh` に追加）: アイコンの5状態と優先順位、注意の2条件（今の接続先と違えば出ない）、注意の最中に既定経路がなくなる（接続画面待ちになる。Wi‑Fi の IPv4 も `WaitingOnUI` もなければ未接続）、✓ の10分の境目、次の時間切れの有無（店 A で再認証したあと店 B へ移る → 出さない、`consent recorded … usen (captive login)` のあと送信に失敗 → 出さない、そのあと `re-authenticated` → その時刻から60分、行より後に `resolv.conf` が書き換わる → 出さない、30秒以内なら出す）、優先言語が日本語でもメニューは英語、状態ごとの行の表記と直近の出来事の読み替え（Today・Yesterday の境目、ブランド名の大文字、MAC・IP を含まない）、ログがない・空・状態ファイルが旧形式、`install.sh` の既定・`--no-menubar`・再導入・uninstall・status。`menubar.js` は GitHub Actions で構文の確認（`osascript -l JavaScript` で読み込むだけの起動方法を用意する。画面のない環境で `NSStatusBar` が使えるかは実装時に確かめる）と、実機での目視。
+**実装での補足**
+
+- JXA は `do shell script` で `/bin/zsh <menubar.sh>` を実行する（`alteringLineEndings: false`。PATH は `do shell script` の既定の `/usr/bin:/bin:/usr/sbin:/sbin` で、使うコマンドはすべて入る）
+- macOS 27 の JXA では、`NSAttributedString.alloc` の直後に `initWithString:attributes:` が橋渡しされない。右の列をそろえる文字列は `NSMutableAttributedString.new` に中身と属性を入れて作る
+- `osascript -l JavaScript menubar.js --check` は、アイコンとメニューを1回作って終わる（GitHub Actions での読み込みの確認用）
+- 状態の行は押せない行（無効の項目）にしている。無効の項目でツールチップが出るかは未確認（§7）
+
+**試験**（`test/run.sh`。結果は §7）: アイコンの5状態と優先順位、注意の2条件（今の接続先と違えば出ない）、注意の最中に既定経路がなくなる（接続画面待ちになる。Wi‑Fi の IPv4 も `WaitingOnUI` もなければ未接続）、✓ の10分の境目、次の時間切れの有無（店 A で再認証したあと店 B へ移る → 出さない、`consent recorded … usen (captive login)` のあと送信に失敗 → 出さない、そのあと `re-authenticated` → その時刻から60分、行より後に `resolv.conf` が書き換わる → 出さない、30秒以内なら出す）、優先言語が日本語でもメニューは英語、状態ごとの行の表記と直近の出来事の読み替え（Today・Yesterday の境目、ブランド名の大文字、MAC・IP を含まない）、ログがない・空・状態ファイルが旧形式、`install.sh` の既定・`--no-menubar`・再導入・uninstall・status。`menubar.js` は GitHub Actions で構文の確認と `--check` での読み込み、実機での目視。
 
 ## 4. 安全性
 
@@ -459,12 +472,14 @@ This Wi‑Fi: Skylark · Auto Reconnect On
 - `ProcessType=Background` で低優先度。スリープ中は動かず、復帰後の最初の周期で判定する
 - 復旧までの時間: 気づくまで最大約10秒＋再認証（同意の送信から疎通まで実測2〜3秒）。ガストの実測では通信が止まったのは約6秒。疎通は1秒ごとに確かめ、各通信の上限（5〜10秒）の分だけ延びうる
 - 継続障害時: 失敗のたびに次の試行を 30秒→…→最大30分 と遅らせる（状態は1行のファイルだけ）。待機は接続先ごと。認証 API の呼び出しは最大1日約48回、ログも1日約50行。ダイアログは失敗が続く間に1回（自動の停止でもう1回）。認証済みを確認したら状態を消す
+- **メニューバーの表示**（§3.2）: `menubar.sh` は1回約0.02〜0.03秒（手元で5回）。常駐の `osascript` は RSS 約18〜33MB、CPU は2分で約0.4秒（平均約0.3%。10秒ごとの作り直しを含み、子の zsh は含まない）。どれも LaunchAgent から起動して測った（2026-09-30）
 - **USEN の分岐**: システムログを読むのは、記録のない網で接続ごとに1回（接続から5分以内）と、同意待ちの網で通信できている間（30秒→…→最大30分 の間隔）。実測は1時間分を読んで約1.6秒・CPU 約0.5秒で、読む範囲は接続の前後数分なので短くなる。自宅でも、つなぐたびに1回は読む。時間切れごとの通信は GET 2本（約2KB・約28KB）と POST 1本で、すべて店内の機器あて。見張り中の網では、同意済みの網と同じく10秒ごとにプローブする
 
 ## 6. 導入・停止
 
 ```sh
-./install.sh             # 導入・更新（スクリプトを複製し、plist を生成して登録）
+./install.sh             # 導入・更新（スクリプトを複製し、plist を生成して登録。メニューバーの表示も入れる）
+./install.sh --no-menubar  # メニューバーの表示なしで導入・更新（入っていれば消す）
 ./install.sh status      # 動作の確認（英語。通信しない。未登録なら 1 で終わる）
 ./install.sh uninstall   # 停止・削除（同意の記録も消す。ログは残す）
 ```
@@ -475,13 +490,16 @@ This Wi‑Fi: Skylark · Auto Reconnect On
 
 | 確認項目 | 結果 |
 |---|---|
-| 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`） | OK |
-| 模擬試験 `zsh test/run.sh`（256項目。うち USEN の分岐と `install.sh status` の見張り表示が108項目） | OK。GitHub Actions でも実行 |
-| 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、すべて NG として検出（例: `-b "$jar"` を外す・同意の本文を変えると、どちらも23項目が失敗）。USEN の実装では33通りの変異（例: `--noproxy` を外す・性別を空でなく送る・GET のあとの same() を外す・同意の行の削除を行全体の一致にする・基準時刻の +1 を外す）をすべて検出 |
+| 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`・`menubar.js` の `osacompile -l JavaScript`） | OK |
+| 模擬試験 `zsh test/run.sh`（307項目。うち USEN の分岐と `install.sh status` の見張り表示が108項目、メニューバーの表示が38項目、`install.sh` のメニューバーと次の時間切れの目安が13項目） | OK。GitHub Actions でも実行。既存の項目のうち、仕様を変えた3項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない）は書き換えた |
+| 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、すべて NG として検出（例: `-b "$jar"` を外す・同意の本文を変えると、どちらも23項目が失敗）。USEN の実装では33通りの変異（例: `--noproxy` を外す・性別を空でなく送る・GET のあとの same() を外す・同意の行の削除を行全体の一致にする・基準時刻の +1 を外す）をすべて検出。メニューバーの実装では37通り（例: 注意の接続先の照合を外す・Wi‑Fi でなく先頭のポートを使う・目安の captive login の除外や resolv.conf の30秒を変える・出来事を4件にする・`--no-menubar` で消さない・`KeepAlive` を付ける）をすべて検出（最初は2通りを見逃したので、試験の行の並びと `status` の30秒の境目を足した） |
 | 実際の curl の Cookie の保存と送信 | OK。空の jar で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る（ローカルの HTTPS サーバーと実網） |
 | LaunchAgent からの知らせ | `display notification` は **NG**（macOS 27。終了コード 0 だが表示されず、許可も求められない）。`display alert … giving up after 120` は表示された |
 | アプレット経由の通知（試作） | **NG**。`osacompile` のアプレットを LaunchAgent から `open -g` で起動しても、bundle ID を付けて署名し直しても、usernoted が `Denying message … LegacyConnection` で拒否した（2026-09-30） |
 | メニューバーの表示（試作） | OK。JXA の `NSStatusItem` と SF Symbols で、動作中・✓・停止中の3状態とメニューの中身を画面で確かめた（2026-09-30。✓ と停止中は偽のログ・登録名で確認） |
+| メニューバーの表示（実装） | OK。LaunchAgent（`LimitLoadToSessionType=Aqua`）から起動して `state = running`。動作中（実際の記録）・✓・!・…・停止中の5状態のアイコンとメニューをスクリーンショットで確かめた（2026-09-30。✓・! は偽の HOME、… は既定経路の問い合わせだけを外した判定の写し、停止中は登録名を変えた写しで。本体の登録と記録には触れていない）。直近の出来事は2列にそろい、状態の行は押せない行の色で出る |
+| メニューバーのツールチップ（`Next Time-out`） | 未確認。カーソルを行に載せる操作を自動で再現できなかった。状態の行は無効の項目なので、無効の項目でツールチップが出るかを実機で確かめる |
+| `menubar.js --check` | OK。手元（`ok:  9 items`）と GitHub Actions の macOS（`macos-26-arm64`。`ok:  5 items`。本体が未登録なので停止中の表示）で、画面のない CI でも `NSStatusBar` とメニューを作れた（2026-09-30） |
 | 入店時の同意の記録 | OK（ドトール・ガストで `consent recorded … (online)`） |
 | 実際の時間切れでの自動再認証 | OK（ドトール2回・ガスト1回。§1 の現地試験の結果） |
 | 捕捉中の転送先 | 同意ページ `index.html` と `session_id`（ドトールで実測。ガストは再認証できたことから同じと見られる）。認証済みでは `landing.html` |
@@ -587,7 +605,25 @@ This Wi‑Fi: Skylark · Auto Reconnect On
 | `install.sh`: bootstrap が2回失敗 / 再導入 / 引数誤り / 削除 | やり直して成功（失敗が続けば 0 以外）/ 成功 / 2 で終了 / ログ以外は残らない |
 | `install.sh status`: 登録済み / 未登録 / 記録なし | 0 で終わり、登録・終了コードと実行回数・同意済みの件数とブランド（重複なし・整列）・ログの最新5行 / 1 で終わる / `none yet` |
 | `install.sh status`: 今の接続先が同意済み / 未同意 / 既定経路なし | ブランドと自動再認証 on / off / `none` |
-| `install.sh status`: 最後の認証（`re-authenticated`・`consent recorded` の最後の行）が60分以内 / 60分より前 / ない | 時刻・経過・種類とブランド・60分後の目安 / 目安は `unknown` / `none logged yet` |
+| `install.sh status`: 最後の認証（`re-authenticated`・`consent recorded` の最後の行）が60分以内 / 60分より前 / ない | 時刻・経過・種類とブランド・60分後の目安 / 目安を出さない / `none logged yet` |
+| `install.sh status`: 最後の認証が別の接続先 / 行の30秒より後に resolv.conf が書き換わった / そのあとに `consent recorded … usen (captive login)` | どれも最後の認証の行は出す。目安は出さない / 出さない / その前の再認証から出す |
+| `install.sh`: 既定 / `--no-menubar` / そのあとの再導入 / 削除 | メニューバーの2ファイルと plist（`osascript -l JavaScript <js>`・`RunAtLoad`・`Aqua`・`KeepAlive` なし）を入れて登録 / 本体だけ更新し、メニューバーを外して消す / 戻る / 両方の登録を外し、ログ以外は残らない |
+| `install.sh status`: メニューバーが動いている / 止まっている / 入っていない | `Menu bar  running` / `not running` / `not installed` |
+
+`test/run.sh` で確認しているメニューバーの表示（`menubar.sh` の出力。模擬の `networksetup` は有線のポートを先に並べ、`ipconfig getifaddr` は Wi‑Fi の en0 だけ IPv4 を返す）:
+
+| 状況 | 期待する結果 |
+|---|---|
+| 記録なし・ログが空 / 同意済み / 同じ MAC で2ブランド同意済み / 見張り中（24時間以内）/ 24時間を過ぎた見張り | `on`。`Auto Reconnect Off`（区切り線も出来事も出さない）/ `Skylark · Auto Reconnect On` / `Skylark, USEN · …` / `Auto Reconnect from Next Time-out` / `Auto Reconnect Off` |
+| 状態ファイルの接続先が今と同じで「知らせたか」が 1 / 接続先が違う / 0 / 旧形式 | `warn` と失敗の案内（This Wi‑Fi の直後）/ 注意にしない / 注意にしない / 注意にしない（異常終了しない） |
+| 同意待ち `MAC ブランド notified`・`MAC usen 基準時刻 notified` / 接続先が違う / notified なし | `warn` と同意の案内 / 注意にしない / 注意にしない |
+| 注意の最中に既定経路がなくなる: Wi‑Fi に IPv4 あり / IPv4 なしで `WaitingOnUI` が TRUE / どちらもない | `wait` と接続画面の案内 / `wait` / `on` で `Offline` |
+| 再認証から590秒 / 610秒、別の接続先でも / 接続画面待ち・注意と重なる / 停止中と重なる | `check` / `on`、`check` / `wait`・`warn` を優先 / `off`。1行目・`Run ./install.sh to Restart`・直近の出来事だけ |
+| 今の接続先で600秒前に再認証 / 別の接続先へ移る / 3700秒前・3500秒前に入店時の同意の記録 | 60分後の目安とツールチップ / 出さない / 出さない・出す |
+| 3700秒前に再認証 → `consent recorded … usen (captive login)` → `login failed` / そのあと再認証 / 行の20秒後・50秒後に resolv.conf が書き換わる | 出さない / その時刻から60分 / 出す・出さない |
+| 直近の出来事 | 新しい順に3件。`login failed`・`redirect failed`（失敗の行）は `Couldn't Reconnect`、ブランドの確認の失敗・`consent pending`・`captive login seen`・`probe failed`・`network changed` は出さない。今日・昨日（23:59）・それより前（月-日）の境目。ブランド名に `:` などがあれば出さない。MAC・IP・URL・応答を含まない |
+| 優先言語が日本語 / 英語 | 同じ英語の表示 |
+| ログの末尾 16KB より前にだけ再認証の行がある | 読まない（`on`、出来事なし） |
 
 ## 8. やらないこと（YAGNI）
 
@@ -596,5 +632,5 @@ This Wi‑Fi: Skylark · Auto Reconnect On
 - アンケート・会員登録・メール登録が必要なポータル
 - 時間切れ前の先回り再認証（検知方式で十分）
 - 設定ファイル、ログのローテーション（正常時は1時間に1行、障害時も1日約50行）
-- 成功時の通知。常駐処理から出せるのはダイアログだけで、集中モードでも止まらず、画面共有・録画にも写る。再認証は約60分ごとに起きるので、通話や録画に割り込ませない。成功はログと `./install.sh status` で確かめる（メニューバーの ✓ で見せる予定。§3.2）
+- 成功時の通知。常駐処理から出せるのはダイアログだけで、集中モードでも止まらず、画面共有・録画にも写る。再認証は約60分ごとに起きるので、通話や録画に割り込ませない。成功はメニューバーの ✓（§3.2）・ログ・`./install.sh status` で確かめる
 - macOS 標準のポータル画面（Captive Network Assistant）の無効化（全ネットワークに影響する）

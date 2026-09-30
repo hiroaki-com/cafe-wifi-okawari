@@ -1,0 +1,82 @@
+// メニューバーに cafe-wifi-okawari の状態を出す（DESIGN.md §3.2）。表示するだけで、判定はすべて同じ場所の .sh が行う。
+// 起動: osascript -l JavaScript <この .js>。--check を付けると、アイコンとメニューを1回作って終わる（CI での読み込みの確認用）
+ObjC.import('Cocoa')
+
+const sa = Application.currentApplication()
+sa.includeStandardAdditions = true
+// 自分のパス（osascript の引数）の .js を .sh に替えたものが判定のスクリプト（導入先でもリポジトリでも同じ名前の組）
+const self = $.NSURL.fileURLWithPath(ObjC.deepUnwrap($.NSProcessInfo.processInfo.arguments).find(a => a.endsWith('.js'))).path.js
+const SH = self.replace(/\.js$/, '.sh')
+const LOG = $.NSHomeDirectory().js + '/Library/Logs/cafe-wifi-okawari.log'
+// アイコンの種類ごとの印。これ以外の値と実行の失敗は off として扱う
+const MARK = { off: '', warn: ' !', wait: ' …', check: ' ✓', on: '' }
+
+const app = $.NSApplication.sharedApplication
+app.setActivationPolicy($.NSApplicationActivationPolicyAccessory)   // Dock に出さない
+const item = $.NSStatusBar.systemStatusBar.statusItemWithLength($.NSVariableStatusItemLength)
+const menu = $.NSMenu.alloc.init
+item.menu = menu
+
+// 右の列（直近の出来事の中身）をそろえるタブ位置
+const ps = $.NSMutableParagraphStyle.alloc.init
+ps.tabStops = $([$.NSTextTab.alloc.initWithTextAlignmentLocationOptions($.NSTextAlignmentLeft, 110, $())])
+const cols = $.NSDictionary.dictionaryWithObjectsForKeys(
+  $([$.NSFont.menuFontOfSize(0), ps, $.NSColor.disabledControlTextColor]),
+  $([$.NSFontAttributeName, $.NSParagraphStyleAttributeName, $.NSForegroundColorAttributeName]))
+
+function refresh() {
+  let out = ['off']
+  try { out = sa.doShellScript("/bin/zsh '" + SH.replace(/'/g, "'\\''") + "'", { alteringLineEndings: false }).replace(/\n$/, '').split('\n') } catch (e) {}
+  const k = MARK.hasOwnProperty(out[0]) ? out[0] : 'off'
+  const img = $.NSImage.imageWithSystemSymbolNameAccessibilityDescription(k === 'off' ? 'cup.and.saucer' : 'cup.and.saucer.fill', 'cafe-wifi-okawari')
+  img.template = true   // ライト・ダーク・色付きのメニューバーに合わせて色が変わる
+  item.button.image = img
+  item.button.appearsDisabled = k === 'off'
+  item.button.title = MARK[k]
+
+  menu.removeAllItems
+  for (const l of out.slice(1)) {
+    if (!l) { menu.addItem($.NSMenuItem.separatorItem); continue }
+    const [text, right, tip] = l.split('\t')
+    const m = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent(right ? text + '\t' + right : text, null, '')
+    if (right) {
+      // alloc の直後では initWithString:attributes: が橋渡しされない（macOS 27）ので、new で作って中身と属性を入れる
+      const s = $.NSMutableAttributedString.new
+      s.replaceCharactersInRangeWithString($.NSMakeRange(0, 0), m.title)
+      s.setAttributesRange(cols, $.NSMakeRange(0, s.length))
+      m.attributedTitle = s
+    }
+    if (tip) m.toolTip = tip
+    m.enabled = false   // 状態と案内の行は押せない
+    menu.addItem(m)
+  }
+  menu.addItem($.NSMenuItem.separatorItem)
+  const open = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent('Open Log', 'openLog:', '')
+  open.target = handler
+  open.enabled = $.NSFileManager.defaultManager.fileExistsAtPath(LOG)
+  menu.addItem(open)
+  // 終了するだけ（KeepAlive なしなので、次のログインか ./install.sh で戻る）
+  const hide = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent('Hide from Menu Bar', 'terminate:', '')
+  hide.target = app
+  menu.addItem(hide)
+}
+
+ObjC.registerSubclass({
+  name: 'OkawariMenubar',
+  protocols: ['NSMenuDelegate'],
+  methods: {
+    'tick:': { types: ['void', ['id']], implementation: () => refresh() },
+    'menuNeedsUpdate:': { types: ['void', ['id']], implementation: () => refresh() },   // メニューを開く直前
+    'openLog:': { types: ['void', ['id']], implementation: () => $.NSWorkspace.sharedWorkspace.openURL($.NSURL.fileURLWithPath(LOG)) },
+  },
+})
+const handler = $.OkawariMenubar.alloc.init
+menu.autoenablesItems = false
+menu.delegate = handler
+
+function run(argv) {
+  refresh()
+  if (argv[0] === '--check') return 'ok: ' + item.button.title.js + ' ' + menu.numberOfItems + ' items'
+  $.NSTimer.scheduledTimerWithTimeIntervalTargetSelectorUserInfoRepeats(10, handler, 'tick:', null, true)
+  app.run
+}

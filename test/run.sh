@@ -1,5 +1,6 @@
 #!/bin/zsh
-# 模擬の curl・route・arp・ipconfig・ifconfig・defaults・osascript・launchctl で分岐を確かめる。実際の網には一切つながない。
+# 模擬の curl・route・arp・ipconfig・ifconfig・defaults・osascript・launchctl・networksetup・scutil で分岐を確かめる。
+# 実際の網には一切つながない。
 # 使い方: zsh test/run.sh
 set -u
 zmodload zsh/datetime   # EPOCHSECONDS
@@ -123,13 +124,13 @@ esac
 EOS
 # arp: 既定ゲートウェイの MAC は $MAC（ゲートウェイがなければ失敗。$M/switched があれば別の回線 cc:cc:cc:cc:cc:03）
 print '#!/bin/sh\n[ -z "$2" ] && exit 1\n[ -e $M/switched ] && MAC=cc:cc:cc:cc:cc:03\necho "? ($2) at $MAC on en0 ifscope [ethernet]"' > $T/bin/arp
-# ipconfig: DHCP のドメイン名は $DOM（既定は空）、自分の IP は $MYIP（既定 10.0.0.5）。
+# ipconfig: DHCP のドメイン名は $DOM（既定は空）、自分の IP は $MYIP（既定 10.0.0.5。en0 だけ）。
 # getsummary のリース開始は $LEASE（エポック秒。既定は resolv.conf の更新時刻、none なら行なし）
 cat > $T/bin/ipconfig <<'EOS'
 #!/bin/sh
 case $1 in
   getoption) printf "%s\n" "$DOM" ;;
-  getifaddr) echo "${MYIP-10.0.0.5}" ;;
+  getifaddr) [ "$2" = en0 ] && echo "${MYIP-10.0.0.5}" ;;
   getsummary) [ "$LEASE" = none ] ||
     printf '        LeaseStartTime : %s\n' "$(date -r "${LEASE:-$(stat -f %m $M/resolv)}" '+%m/%d/%Y %H:%M:%S')" ;;
 esac
@@ -154,16 +155,27 @@ print '#!/bin/sh\nprintf "%s\\n" "$2" >> $M/notify' > $T/bin/osascript
 # defaults: macOS の優先言語を $LANGS（既定は ja-JP）として返す。
 print '#!/bin/sh\nprintf "(\\n    \\"%s\\",\\n    \\"en-JP\\"\\n)\\n" "${LANGS-ja-JP}"' > $T/bin/defaults
 # launchctl: $M/bootstrap_fail に書いた回数だけ bootstrap を失敗させる（bootout 直後の error 5 の再現）。$M/notloaded があれば print は未登録で失敗する。
+# $M/mbstopped があれば、メニューバー（*.menubar）は登録済みで止まっている。
 cat > $T/bin/launchctl <<'EOF'
 #!/bin/zsh
 print -r -- "$*" >> $M/launchctl
 [[ $1 == print && -e $M/notloaded ]] && exit 113
-[[ $1 == print ]] && print '\truns = 7\n\tlast exit code = 0'
+[[ $1 == print && $2 == *.menubar && -e $M/mbstopped ]] && { print '\tstate = not running'; exit 0 }
+[[ $1 == print ]] && print '\tstate = running\n\truns = 7\n\tlast exit code = 0'
 if [[ $1 == bootstrap && -s $M/bootstrap_fail ]]; then
   n=$(<$M/bootstrap_fail); (( n > 0 )) && { print $((n - 1)) > $M/bootstrap_fail; exit 5 }
 fi
 exit 0
 EOF
+# networksetup: Wi‑Fi のデバイスは en0（有線の en5 が先に並ぶ）
+print '#!/bin/sh\nprintf "Hardware Port: Ethernet\\nDevice: en5\\nEthernet Address: 0:0:0:0:0:5\\n\\nHardware Port: Wi-Fi\\nDevice: en0\\nEthernet Address: aa:bb:cc:dd:ee:f\\n"' > $T/bin/networksetup
+# scutil: en0 の CaptiveNetwork の WaitingOnUI は $WAITUI（既定 FALSE）。ほかのキーはなし
+cat > $T/bin/scutil <<'EOS'
+#!/bin/sh
+read -r c
+[ "$c" = 'show State:/Network/Interface/en0/CaptiveNetwork' ] || { echo '  No such key'; exit 0; }
+printf '<dictionary> {\n  Stage : Online\n  WaitingOnUI : %s\n}\n' "${WAITUI-FALSE}"
+EOS
 chmod +x $T/bin/*
 
 sed -e "s#/usr/bin/curl#$T/bin/curl#" -e "s#/sbin/route#$T/bin/route#" -e "s#/usr/sbin/arp#$T/bin/arp#" \
@@ -171,6 +183,9 @@ sed -e "s#/usr/bin/curl#$T/bin/curl#" -e "s#/sbin/route#$T/bin/route#" -e "s#/us
     -e "s#/usr/sbin/ipconfig#$T/bin/ipconfig#" -e "s#/sbin/ifconfig#$T/bin/ifconfig#" \
     -e "s#/var/run/resolv.conf#$M/resolv#" -e "s#/usr/bin/log #$T/bin/log #" \
     $root/cafe-wifi-okawari.sh > $T/s.sh
+# メニューバーの判定と install.sh status も、resolv.conf だけ模擬のファイルにする
+sed "s#/var/run/resolv.conf#$M/resolv#" $root/menubar.sh > $T/mb.sh
+sed "s#/var/run/resolv.conf#$M/resolv#" $root/install.sh > $T/is.sh
 
 ST=$HOME/Library/Caches/cafe-wifi-okawari
 PD=$ST.pending
@@ -762,9 +777,118 @@ reset; mkknown $A "usen $HASH"; s0=$(snap)
 for i in 1 2 3; do skip; run MAC=$A "$UL" USWITCH=post; rm -f $M/noroute; done
 ok 'USEN 送ったあとに既定経路がなくなったら、成功とも拒否とも数えない' '(( uposts == 1 )) && [[ $out == *"network changed net=$A usen api=ok probe=ng" && $(snap) == "$s0" && ! -e $ST ]]'
 
+# --- メニューバーの表示（menubar.sh） ------------------------------------------
+LG=$HOME/Library/Logs/cafe-wifi-okawari.log
+NL=$'\n' TB=$'\t'
+R='cafe-wifi-okawari — Running'
+TIP="${TB}${TB}Estimated from the last authentication, if the shop's limit is 60 minutes."
+# mb VAR=val...: menubar.sh を1回実行し、1行目を icon に、2行目以降を rows に残す
+mb() { env "$@" PATH=$T/bin:$PATH zsh $T/mb.sh > $M/out 2>&1; rc=$? out=$(<$M/out); icon=${out%%$'\n'*} rows=${out#*$'\n'} }
+mbreset() { reset; rm -f $LG $M/notloaded; mkdir -p ${LG:h}; T0=$EPOCHSECONDS }
+# 基準の時刻 T0（mbreset の時刻）から数える。行の時刻と期待する表示を同じ基準で作り、分の境目で揺れないようにする
+lt() { strftime '%F %T' $(( T0 - $1 )) }   # lt <秒>: その秒数前のログの時刻
+hm() { strftime '%H:%M' $(( T0 - $1 )) }   # hm <秒>: その秒数前の時:分
+mbreset
+mb MAC=$A;                ok 'メニューバー: 記録がなければ動作中・未同意だけ（区切り線も出来事も出さない）' '(( rc == 0 )) && [[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off" ]]'
+touch $LG; mb MAC=$A;     ok 'メニューバー: ログが空でも同じ' '[[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off" ]]'
+mkknown $A skylark
+mb MAC=$A;                ok 'メニューバー: 同意済みならブランド（先頭だけ大文字）と自動再接続 On' '[[ $rows == "$R${NL}This Wi‑Fi: Skylark · Auto Reconnect On" ]]'
+consent $A "usen $HASH"; consent $B doutor
+mb MAC=$A;                ok 'メニューバー: 同じ MAC の同意済みのブランドを並べる（usen は USEN）' '[[ $rows == "$R${NL}This Wi‑Fi: Skylark, USEN · Auto Reconnect On" ]]'
+mbreset; mkdir -p ${WT:h}; print -r -- "$A $(now 3600)" > $WT
+mb MAC=$A;                ok 'メニューバー: 見張り中（24時間以内）なら次の時間切れから' '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect from Next Time-out" ]]'
+print -r -- "$A $(now 86401)" > $WT
+mb MAC=$A;                ok 'メニューバー: 見張りから24時間を過ぎていれば未同意' '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off" ]]'
+# 注意の2条件（今の接続先のときだけ）
+W1="Couldn't reconnect automatically. Check the login page."
+W2='Accept the terms once on the login page. After that, it reconnects automatically.'
+mbreset; mkknown $A; print -r -- "2 $(now -60) $A 0 1 doutor" > $ST
+mb MAC=$A;                ok 'メニューバー: 再接続に失敗して知らせたあとは注意（案内は This Wi‑Fi の直後）' '[[ $icon == warn && $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On${NL}$W1" ]]'
+mb MAC=$B;                ok 'メニューバー: 失敗の状態ファイルが別の接続先なら注意にしない' '[[ $icon == on && $rows != *reconnect\ automatically* ]]'
+print -r -- "2 $(now -60) $A 0 0 doutor" > $ST
+mb MAC=$A;                ok 'メニューバー: 失敗しても、まだ知らせていなければ注意にしない' '[[ $icon == on && $rows != *reconnect\ automatically* ]]'
+print -r -- "3 $(now -60)" > $ST
+mb MAC=$A;                ok 'メニューバー: 旧形式の状態ファイルでも動く（注意にしない）' '(( rc == 0 )) && [[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On" ]]'
+mbreset; print -r -- "$A doutor notified" > $PD
+mb MAC=$A;                ok 'メニューバー: 同意待ちで知らせたあとは注意（同意の案内）' '[[ $icon == warn && $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off${NL}$W2" ]]'
+mb MAC=$B;                ok 'メニューバー: 同意待ちが別の接続先なら注意にしない（店を出たあとの自宅など）' '[[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off" ]]'
+print -r -- "$A doutor" > $PD
+mb MAC=$A;                ok 'メニューバー: 同意待ちでも、まだ知らせていなければ注意にしない' '[[ $icon == on ]]'
+print -r -- "$A usen $(now 60) notified" > $PD
+mb MAC=$A;                ok 'メニューバー: USEN の同意待ち（自動の停止のあと）も注意' '[[ $icon == warn && $rows == *"${NL}$W2" ]]'
+print -r -- "$A usen $(now 60)" > $PD
+mb MAC=$A;                ok 'メニューバー: USEN の同意待ちで知らせる前は注意にしない' '[[ $icon == on ]]'
+# 接続画面待ち・未接続（既定経路がない）
+WL="This Wi‑Fi: Waiting for Login Page${NL}If the login page doesn't appear, open http://captive.apple.com."
+print -r -- "$A doutor notified" > $PD
+mb MAC=$A NOROUTE=1;      ok 'メニューバー: 注意の最中に既定経路がなくなり、Wi‑Fi に IPv4 があれば接続画面待ち' '[[ $icon == wait && $rows == "$R${NL}$WL" ]]'
+mb MAC=$A NOROUTE=1 MYIP= WAITUI=TRUE
+                          ok 'メニューバー: Wi‑Fi に IPv4 がなくても、macOS が接続画面を待っていれば接続画面待ち' '[[ $icon == wait && $rows == "$R${NL}$WL" ]]'
+mb MAC=$A NOROUTE=1 MYIP=; ok 'メニューバー: どちらもなければ未接続（アイコンは動作中）' '[[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Offline" ]]'
+# 再認証直後（✓）と優先順位
+mbreset; mkknown $A
+print -r -- "$(lt 590) re-authenticated api=ok probe=ok net=$A doutor t=2s" > $LG
+mb MAC=$A;                ok 'メニューバー: 再認証から10分以内は ✓' '[[ $icon == check ]]'
+mb MAC=$B;                ok 'メニューバー: ✓ は今の接続先に依らない' '[[ $icon == check ]]'
+mb MAC=$A NOROUTE=1;      ok 'メニューバー: 接続画面待ちは ✓ より優先' '[[ $icon == wait ]]'
+print -r -- "2 $(now -60) $A 0 1 doutor" > $ST
+mb MAC=$A;                ok 'メニューバー: 注意は ✓ より優先' '[[ $icon == warn ]]'
+touch $M/notloaded
+mb MAC=$A;                ok 'メニューバー: 停止中は注意より優先し、今の接続先・案内・目安を出さない' \
+  '(( rc == 0 )) && [[ $icon == off && $rows == "cafe-wifi-okawari — Stopped${NL}Run ./install.sh to Restart${NL}${NL}Today $(hm 590)${TB}Reconnected · Doutor · 2 s" ]]'
+rm -f $M/notloaded $ST
+print -r -- "$(lt 610) re-authenticated api=ok probe=ok net=$A doutor t=2s" > $LG
+mb MAC=$A;                ok 'メニューバー: 再認証から10分を過ぎれば ✓ を外す' '[[ $icon == on ]]'
+# 次の時間切れの目安
+mbreset; mkknown $A
+print -r -- "$(lt 600) re-authenticated api=ok probe=ok net=$A doutor t=2s" > $LG
+mb MAC=$A;                ok 'メニューバー: 今の接続先で再認証していれば、その60分後を目安に（ツールチップ付き）' '[[ $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On${NL}Next Time-out: ~$(hm -3000)$TIP${NL}${NL}"* ]]'
+mb MAC=$B;                ok 'メニューバー: 店 A で再認証したあと店 B へ移れば目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
+print -r -- "$(lt 3700) consent recorded net=$A doutor (online)" > $LG
+mb MAC=$A;                ok 'メニューバー: 最後の認証から60分を過ぎていれば目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
+print -r -- "$(lt 3500) consent recorded net=$A doutor (online)" > $LG
+mb MAC=$A;                ok 'メニューバー: 入店時の同意の記録からも目安を出す' '[[ $rows == *"${NL}Next Time-out: ~$(hm -100)$TIP${NL}"* ]]'
+mbreset; mkknown $A "usen $HASH"
+print -rl -- "$(lt 3700) re-authenticated api=ok probe=ok net=$A usen t=1s" "$(lt 120) consent recorded net=$A usen (captive login)" \
+  "$(lt 110) login failed x1 api=ng probe=ng http=200 curl=0 res=" > $LG
+mb MAC=$A;                ok 'メニューバー: 接続画面での同意の記録（captive login）のあと送信に失敗したら目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
+print -r -- "$(lt 60) re-authenticated api=ok probe=ok net=$A usen t=1s" >> $LG
+mb MAC=$A;                ok 'メニューバー: そのあと再認証すれば、その時刻から60分' '[[ $rows == *"${NL}Next Time-out: ~$(hm -3540)$TIP${NL}"* ]]'
+ago 40 $M/resolv
+mb MAC=$A;                ok 'メニューバー: 行から30秒以内に resolv.conf が書き換わっても目安を出す' '[[ $rows == *Next\ Time-out* ]]'
+ago 20 $M/resolv
+mb MAC=$A;                ok 'メニューバー: 行の30秒より後に resolv.conf が書き換わっていれば（つなぎ直し）目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
+# 直近の出来事の読み替え
+mbreset; mkknown $A
+strftime -s d0 %F $EPOCHSECONDS; strftime -r -s md %F $d0; strftime -s d1 %F $(( md - 1 )); strftime -s d2 %F $(( md - 86401 ))
+print -rl -- "$d2 10:00:00 re-authenticated api=ok probe=ok net=$A skylark t=9s" \
+  "$d2 10:05:00 auto stopped net=$A doutor rejected x3 http=200 curl=0 res={\"result\":false}" \
+  "$d1 23:59:30 re-authenticated api=ok probe=ok net=$A skylark t=2s" \
+  "$d0 00:00:05 consent recorded net=$A doutor (online)" \
+  "$d0 00:00:20 consent recorded net=$A usen (captive login)" \
+  "$d0 00:00:30 redirect failed x2 http=302 to=https://service.wi2.ne.jp/wi2auth/error/ctrlapi_timeout.html" \
+  "$d0 00:00:31 consent pending net=$B doutor" "$d0 00:00:32 captive login seen net=$B" "$d0 00:00:33 probe failed x1 net=$A if=en0 curl=7 http=000" \
+  "$d0 00:00:34 redirect failed x1 net=$A curl=28 http=000" "$d0 00:00:35 network changed net=$A doutor api=ok probe=ng" \
+  "$d0 00:00:40 login failed x3 api=ng probe=ng http=200 curl=0 res={\"result\":false}" > $LG
+mb MAC=$B;                ok 'メニューバー: 直近の出来事は新しい順に3件（失敗はブランドなし。確認の失敗・同意待ちなどは出さない）' \
+  '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off${NL}${NL}Today 00:00${TB}Couldn'"'"'t Reconnect${NL}Today 00:00${TB}Couldn'"'"'t Reconnect${NL}Today 00:00${TB}Terms Accepted · USEN" ]]'
+sed -i '' '/ 00:00:[1-4]/d' $LG
+mb MAC=$B;                ok 'メニューバー: 今日・昨日の境目と、それより前は月-日' \
+  '[[ $rows == *"${NL}${NL}Today 00:00${TB}Terms Accepted · Doutor${NL}Yesterday 23:59${TB}Reconnected · Skylark · 2 s${NL}${d2[6,10]} 10:05${TB}Auto Reconnect Stopped · Doutor" ]]'
+print -r -- "$d0 00:00:50 consent recorded net=$A aa:bb:cc (online)" >> $LG
+mb MAC=$B;                ok 'メニューバー: ブランド名に英数字・-・_ 以外があれば出さない' '[[ $rows == *"${NL}${NL}Today 00:00${TB}Terms Accepted${NL}Today 00:00${TB}Terms Accepted · Doutor${NL}"* && $out != *aa:bb* ]]'
+sed -i '' '$d' $LG; mb MAC=$B
+                          ok 'メニューバー: MAC・IP・URL・応答を出さない' '[[ $out != *aa:aa* && $out != *net=* && $out != *10.0.0* && $out != *http* && $out != *result* ]]'
+o1=$out; mb MAC=$B LANGS=en-US
+                          ok 'メニューバー: 優先言語が日本語でも英語でも同じ英語の表示' '[[ $out == "$o1" ]]'
+# ログは末尾の 16KB だけ読む（途中で切れた行は使わない）
+{ print -r -- "$(lt 60) re-authenticated api=ok probe=ok net=$A doutor t=2s"; for i in {1..300}; do print -r -- "$(lt 30) probe failed x1 net=$A if=en0 curl=7 http=000"; done } > $LG
+mb MAC=$A;                ok 'メニューバー: 16KB より前の行は読まない' '[[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On" ]]'
+
 # --- install.sh ----------------------------------------------------------------
 H="$T/ho&me<x>"; mkdir -p "$H"
 plist="$H/Library/LaunchAgents/local.cafe-wifi-okawari.plist"
+mplist="$H/Library/LaunchAgents/local.cafe-wifi-okawari.menubar.plist" mbin="$H/.local/bin/cafe-wifi-okawari-menubar"
 print 2 > $M/bootstrap_fail
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '導入: HOME に & < > があっても成功' '(( rc == 0 )) && plutil -lint -s "$plist"'
@@ -772,10 +896,31 @@ ok '導入: 初回は Installed と表示'   '[[ $out == "Installed: $H/.local/b
 ok '導入: plist のパスが正しい'        '[[ $(plutil -extract ProgramArguments.0 raw "$plist") == "$H/.local/bin/cafe-wifi-okawari" ]]'
 ok '導入: 接続したときにも起動する'   '[[ $(plutil -extract WatchPaths.0 raw "$plist") == /var/run/resolv.conf ]]'
 ok '導入: 10秒ごとに起動する'           '[[ $(plutil -extract StartInterval raw "$plist") == 10 ]]'
-ok '導入: bootstrap の一時失敗をやり直す' '(( $(grep -c ^bootstrap $M/launchctl) == 3 ))'
+ok '導入: bootstrap の一時失敗をやり直す' '(( $(grep -c "^bootstrap .*/local.cafe-wifi-okawari.plist$" $M/launchctl) == 3 ))'
+ok '導入: 既定でメニューバーも入れる' '[[ -x $mbin.sh && -f $mbin.js && $out == *"${NL}  Menu bar: coffee cup icon (LaunchAgent local.cafe-wifi-okawari.menubar)${NL}"* ]] && cmp -s $mbin.js $root/menubar.js && cmp -s $mbin.sh $root/menubar.sh'
+pa() { plutil -extract ProgramArguments.$1 raw "$mplist" }
+ok '導入: メニューバーの plist（osascript で .js を起動・ログイン時・Aqua だけ・KeepAlive なし）' \
+  'plutil -lint -s "$mplist" && [[ "$(pa 0)|$(pa 1)|$(pa 2)|$(pa 3)" == "/usr/bin/osascript|-l|JavaScript|$mbin.js" && $(plutil -extract ProgramArguments raw "$mplist") == 4 &&
+   $(plutil -extract RunAtLoad raw "$mplist") == true && $(plutil -extract LimitLoadToSessionType raw "$mplist") == Aqua ]] && ! plutil -extract KeepAlive raw "$mplist" >/dev/null 2>&1'
+ok '導入: メニューバーを登録する' 'grep -qxF "bootstrap gui/$UID $mplist" $M/launchctl'
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '再導入も成功'                      '(( rc == 0 ))'
 ok '導入: 2回目は Updated と表示'    '[[ $out == Updated:* ]]'
+rm -f $M/launchctl
+HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh --no-menubar > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '導入: --no-menubar なら本体だけ更新し、入っていたメニューバーを消す' \
+  '(( rc == 0 )) && [[ $out == Updated:*"${NL}  Menu bar: not installed (--no-menubar)${NL}"* && ! -e $mplist && ! -e $mbin.sh && ! -e $mbin.js ]] &&
+   grep -qxF "bootout gui/$UID/local.cafe-wifi-okawari.menubar" $M/launchctl && grep -qxF "bootstrap gui/$UID $plist" $M/launchctl && ! grep -q "^bootstrap .*menubar" $M/launchctl'
+HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: メニューバーがなければ not installed' '[[ $out == *"${NL}Menu bar         not installed${NL}"* ]]'
+HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$?
+ok '導入: --no-menubar のあとの再導入でメニューバーが戻る' '(( rc == 0 )) && [[ -e $mplist && -x $mbin.sh && -f $mbin.js ]]'
+HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: メニューバーが動いていれば running' '[[ $out == *"${NL}Menu bar         running${NL}"* ]]'
+touch $M/mbstopped
+HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: メニューバーが止まっていれば（メニューから隠した・落ちた）not running' '[[ $out == *"${NL}Menu bar         not running${NL}"* ]]'
+rm -f $M/mbstopped
 print 99 > $M/bootstrap_fail
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '登録できなければ失敗で終わる'      '(( rc != 0 )) && [[ $out == "Error: could not register "* ]]'
@@ -786,42 +931,58 @@ touch "$H/Library/Logs/cafe-wifi-okawari.log" "$H/Library/Application Support/ca
       "$H/Library/Caches/cafe-wifi-okawari.seen" "$H/Library/Caches/cafe-wifi-okawari.probe"
 print -r -- "$A doutor"$'\n'"$B starbucks"$'\n'"$B doutor" > "$H/Library/Application Support/cafe-wifi-okawari/consented"
 print -rl -- L{1..6} > "$H/Library/Logs/cafe-wifi-okawari.log"
-MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
+MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '状態: 登録済みなら 0 で終わり、英語で登録の詳細を表示' \
   '(( rc == 0 )) && [[ $out == "Service          loaded (LaunchAgent local.cafe-wifi-okawari)"$'"'"'\n'"'"'"Schedule "*$'"'"'\n'"'"'"Last exit code   0 (7 runs since loaded)"$'"'"'\n'"'"'* ]]'
 ok '状態: 今の接続先が同意済みならブランドと自動再認証を表示' '[[ $out == *"Current network  gateway $A (doutor), accepted: auto re-authentication on"* ]]'
 ok '状態: 同意済みの件数とブランド（重複なし・整列）を表示' '[[ $out == *$'"'"'\n'"'"'"Accepted         3 networks (brands: doutor, starbucks)"$'"'"'\n'"'"'* ]]'
 ok '状態: ログの最新5行を字下げして表示' '[[ $out == *"Log              "*"(6 lines)"$'"'"'\n\nRecent log (last 5 lines):\n  L2\n'"'"'*"  L6" && $out != *L1* ]]'
 ok '状態: 認証の記録がなければそう表示し、目安は出さない' '[[ $out == *"Last auth        none logged yet"* && $out != *Next\ time-out* ]]'
-MAC=cc:cc:cc:cc:cc:09 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; out=$(<$M/out)
+MAC=cc:cc:cc:cc:cc:09 HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
 ok '状態: 今の接続先が未同意ならそう表示' '[[ $out == *"Current network  gateway cc:cc:cc:cc:cc:09, not accepted: auto re-authentication off"* ]]'
-NOROUTE=1 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; out=$(<$M/out)
+NOROUTE=1 HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
 ok '状態: 既定経路がなければ接続先なしと表示' '[[ $out == *"Current network  none ("* ]]'
 D=dd:dd:dd:dd:dd:04
 print -r -- "$D $(( EPOCHSECONDS - 3600 ))" > "$H/Library/Application Support/cafe-wifi-okawari/watched"
-MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; out=$(<$M/out)
+MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
 ok '状態: 今の接続先が見張り中（24時間以内）なら、次の時間切れで自動で同意を送りうると表示' '[[ $out == *"Current network  gateway $D, you accepted on its login page: if it is USEN Wi-Fi, auto re-authentication starts at the next time-out"* ]]'
 print -r -- "$D $(( EPOCHSECONDS - 86401 ))" > "$H/Library/Application Support/cafe-wifi-okawari/watched"
-MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; out=$(<$M/out)
+MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
 ok '状態: 見張りから24時間を過ぎていれば未同意と同じ表示' '[[ $out == *"Current network  gateway $D, not accepted: auto re-authentication off"* ]]'
 t1=$(date -v-70M '+%F %T') t2=$(date -v-10M '+%F %T') t3=$(date -v-5M '+%F %T')
 print -rl -- "$t1 consent recorded net=$A doutor (online)" "$t2 re-authenticated api=ok probe=ok net=$A doutor t=3s" \
   "$t3 login failed x1 api=ng probe=ng" > "$H/Library/Logs/cafe-wifi-okawari.log"
-HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
+touch -t 202001010000 $M/resolv
+MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '状態: 最後の認証の時刻・経過・種類と、60分後の目安を出す（失敗の行は数えない）' \
   '(( rc == 0 )) && [[ $out == *$'"'"'\n'"'"'"Last auth        $t2 (10 min ago), re-authenticated on doutor"$'"'"'\n'"'"'"Next time-out    around $(date -j -v+60M -f "%F %T" "$t2" +%H:%M), in "*" min (if "* ]]'
 ok '状態: ログが5行以下なら全行を表示' '[[ $out == *"(3 lines)"$'"'"'\n\nRecent log:\n'"'"'* ]]'
+MAC=$B HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 最後の認証が別の接続先なら目安を出さない（最後の認証の行は出す）' '[[ $out == *"Last auth        $t2 "* && $out != *Next\ time-out* ]]'
+touch -t $(date -j -v+20S -f '%F %T' "$t2" +%Y%m%d%H%M.%S) $M/resolv
+MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 行から30秒以内に resolv.conf が書き換わっても目安を出す' '[[ $out == *Next\ time-out* ]]'
+touch -t $(date -j -v+50S -f '%F %T' "$t2" +%Y%m%d%H%M.%S) $M/resolv
+MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 行の30秒より後に resolv.conf が書き換わっていれば目安を出さない' '[[ $out == *"Last auth        $t2 "* && $out != *Next\ time-out* ]]'
+touch -t 202001010000 $M/resolv
+print -r -- "$(date -v-1M '+%F %T') consent recorded net=$A usen (captive login)" >> "$H/Library/Logs/cafe-wifi-okawari.log"
+MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 接続画面での同意の記録（captive login）は目安に使わない（最後の認証としては出す）' \
+  '[[ $out == *"Last auth        "*"(1 min ago), consent recorded on usen"* && $out == *"Next time-out    around $(date -j -v+60M -f "%F %T" "$t2" +%H:%M), "* ]]'
 print -rl -- "$t1 consent recorded net=$A doutor (online)" > "$H/Library/Logs/cafe-wifi-okawari.log"
-HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
-ok '状態: 60分を過ぎていれば目安は不明と表示' \
-  '(( rc == 0 )) && [[ $out == *"Last auth        $t1 (1 h 10 min ago), consent recorded on doutor"* && $out == *"Next time-out    unknown ("* ]]'
+MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '状態: 60分を過ぎていれば目安を出さない' \
+  '(( rc == 0 )) && [[ $out == *"Last auth        $t1 (1 h 10 min ago), consent recorded on doutor"* && $out != *Next\ time-out* ]]'
 touch $M/notloaded
-HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
+HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '状態: 未登録なら 1 で終わる'        '(( rc == 1 )) && [[ $out == "Service          not loaded "* && $out != *Program* ]]'
 rm -f $M/notloaded
+rm -f $M/launchctl
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh uninstall > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '削除: ログ以外は残らない'          '[[ $out == Uninstalled:* ]] && (( rc == 0 )) && [[ $(cd "$H" && find . -type f) == ./Library/Logs/cafe-wifi-okawari.log ]]'
-HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '削除: 本体とメニューバーの登録を外す' '[[ $(<$M/launchctl) == "bootout gui/$UID/local.cafe-wifi-okawari${NL}bootout gui/$UID/local.cafe-wifi-okawari.menubar" ]]'
+HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '状態: 記録がなければ同意済みなしと表示' '[[ $out == *$'"'"'\nAccepted         none yet\n'"'"'* ]]'
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh bogus > $M/out 2>&1; rc=$?
 ok '引数誤りは 2 で終わる'             '(( rc == 2 ))'
