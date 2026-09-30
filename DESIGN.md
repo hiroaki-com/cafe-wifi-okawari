@@ -2,14 +2,14 @@
 
 公衆 Wi‑Fi のキャプティブポータルで時間切れ（30分・60分など）により認証画面へ戻されたとき、自動で再認証する macOS 常駐ツール。
 
-**現状**: Wi2 のワンタップ認証は実装済みで、現地で確かめた（§3・§7）。USEN（USPOT-02）は実装済みで、模擬試験で確かめた（§1.2・§3.1・§7）。現地では未確認（§7 の現地の項目 4〜6）。
+**現状**: Wi2 のワンタップ認証は実装済みで、現地で確かめた（§3・§7）。USEN（USPOT-02）は実装済みで、時間切れからの自動再認証をタリーズの1店舗で1回確かめた（§1.2・§3.1・§7）。入店時の同意の検知（§3.1 の b'）は現地で未確認（§7 の現地の項目 4〜6）。
 
 ## 1. 要件と対象
 
 | 項目 | 内容 |
 |---|---|
 | 対象 PC | macOS 15 以降（標準の `/usr/bin/jq` を使うため）。Apple Silicon・Intel。実機の確認は macOS 27.0 / arm64。追加依存なし（`/bin/zsh`・`/usr/bin/curl`・`/usr/bin/jq`・launchd など OS 標準のみ） |
-| 対象 Wi‑Fi | Wi2（Wire and Wireless, AS131160）のワンタップ認証。ドトール・すかいらーく（ガスト）で実測、スタバ・ルノアールは同じ方式の見込み（§1.1）。USEN（USPOT-02）は実装済み・現地未確認（§1.2） |
+| 対象 Wi‑Fi | Wi2（Wire and Wireless, AS131160）のワンタップ認証。ドトール・すかいらーく（ガスト）で実測、スタバ・ルノアールは同じ方式の見込み（§1.1）。USEN（USPOT-02）は実装済み。タリーズで時間切れからの自動再認証を1回実測、入店時の検知は未確認（§1.2） |
 | 時間制限 | 固定タイマーを持たず、ポータルに戻されたことを検知して再認証する。制限時間が何分でもそのまま動く。回数は数えない |
 | 前提 | 規約に同意するだけで使える網に限る。ID・パスワード・メールアドレスは扱わない。任意の入力欄（USEN の誕生年・性別）は空で送り、保存しない。OSS として公開する |
 
@@ -44,6 +44,7 @@
 | 0d0a996 | OK（ドトール）。`re-authenticated api=ok probe=ok … t=3s`、捕捉から約20秒で復旧。IP・ゲートウェイは変わらず、接続画面も出なかった |
 | 90d7097 | OK（ドトール、周期10秒）。`t=2s` |
 | 4c0a7c3 | OK（ガスト）。入店時に `consent recorded … skylark (online)`、時間切れで `t=2s`。通信が止まったのは約6秒 |
+| e2053c8 | OK（タリーズ、USEN）。時間切れで `consent recorded … usen (captive login)` → `re-authenticated … usen t=1s`。macOS の接続画面は出なかった。見張りの行は、接続画面での同意をシステムログで確かめてから手で書いた（入店時の検知 b' は通っていない） |
 
 ### 1.1 主要チェーンの認証方式（2026-09-30 時点）
 
@@ -55,7 +56,7 @@
 | スターバックス | at_STARBUCKS_Wi2 | Wi2 | 同意のみ | 1時間・繰り返し利用可 | 対応見込み（JS 一致） |
 | ガスト等すかいらーく | .Wi2_Free_at_【SK.GROUP】 | Wi2 | 同意のみ | 60分・再認証で継続 | 対応（入店時の記録と自動再認証まで実測）。バーミヤンなどは 2025-06-30 で提供終了 |
 | ルノアール・ミヤマ珈琲 | Renoir_Miyama_Wi-Fi | Wi2 | 同意のみ | 1日1回3時間 | 対応見込み（JS 一致）。上限後は延長されない想定 |
-| タリーズ | tullys_Wi-Fi | USEN | 同意（誕生年・性別は任意） | 60分 | 実装済み・現地未確認（§1.2）。画面と時間切れは1店舗で調べた |
+| タリーズ | tullys_Wi-Fi | USEN | 同意（誕生年・性別は任意） | 60分 | 実装済み。1店舗で時間切れからの自動再認証まで実測、入店時の検知は未確認（§1.2） |
 | コメダ珈琲 | Komeda_Wi-Fi（一部 .FREE_Wi-Fi_PASSPORT_J） | USEN | 同意（誕生年・性別は任意） | 60分・回数無制限 | 実装済み・現地未確認（§1.2） |
 | マクドナルド | 00_MCD-FREE-WIFI | 日本マクドナルド | 会員登録・ログイン | 60分 | 対象外 |
 | モスバーガー | —（d Wi-Fi） | ドコモ | ドコモ回線の契約と d アカウント | — | 対象外 |
@@ -87,8 +88,8 @@
 | 網の目印 | ない。DHCP のドメイン名は `lan`（家庭のルーターにもある）で、ゲートウェイの MAC は VRRP の共通 MAC ではない |
 | 捕捉中の captive.apple.com | 本ツールと同じ curl には `302`。Location は `http://<機器のプライベート IP>:<ポート>/captive/?url=captive.apple.com/hotspot-detect.html&stamac=<端末の MAC>`。macOS の問い合わせには 200（HTML）を返す（User-Agent で変えていると見られる） |
 | 機器の位置 | 端末とは別のサブネットで、既定のゲートウェイ経由で届いた（`route -n get <機器>` のインターフェースは既定経路と同じ） |
-| `stamac` | macOS のプライベート Wi‑Fi アドレス。あとで読んだ `ifconfig en0` の ether、DHCP の `chaddr`（`ipconfig getpacket en0`・`getsummary`）と一致した。`networksetup -getmacaddress` のハードウェア MAC とは違う。捕捉と同時に採った比較ではないので、捕捉中も一致するかは未確認（§7 の現地の項目 6）。`getsummary` の行は `chaddr = <MAC>` の形 |
-| 時間切れのときの macOS | 捕捉から約12秒で気づき、接続画面を開いて既定経路を外した（Wi2 では起きない）。誕生年・性別を空のまま手動で同意すると通信が戻り、ゲートウェイと IP は変わらなかった。時間切れは同意から約60分 |
+| `stamac` | macOS のプライベート Wi‑Fi アドレス。あとで読んだ `ifconfig en0` の ether、DHCP の `chaddr`（`ipconfig getpacket en0`・`getsummary`）と一致した。捕捉中も、本ツールの照合（`ifconfig` の ether と比べる）を通った。`networksetup -getmacaddress` のハードウェア MAC とは違う。`getsummary` の行は `chaddr = <MAC>` の形 |
+| 時間切れのときの macOS | 捕捉から約12秒で気づき、接続画面を開いて既定経路を外した（Wi2 では起きない）。誕生年・性別を空のまま手動で同意すると通信が戻り、ゲートウェイと IP は変わらなかった。本ツールが先に送ったときは接続画面を開かなかった（下の「macOS との競争」）。時間切れは同意から約60分（2回） |
 | 画面 | `/captive/` は `<title>USPOT-02</title>` の SPA で、JS は `/captive/dist/page.js`。step1（誕生年・性別。任意）→ step2（規約と「インターネットに接続する」）→ step3（完了） |
 | 同意の要求 | step2 のボタンが同じ機器へ平文で `POST /capi/welcome`。本文 `{"gender":"","birth":"","macaddr":"<stamac>","lang":"ja"}`。`gender` は `male`・`female`・`etc` か空、`birth` は `"YYYY"` か空で、初期値はどちらも空。`lang` は画面の言語。ヘッダ `authorization` は空。画面は応答の中身を使わず step3 へ移るだけ |
 | 利用時間 | `GET /capi/welcome/info` の `sess_time` が `"60"`。店が機器で変えられる（[USEN のサポート FAQ](https://support.usen.com/faq/show/10300?category_id=95&site_domain=default)） |
@@ -119,7 +120,7 @@
 | 同意の記録 | Wi2 と同じ `consented` に「MAC usen <ハッシュ>」。拒否3回の停止・同意待ち・知らせ方の仕組みを共用する | 仕組みを増やさない |
 | `lang` | macOS の優先言語が日本語なら `ja`、それ以外は `en` | 画面もブラウザの言語で決める |
 
-**macOS との競争（未検証）**: 捕捉から約12秒で macOS が既定経路を外すと、本ツールは何もしない（§3 の 0）。起動は10秒ごと（気づくまで平均5秒・最大10秒）で、画面と JS の GET は各数十ミリ秒だった。POST から通信が戻るまでの時間と、その間に macOS が気づくかは測れていない。間に合わなければ、利用者が開いた接続画面で同意する（何も送らない側に倒れる）。途中で経路が外れても、送らないか、成功とも拒否とも数えない（§3.1 の 5'・6'）。経路が外れたあとに `curl --interface en0` で送る案は、macOS が経路を戻すか分からないので、実測するまで採らない。
+**macOS との競争**: 捕捉から約12秒で macOS が既定経路を外すと、本ツールは何もしない（§3 の 0）。現地の1回では、本ツールが画面と JS を確かめて同意を送り、約1秒で通信が戻った。macOS はその約2秒後に気づいたが、確かめの問い合わせが通ったので接続画面を開かなかった。起動は10秒ごと（気づくまで平均5秒・最大10秒）なので、捕捉の直後に起動を逃すと差は1〜2秒と見込まれ、負けることもありうる。負ければ、利用者が開いた接続画面で同意する（何も送らない側に倒れる）。途中で経路が外れても、送らないか、成功とも拒否とも数えない（§3.1 の 5'・6'）。
 
 **制約**: システムログの文言が変わると網を見つけられず、何もしない。POST の応答の意味（受け付けたか）は分からない（`GET /capi/welcome/info` には `status_code` があるが、POST が同じ形かは不明）。そのため成功は疎通の回復で判断し、「応答したが通信が戻らない」も拒否に数える（§3.1 の 6'）。
 
@@ -379,16 +380,18 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | 実際の `launchctl` での再導入・起動の間隔 | 再導入は3回続けて成功。10秒の間隔で起動（`run interval = 10 seconds`） |
 | `/var/run/resolv.conf` が書き換わる時刻 | 接続画面で同意して通信できるようになった時刻（`Online (websheet: success)`）と一致 |
 | 現行版（USEN 未対応）が USEN の網で何もしないか | OK（入店時・時間切れ時とも、ログは増えず何も送らなかった） |
-| USEN の `stamac` | あとで読んだ ether・`chaddr` と一致。捕捉と同時の比較は未実施（下の項目 6） |
+| USEN の `stamac` | あとで読んだ ether・`chaddr` と一致。捕捉中も本ツールの照合（ether）を通った |
+| USEN の実際の時間切れでの自動再認証 | OK（タリーズ1回。`consent recorded … usen (captive login)` → `re-authenticated … usen t=1s`）。誕生年・性別は空のまま受け付けられた。見張りの行は手で書いた（下の項目 4） |
+| USEN の macOS との競争 | 本ツールが先（1回）。通信が戻った約2秒後に macOS が気づき、確かめの問い合わせが通ったので接続画面は出なかった（§1.2） |
 
 次の現地試験で見ること:
 
 1. スタバ・ルノアールで、入店時の `consent recorded … (online)` と、時間切れ後の `re-authenticated` が出るか。`agreement.html` へ転送されれば `redirect failed … to=…` に出る（§1.1）
 2. 10秒周期で、捕捉から通信が戻るまでの秒数（回数を重ねて平均を見る）
 3. 失敗したら、ログの `redirect failed`・`portal …`・`login failed … curl=… res=…`・`probe failed`・`network changed` で原因を切り分ける（黙って終わるのは、記録も Wi2 のドメイン名もない網と、既定経路がないときだけ）
-4. USEN: 入店時の同意のあと `captive login seen` が出るか。最初の時間切れで `consent recorded … usen (captive login)` と `re-authenticated … usen` が続くか
-5. USEN: macOS との競争。捕捉から POST まで・POST から疎通までの秒数と、接続画面が出たか。出たときに、ログが `network changed` だけで拒否に数えていないか
-6. USEN: 捕捉中と復帰後の `scutil` の CaptiveNetwork の値。同じ網につなぎ直したとき `LeaseStartTime` が更新されるか（§3.1 の a'・b' の前提）。捕捉の時点で Location の `stamac`・`ifconfig en0` の ether・DHCP の `chaddr` を同時に採り、一致を確かめる（値は残さず、一致したかだけを書く）
+4. USEN: 入店時に接続画面で同意したあと、本ツールが `captive login seen` を書くか（b'。手で書かずに）。コメダでも、時間切れで `consent recorded … usen (captive login)` と `re-authenticated … usen` が続くか
+5. USEN: macOS との競争を重ねて見る。接続画面が先に出たときに、ログが `network changed` だけで拒否に数えていないか
+6. USEN: 捕捉中の `scutil` の CaptiveNetwork の値（復帰後は `Online`・`WaitingOnUI` が `FALSE`）。同じ網につなぎ直したとき `LeaseStartTime` が更新されるか（§3.1 の a'・b' の前提）
 
 `test/run.sh` で確認している USEN の分岐（`run` の `posts` は `xhr/login` と `/capi/welcome` の両方を数え、USEN の項目では `uposts` で宛先も確かめる。模擬の `log show`・`ipconfig getsummary`・`route -n get <IP>`・USEN の機器を使う）:
 

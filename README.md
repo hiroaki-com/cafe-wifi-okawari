@@ -8,7 +8,7 @@ English | [日本語](README.ja.md)
 
 Automatically re-accepts the captive portal terms when a free café Wi‑Fi in Japan sends you back to its login page after the time limit (e.g. 60 minutes). *Okawari* means "a refill" — like a coffee refill, but for Wi‑Fi.
 
-- On Wi2 Wi‑Fi where you have accepted the terms yourself (USEN has not been tested at a shop; see [About USEN](#about-usen)), it checks every 10 seconds, notices a logout within about 10 seconds, and usually reconnects a few seconds later (your connection is down in between; see [Caveats](#caveats))
+- On Wi2 Wi‑Fi where you have accepted the terms yourself (USEN is only partly tested at a shop; see [About USEN](#about-usen)), it checks every 10 seconds, notices a logout within about 10 seconds, and usually reconnects a few seconds later (your connection is down in between; see [Caveats](#caveats))
 - Works with any time limit — it reacts to the login page, not a timer
 - Uses no IDs, passwords, or email addresses, and stores nothing secret
 - Nothing extra to install: it runs on the zsh, curl, and launchd that ship with macOS
@@ -24,11 +24,11 @@ Free Wi‑Fi from Wire and Wireless (Wi2) where you only need to accept the term
 | Starbucks | `at_STARBUCKS_Wi2` | Expected to work (same portal) |
 | Renoir / Miyama Coffee | `Renoir_Miyama_Wi-Fi` | Expected to work (same portal). The 3-hour daily cap cannot be extended |
 
-Tully's Coffee (`tullys_Wi-Fi`) and Komeda's Coffee (`Komeda_Wi-Fi`) use a USEN portal (not Wi2) that also asks for your birth year and gender (optional). The tool has code that re-sends the acceptance to this portal, but it has not been tested at a shop, so these networks are not listed as supported (see [About USEN](#about-usen)). Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported. The survey is in [DESIGN.md](DESIGN.md) (Japanese).
+Tully's Coffee (`tullys_Wi-Fi`) and Komeda's Coffee (`Komeda_Wi-Fi`) use a USEN portal (not Wi2) that also asks for your birth year and gender (optional). The tool has code that re-sends the acceptance to this portal, and automatic re-acceptance after a time-out was tested once at one Tully's shop. Detecting your acceptance when you join, and Komeda's Coffee, have not been tested at a shop yet, so these networks are not listed as supported (see [About USEN](#about-usen)). Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported. The survey is in [DESIGN.md](DESIGN.md) (Japanese).
 
 ### About USEN
 
-This part has not been tested at a shop. To see whether it worked, check `./install.sh status` and the log ([Troubleshooting](#troubleshooting)).
+Only automatic re-acceptance after a time-out has been tested at a shop, once, at one Tully's shop. Detecting your acceptance when you join (see "When it applies" below) has not been tested at a shop yet. To see whether it worked, check `./install.sh status` and the log ([Troubleshooting](#troubleshooting)).
 
 - **Which networks**: only networks whose login page is USEN's "USPOT-02". According to their official guides, Tully's and Komeda's Coffee use it
 - **When it applies**: only when you accept the terms yourself on the login page within 5 minutes of joining the Wi‑Fi. The tool checks the Mac's system log (`/usr/bin/log show`) for that acceptance and then watches the network for 24 hours (it only reads the log; it sends nothing). It does nothing on a network you accepted before installing the tool, or more than 5 minutes after joining. It applies from the next time you join and accept on the login page yourself
@@ -41,7 +41,7 @@ This part has not been tested at a shop. To see whether it worked, check `./inst
 - **What it sends**: the same request as the login page's "connect to the internet" button, in plain HTTP to the device in the shop, as the login page does. It includes this Mac's MAC address. Birth year and gender are sent empty (the official guide says they are optional, and the page leaves them empty by default). The tool never asks for them, does not store them, and does not use values you entered on the login page
 - **Changes to the terms**: when it first sends the acceptance, it records a hash of the terms text on the page. If the text has changed, it sends nothing, stops re-accepting automatically, and tells you in a dialog. Read the terms on the login page and accept yourself to resume
 - **When it stops**: the USEN device does not say in its response whether it accepted. So if the device responds but the connection does not come back three times in a row, the tool stops re-accepting on that network. Accept on the login page yourself to resume
-- **If it is too late**: on USEN, macOS opens its login window about 12 seconds after the time-out, and the tool can no longer send anything after that. Whether the tool gets there first has not been tested yet. If it does not, accept in the login window yourself
+- **If it is too late**: on USEN, macOS opens its login window about 12 seconds after the time-out, and the tool can no longer send anything after that. In the one test at a shop, the tool got there first: the connection came back in about 1 second and the login window did not open. But the tool checks only every 10 seconds, so it can be too late. If so, accept in the login window yourself
 
 ## Requirements
 
