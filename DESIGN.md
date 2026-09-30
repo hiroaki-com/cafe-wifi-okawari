@@ -326,32 +326,52 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 - この間はどの網か分からないので、本ツールの対象の網かどうかは言わない（ホテルなど対象外の網でも出る）。メニューは「macOS が接続画面での同意を待っている」ことと、画面が出ていなければ `http://captive.apple.com` を開くという案内だけ
 - 捕捉中に上の2つの値がどうなるかは未確認（`scutil` は認証済みの `Online`・`FALSE` しか見ていない。§1.2）。現地で確かめて、片方で足りれば条件を絞る（§7 の現地の項目 7）
 
-**メニュー**（英語のみ。macOS の優先言語で切り替えない。`install.sh` のメッセージと同じ扱いで、用語も `install.sh status` に揃える。ダイアログは今までどおり日本語・英語）
+**メニュー**（英語のみ。macOS の優先言語で切り替えない。`install.sh` のメッセージと同じ扱い。ダイアログは今までどおり日本語・英語）
+
+表記は2026-09-30 に決めた。状態の行は短い語句を「·」でつなぎ（一目で読め、メニューが細くなる）、利用者の対応が要る「!」の案内だけを文にする（何をすればよいかを誤解させない）。ログと `install.sh status` の語（`re-authenticated` など）は変えず、メニューだけ下の表で読み替える。
 
 ```
-cafe-wifi-okawari: running                      （停止中は stopped (run ./install.sh to register again)）
-Current network: accepted (skylark), auto re-authentication on
-                                                （not accepted, auto re-authentication off / none (offline) /
-                                                  accepted on its login page: auto from the next time-out if USEN（§3.1 の見張り中）/
-                                                  waiting for you to accept on the login page (macOS)）
-Next time-out: around 15:12 (if the shop's limit is 60 minutes)
-                                                （同意済みの接続先で、下の条件を満たすときだけ。満たさなければ unknown）
-Action needed: check the login page             （注意・接続画面待ちのときだけ。条件ごとに文言を分ける）
+cafe-wifi-okawari — Running
+This Wi‑Fi: Skylark · Auto Reconnect On
+Next Time-out: ~15:12
 ────
-09-30 13:19  re-authenticated usen t=1s        （ログの再認証・同意の記録・失敗・自動の停止を新しい順に3件。種類はログの語のまま）
-09-30 13:19  consent recorded usen
-09-29 14:11  re-authenticated skylark t=2s
+Today 13:19      Reconnected · USEN · 1 s
+Today 13:19      Terms Accepted · USEN
+Yesterday 14:11  Reconnected · Skylark · 2 s
 ────
-Open Log                                        （「コンソール」で開く）
-Hide from Menu Bar                              （次のログインか ./install.sh で再表示）
+Open Log
+Hide from Menu Bar
 ```
+
+| 状態 | 行 |
+|---|---|
+| 1行目（動作中 / 停止中） | `cafe-wifi-okawari — Running` / `cafe-wifi-okawari — Stopped` と、続けて `Run ./install.sh to Restart` |
+| 同意済み | `This Wi‑Fi: Skylark · Auto Reconnect On` |
+| 未同意（自宅など） | `This Wi‑Fi: Auto Reconnect Off` |
+| 未接続 | `This Wi‑Fi: Offline` |
+| 見張り中（§3.1） | `This Wi‑Fi: Auto Reconnect from Next Time-out` |
+| 接続画面待ち（…） | `This Wi‑Fi: Waiting for Login Page` と、続けて `If the login page doesn't appear, open http://captive.apple.com.` |
+| 注意: 再接続に失敗し、知らせたあと（!） | `Couldn't reconnect automatically. Check the login page.` |
+| 注意: 同意が要る（!。初めての網・自動の停止のあと） | `Accept the terms once on the login page. After that, it reconnects automatically.` |
+| 次の時間切れ | `Next Time-out: ~15:12`。項目にマウスを載せると `Estimated from the last authentication, if the shop's limit is 60 minutes.`（ツールチップ）。下の条件を満たさなければ行を出さない |
+
+| ログの語 | 直近の出来事での表記 |
+|---|---|
+| `re-authenticated` | `Reconnected · <ブランド> · <t> s` |
+| `consent recorded` | `Terms Accepted · <ブランド>` |
+| `login failed`・`redirect failed` | `Couldn't Reconnect · <ブランド>`（ブランドがない行は省く） |
+| `auto stopped` | `Auto Reconnect Stopped · <ブランド>` |
+
+- 日付は、今日なら `Today`、昨日なら `Yesterday`、それより前は `09-28`。時刻は24時間制の `HH:MM`
+- ブランド名は先頭だけ大文字（`skylark` → `Skylark`）。`usen` は `USEN`。本体は英字・数字・`-`・`_` だけのブランド名しか記録しないので、そのほかの文字は出てこない
+- 案内の行（!・…）は押せない行として出す。接続画面を開くボタンは付けない（操作を増やさない）
 
 - 画面共有や録画に写るので、端末とゲートウェイの MAC・IP・SSID は出さない（時刻・種類・ブランド・秒数だけ）
 - ログは末尾の 16KB だけ読む（ローテーションしないので、全体を読むと年単位で重くなる）
-- 次の時間切れの目安は、次をすべて満たすログの最後の行から60分とする。1つでも欠ければ unknown（間違った時刻を出すより、出さない側に倒す）
+- 次の時間切れの目安は、次をすべて満たすログの最後の行から60分とする。1つでも欠ければ行を出さない（間違った時刻を出すより、出さない側に倒す）
   - 種類が `re-authenticated` か `consent recorded`。ただし `consent recorded … usen (captive login)` は除く。これは最初の時間切れで、過去の接続画面での同意を記録する行で、同意を送る**前**に書く（本体の USEN の分岐）。送信に失敗しても残るので、通信が戻った時刻にならない。成功すれば続けて `re-authenticated` が出るので、そちらを使う
   - `net=` が今の接続先。店 A で再認証したあと店 B へ移ったときに、A の時刻から B の時間切れを出さないため
-  - 行の時刻から30秒より後に `resolv.conf` が書き換わっていない。本体は、同意済みの網で利用者が自分で同意し直してもログを書かない（記録済みなら何もしない）ので、1時間以内に同じ店へ戻って同意し直すと、今の接続先の古い行しか残らない。`resolv.conf` はつなぎ直したときと接続画面で同意したときに書き換わる（§7）ので、行より後に書き換わっていれば、その行は今の接続の認証ではない。30秒は、再認証に続いて書き換わる場合の幅。再認証やリースの更新で実際に書き換わるかは未確認で、書き換わるなら目安が途中で unknown になる（現地の項目 7）
+  - 行の時刻から30秒より後に `resolv.conf` が書き換わっていない。本体は、同意済みの網で利用者が自分で同意し直してもログを書かない（記録済みなら何もしない）ので、1時間以内に同じ店へ戻って同意し直すと、今の接続先の古い行しか残らない。`resolv.conf` はつなぎ直したときと接続画面で同意したときに書き換わる（§7）ので、行より後に書き換わっていれば、その行は今の接続の認証ではない。30秒は、再認証に続いて書き換わる場合の幅。再認証やリースの更新で実際に書き換わるかは未確認で、書き換わるなら目安が途中で消える（現地の項目 7）
   - 行の時刻から60分以内
 - `install.sh status` の「Last auth」「Next time-out」も今は接続先を絞らず、`(captive login)` も数えている。実装のときに、同じ条件に揃える（ログの最後の行としての「Last auth」の表示は残し、「Next time-out」だけ条件を満たすときに出す）
 
@@ -359,8 +379,8 @@ Hide from Menu Bar                              （次のログインか ./insta
 
 ```
 warn
-cafe-wifi-okawari: running
-Current network: accepted (skylark), auto re-authentication on
+cafe-wifi-okawari — Running
+This Wi‑Fi: Skylark · Auto Reconnect On
 …
 ```
 
@@ -376,7 +396,7 @@ Current network: accepted (skylark), auto re-authentication on
 
 **負荷**: 10秒ごとに zsh を1回起動し、`launchctl print`・`route`・`arp` と小さなファイルの読み取りだけを行う（通信しない）。既定経路がないときだけ `networksetup`（手元で約0.03秒）・`ipconfig`・`scutil` も読む。常駐の `osascript` の CPU・メモリは実装時に測って §5 に書く。
 
-**試験**（`test/run.sh` に追加）: アイコンの5状態と優先順位、注意の2条件（今の接続先と違えば出ない）、注意の最中に既定経路がなくなる（接続画面待ちになる。Wi‑Fi の IPv4 も `WaitingOnUI` もなければ未接続）、✓ の10分の境目、次の時間切れの有無（店 A で再認証したあと店 B へ移る → unknown、`consent recorded … usen (captive login)` のあと送信に失敗 → unknown、そのあと `re-authenticated` → その時刻から60分、行より後に `resolv.conf` が書き換わる → unknown、30秒以内なら出す）、優先言語が日本語でもメニューは英語、ログの行の短縮（MAC・IP を含まない）、ログがない・空・状態ファイルが旧形式、`install.sh` の既定・`--no-menubar`・再導入・uninstall・status。`menubar.js` は GitHub Actions で構文の確認（`osascript -l JavaScript` で読み込むだけの起動方法を用意する。画面のない環境で `NSStatusBar` が使えるかは実装時に確かめる）と、実機での目視。
+**試験**（`test/run.sh` に追加）: アイコンの5状態と優先順位、注意の2条件（今の接続先と違えば出ない）、注意の最中に既定経路がなくなる（接続画面待ちになる。Wi‑Fi の IPv4 も `WaitingOnUI` もなければ未接続）、✓ の10分の境目、次の時間切れの有無（店 A で再認証したあと店 B へ移る → 出さない、`consent recorded … usen (captive login)` のあと送信に失敗 → 出さない、そのあと `re-authenticated` → その時刻から60分、行より後に `resolv.conf` が書き換わる → 出さない、30秒以内なら出す）、優先言語が日本語でもメニューは英語、状態ごとの行の表記と直近の出来事の読み替え（Today・Yesterday の境目、ブランド名の大文字、MAC・IP を含まない）、ログがない・空・状態ファイルが旧形式、`install.sh` の既定・`--no-menubar`・再導入・uninstall・status。`menubar.js` は GitHub Actions で構文の確認（`osascript -l JavaScript` で読み込むだけの起動方法を用意する。画面のない環境で `NSStatusBar` が使えるかは実装時に確かめる）と、実機での目視。
 
 ## 4. 安全性
 
