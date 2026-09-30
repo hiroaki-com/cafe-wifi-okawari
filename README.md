@@ -20,12 +20,11 @@ Free Wi‑Fi from Wire and Wireless (Wi2) where you only need to accept the term
 | Shop | SSID | Status |
 |---|---|---|
 | Doutor / Excelsior Caffé | `DOUTOR_FREE_Wi-Fi` | Tested (recording your acceptance and automatic re-acceptance after the time limit each confirmed at one shop) |
-| Skylark group (Gusto, etc.) | `.Wi2_Free_at_【SK.GROUP】` | Tested (recording your acceptance and automatic re-acceptance after the time limit each confirmed at one shop) |
+| Skylark group (Gusto, etc.) | `.Wi2_Free_at_【SK.GROUP】` | Tested (recording your acceptance and automatic re-acceptance after the time limit each confirmed at one shop). Some brands, such as Bamiyan, ended their Wi‑Fi in June 2025 |
 | Starbucks | `at_STARBUCKS_Wi2` | Expected to work (same portal) |
-| Tully's Coffee | `tullys_Wi-Fi` | Expected to work (same portal) |
 | Renoir / Miyama Coffee | `Renoir_Miyama_Wi-Fi` | Expected to work (same portal). The 3-hour daily cap cannot be extended |
 
-Networks that need a sign-up, an email address, or a survey (McDonald's, Saizeriya, etc.) are not supported. The survey is in [DESIGN.md](DESIGN.md) (Japanese).
+Tully's Coffee (`tullys_Wi-Fi`) is not supported: its official guide now points to a USEN portal (not Wi2) that also asks for your birth year and gender (optional), and a field check at one shop in September 2026 confirmed that portal. Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported either. The survey is in [DESIGN.md](DESIGN.md) (Japanese).
 
 ## Requirements
 
