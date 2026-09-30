@@ -104,7 +104,7 @@ case ${1-} in
   uninstall)
     launchctl bootout gui/$UID/$label 2>/dev/null || true
     launchctl bootout gui/$UID/$mlabel 2>/dev/null || true
-    rm -f $plist $bin $mplist $mbin.{sh,js} $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen,.probe}
+    rm -f $plist $bin $mplist $mbin{.sh,.js,.png,@2x.png} $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen,.probe}
     rm -rf "${kn:h}"   # 同意した接続先の記録
     print -r -- "Uninstalled: removed the LaunchAgents ($label, $mlabel), the programs and the list of accepted networks"
     print -r -- "  Log kept: $log (delete it by hand if you no longer need it)"
@@ -150,6 +150,8 @@ load $plist $label
 if (( menubar )); then
   install -m 755 ${0:A:h}/menubar.sh $mbin.sh
   install -m 644 ${0:A:h}/menubar.js $mbin.js
+  install -m 644 ${0:A:h}/assets/icon/menuBarTemplate.png $mbin.png
+  install -m 644 ${0:A:h}/assets/icon/menuBarTemplate@2x.png $mbin@2x.png
   rm -f $mplist
   plutil -create xml1 $mplist
   plutil -insert Label -string $mlabel $mplist
@@ -161,7 +163,7 @@ if (( menubar )); then
   load $mplist $mlabel
 else
   launchctl bootout gui/$UID/$mlabel 2>/dev/null || true
-  rm -f $mplist $mbin.{sh,js}
+  rm -f $mplist $mbin{.sh,.js,.png,@2x.png}
 fi
 print -r -- "$verb: $bin"
 print -r -- "  Runs every $every s, and whenever the network settings change (LaunchAgent $label)"

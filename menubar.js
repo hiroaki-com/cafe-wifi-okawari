@@ -8,12 +8,25 @@ sa.includeStandardAdditions = true
 const self = $.NSURL.fileURLWithPath(ObjC.deepUnwrap($.NSProcessInfo.processInfo.arguments).find(a => a.endsWith('.js'))).path.js
 const SH = self.replace(/\.js$/, '.sh')
 const LOG = $.NSHomeDirectory().js + '/Library/Logs/cafe-wifi-okawari.log'
+// アイコンの素材（1x・2x の組）。導入先では .js と同じ名前の .png・@2x.png、リポジトリでは assets/icon の素材
+const ICON = [self.replace(/\.js$/, ''), self.replace(/[^/]*$/, 'assets/icon/menuBarTemplate')].find(p => $.NSFileManager.defaultManager.fileExistsAtPath(p + '.png'))
 // アイコンの種類ごとの印。これ以外の値と実行の失敗は off として扱う
 const MARK = { off: '', warn: ' !', wait: ' …', check: ' ✓', on: '' }
 
 const app = $.NSApplication.sharedApplication
 app.setActivationPolicy($.NSApplicationActivationPolicyAccessory)   // Dock に出さない
 const item = $.NSStatusBar.systemStatusBar.statusItemWithLength($.NSVariableStatusItemLength)
+// 1x・2x を同じ 18 × 18 pt の画像の表現にする（assets/icon/README.md）。どちらかが読めなければ起動しない（--check も失敗する）
+const img = $.NSImage.alloc.initWithSize($.NSMakeSize(18, 18))
+for (const f of [ICON + '.png', ICON + '@2x.png']) {
+  const r = $.NSImageRep.imageRepWithContentsOfFile(f)
+  if (r.isNil()) throw new Error('cannot read the icon: ' + f)
+  r.size = $.NSMakeSize(18, 18)
+  img.addRepresentation(r)
+}
+img.template = true   // ライト・ダーク・色付きのメニューバーに合わせて色が変わる（ファイル名での判定には頼らない）
+img.accessibilityDescription = 'cafe-wifi-okawari'
+item.button.image = img
 const menu = $.NSMenu.alloc.init
 item.menu = menu
 
@@ -28,9 +41,6 @@ function refresh() {
   let out = ['off']
   try { out = sa.doShellScript("/bin/zsh '" + SH.replace(/'/g, "'\\''") + "'", { alteringLineEndings: false }).replace(/\n$/, '').split('\n') } catch (e) {}
   const k = MARK.hasOwnProperty(out[0]) ? out[0] : 'off'
-  const img = $.NSImage.imageWithSystemSymbolNameAccessibilityDescription(k === 'off' ? 'cup.and.saucer' : 'cup.and.saucer.fill', 'cafe-wifi-okawari')
-  img.template = true   // ライト・ダーク・色付きのメニューバーに合わせて色が変わる
-  item.button.image = img
   item.button.appearsDisabled = k === 'off'
   item.button.title = MARK[k]
 

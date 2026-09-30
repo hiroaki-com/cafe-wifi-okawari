@@ -897,7 +897,8 @@ ok '導入: plist のパスが正しい'        '[[ $(plutil -extract ProgramArg
 ok '導入: 接続したときにも起動する'   '[[ $(plutil -extract WatchPaths.0 raw "$plist") == /var/run/resolv.conf ]]'
 ok '導入: 10秒ごとに起動する'           '[[ $(plutil -extract StartInterval raw "$plist") == 10 ]]'
 ok '導入: bootstrap の一時失敗をやり直す' '(( $(grep -c "^bootstrap .*/local.cafe-wifi-okawari.plist$" $M/launchctl) == 3 ))'
-ok '導入: 既定でメニューバーも入れる' '[[ -x $mbin.sh && -f $mbin.js && $out == *"${NL}  Menu bar: coffee cup icon (LaunchAgent local.cafe-wifi-okawari.menubar)${NL}"* ]] && cmp -s $mbin.js $root/menubar.js && cmp -s $mbin.sh $root/menubar.sh'
+ok '導入: 既定でメニューバーも入れる（アイコンの 1x・2x も .js と同じ名前で）' '[[ -x $mbin.sh && -f $mbin.js && $out == *"${NL}  Menu bar: coffee cup icon (LaunchAgent local.cafe-wifi-okawari.menubar)${NL}"* ]] && cmp -s $mbin.js $root/menubar.js && cmp -s $mbin.sh $root/menubar.sh &&
+   cmp -s $mbin.png $root/assets/icon/menuBarTemplate.png && cmp -s $mbin@2x.png $root/assets/icon/menuBarTemplate@2x.png'
 pa() { plutil -extract ProgramArguments.$1 raw "$mplist" }
 ok '導入: メニューバーの plist（osascript で .js を起動・ログイン時・Aqua だけ・KeepAlive なし）' \
   'plutil -lint -s "$mplist" && [[ "$(pa 0)|$(pa 1)|$(pa 2)|$(pa 3)" == "/usr/bin/osascript|-l|JavaScript|$mbin.js" && $(plutil -extract ProgramArguments raw "$mplist") == 4 &&
@@ -909,12 +910,12 @@ ok '導入: 2回目は Updated と表示'    '[[ $out == Updated:* ]]'
 rm -f $M/launchctl
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh --no-menubar > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '導入: --no-menubar なら本体だけ更新し、入っていたメニューバーを消す' \
-  '(( rc == 0 )) && [[ $out == Updated:*"${NL}  Menu bar: not installed (--no-menubar)${NL}"* && ! -e $mplist && ! -e $mbin.sh && ! -e $mbin.js ]] &&
+  '(( rc == 0 )) && [[ $out == Updated:*"${NL}  Menu bar: not installed (--no-menubar)${NL}"* && ! -e $mplist && -z "$(print -r -- $mbin*(N))" ]] &&
    grep -qxF "bootout gui/$UID/local.cafe-wifi-okawari.menubar" $M/launchctl && grep -qxF "bootstrap gui/$UID $plist" $M/launchctl && ! grep -q "^bootstrap .*menubar" $M/launchctl'
 HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
 ok '状態: メニューバーがなければ not installed' '[[ $out == *"${NL}Menu bar         not installed${NL}"* ]]'
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$?
-ok '導入: --no-menubar のあとの再導入でメニューバーが戻る' '(( rc == 0 )) && [[ -e $mplist && -x $mbin.sh && -f $mbin.js ]]'
+ok '導入: --no-menubar のあとの再導入でメニューバーが戻る' '(( rc == 0 )) && [[ -e $mplist && -x $mbin.sh && -f $mbin.js && -f $mbin.png && -f $mbin@2x.png ]]'
 HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
 ok '状態: メニューバーが動いていれば running' '[[ $out == *"${NL}Menu bar         running${NL}"* ]]'
 touch $M/mbstopped

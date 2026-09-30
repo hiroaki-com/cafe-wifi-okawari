@@ -214,7 +214,7 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | `~/Library/Application Support/cafe-wifi-okawari/consented` | 利用者が自分で同意した接続先「MAC ブランド」（1行1つ）。USEN は「MAC usen [<規約のハッシュ>]」。ここにある接続先だけ自動で再認証する |
 | `~/Library/Application Support/cafe-wifi-okawari/watched` | （USEN で追加）接続画面での同意をシステムログで確かめた網「MAC 記録した時刻」（1行1つ、新しい50件まで）。24時間で無効（読むときに捨てる）。同意を記録したとき・対象外と確かめたとき・Wi2 の網と分かったときに外す。確かめられなかった（通信失敗など）だけでは外さない |
 
-`install.sh uninstall` は2つの plist・本体・メニューバーの2ファイル・`~/Library/Caches` の4ファイル・`Application Support/cafe-wifi-okawari`（`watched` を含む）を消し、ログは残す。
+`install.sh uninstall` は2つの plist・本体・メニューバーの4ファイル（2つのスクリプトとアイコンの 1x・2x）・`~/Library/Caches` の4ファイル・`Application Support/cafe-wifi-okawari`（`watched` を含む）を消し、ログは残す。
 
 ### 3.1 USEN の分岐
 
@@ -300,17 +300,18 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 |---|---|
 | `menubar.sh` → `~/.local/bin/cafe-wifi-okawari-menubar.sh` | 状態を判定し、1行目にアイコンの種類、2行目以降にメニューの行を出す（下の「出力」）。通信しない。ファイルは読むだけ |
 | `menubar.js` → `~/.local/bin/cafe-wifi-okawari-menubar.js` | 10秒ごとと、メニューを開く直前（`menuNeedsUpdate:`）に `menubar.sh` を実行して、アイコンとメニューを作り直す。`menubar.sh` は自分のパスの `.js` を `.sh` に替えて求める（導入先でもリポジトリでも同じ名前の組） |
+| `assets/icon/menuBarTemplate.png`・`menuBarTemplate@2x.png` → `~/.local/bin/cafe-wifi-okawari-menubar.png`・`cafe-wifi-okawari-menubar@2x.png` | アイコンの画像（18 × 18 pt の 1x・2x。素材の由来と作り方は `assets/icon/README.md`）。`menubar.js` は、自分のパスの `.js` を外した名前の `.png` があればそれを（導入先）、なければ同じ場所の `assets/icon/menuBarTemplate.png` を使う（リポジトリ） |
 | `~/Library/LaunchAgents/local.cafe-wifi-okawari.menubar.plist` | `ProgramArguments=/usr/bin/osascript -l JavaScript <js>`、`RunAtLoad`、`LimitLoadToSessionType=Aqua`。`KeepAlive` は付けない（下の「止まったとき」） |
 
-**アイコン**（優先の高い順。SF Symbols のテンプレート画像なので、ライト・ダーク・色付きのメニューバーに合わせて色が変わる）
+**アイコン**（優先の高い順。画像は `assets/icon` のカップ1つ（Wi‑Fi に見立てた2本の湯気と、外側の線の先の矢印で「おかわり」）。テンプレート画像なので、ライト・ダーク・色付きのメニューバーに合わせて色が変わる）
 
 | 状態 | 条件 | 表示 |
 |---|---|---|
-| 停止中 | 本体の LaunchAgent が登録されていない（`launchctl print` が失敗） | 線のカップ（`cup.and.saucer`）を薄く |
-| 注意 | 今の接続先について、利用者の対応が要る（下の2つのどちらか） | 塗りのカップ（`cup.and.saucer.fill`）＋「!」 |
-| 接続画面待ち | 既定経路がなく、Wi‑Fi はつながっている（下の「接続画面待ち」） | 塗りのカップ＋「…」 |
-| 再認証直後 | ログの最後の `re-authenticated` から10分以内 | 塗りのカップ＋「✓」 |
-| 動作中 | それ以外 | 塗りのカップ |
+| 停止中 | 本体の LaunchAgent が登録されていない（`launchctl print` が失敗） | カップを薄く |
+| 注意 | 今の接続先について、利用者の対応が要る（下の2つのどちらか） | カップ＋「!」 |
+| 接続画面待ち | 既定経路がなく、Wi‑Fi はつながっている（下の「接続画面待ち」） | カップ＋「…」 |
+| 再認証直後 | ログの最後の `re-authenticated` から10分以内 | カップ＋「✓」 |
+| 動作中 | それ以外 | カップ |
 
 注意の条件（どちらも本体の記録ファイルを読むだけで、ログは解析しない）:
 
@@ -394,7 +395,7 @@ Today 13:19<TAB>Reconnected · Skylark · 2 s
 
 **導入・削除**（`install.sh`）
 
-- `./install.sh` で本体と一緒に導入・更新する（既定で入れる）。`./install.sh --no-menubar` なら入れず、入っていれば LaunchAgent と2つのファイルを消す
+- `./install.sh` で本体と一緒に導入・更新する（既定で入れる）。`./install.sh --no-menubar` なら入れず、入っていれば LaunchAgent と4つのファイルを消す
 - `./install.sh uninstall` は両方を消す。`status` に「Menu bar: running / not running / not installed」の行を足す（plist がなければ not installed。`launchctl print` の `state` が `running` なら running）
 - 本体の動作は、メニューバーの有無・状態に関係しない（メニューバー側はファイルを読むだけで、本体からは何も呼ばない）
 
@@ -407,6 +408,7 @@ Today 13:19<TAB>Reconnected · Skylark · 2 s
 - JXA は `do shell script` で `/bin/zsh <menubar.sh>` を実行する（`alteringLineEndings: false`。PATH は `do shell script` の既定の `/usr/bin:/bin:/usr/sbin:/sbin` で、使うコマンドはすべて入る）
 - macOS 27 の JXA では、`NSAttributedString.alloc` の直後に `initWithString:attributes:` が橋渡しされない。右の列をそろえる文字列は `NSMutableAttributedString.new` に中身と属性を入れて作る
 - `osascript -l JavaScript menubar.js --check` は、アイコンとメニューを1回作って終わる（GitHub Actions での読み込みの確認用）
+- アイコンは 1x・2x の PNG を同じ 18 × 18 pt の `NSImage` の表現にし、`template` を明示する（ファイル名の `Template` での判定には頼らない）。どちらかが読めなければ起動しない（`--check` も失敗する）ので、画像が欠けたまま別の見た目で動くことはない。状態で画像は替えず、停止中は `appearsDisabled` で薄くする
 - 状態の行は押せない行（無効の項目）にしている。無効の項目でツールチップが出るかは未確認（§7）
 
 **試験**（`test/run.sh`。結果は §7）: アイコンの5状態と優先順位、注意の2条件（今の接続先と違えば出ない）、注意の最中に既定経路がなくなる（接続画面待ちになる。Wi‑Fi の IPv4 も `WaitingOnUI` もなければ未接続）、✓ の10分の境目、次の時間切れの有無（店 A で再認証したあと店 B へ移る → 出さない、`consent recorded … usen (captive login)` のあと送信に失敗 → 出さない、そのあと `re-authenticated` → その時刻から60分、行より後に `resolv.conf` が書き換わる → 出さない、30秒以内なら出す）、優先言語が日本語でもメニューは英語、状態ごとの行の表記と直近の出来事の読み替え（Today・Yesterday の境目、ブランド名の大文字、MAC・IP を含まない）、ログがない・空・状態ファイルが旧形式、`install.sh` の既定・`--no-menubar`・再導入・uninstall・status。`menubar.js` は GitHub Actions で構文の確認と `--check` での読み込み、実機での目視。
@@ -492,12 +494,13 @@ Today 13:19<TAB>Reconnected · Skylark · 2 s
 |---|---|
 | 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`・`menubar.js` の `osacompile -l JavaScript`） | OK |
 | 模擬試験 `zsh test/run.sh`（307項目。うち USEN の分岐と `install.sh status` の見張り表示が108項目、メニューバーの表示が38項目、`install.sh` のメニューバーと次の時間切れの目安が13項目） | OK。GitHub Actions でも実行。既存の項目のうち、仕様を変えた3項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない）は書き換えた |
-| 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、すべて NG として検出（例: `-b "$jar"` を外す・同意の本文を変えると、どちらも23項目が失敗）。USEN の実装では33通りの変異（例: `--noproxy` を外す・性別を空でなく送る・GET のあとの same() を外す・同意の行の削除を行全体の一致にする・基準時刻の +1 を外す）をすべて検出。メニューバーの実装では37通り（例: 注意の接続先の照合を外す・Wi‑Fi でなく先頭のポートを使う・目安の captive login の除外や resolv.conf の30秒を変える・出来事を4件にする・`--no-menubar` で消さない・`KeepAlive` を付ける）をすべて検出（最初は2通りを見逃したので、試験の行の並びと `status` の30秒の境目を足した） |
+| 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、すべて NG として検出（例: `-b "$jar"` を外す・同意の本文を変えると、どちらも23項目が失敗）。USEN の実装では33通りの変異（例: `--noproxy` を外す・性別を空でなく送る・GET のあとの same() を外す・同意の行の削除を行全体の一致にする・基準時刻の +1 を外す）をすべて検出。メニューバーの実装では37通り（例: 注意の接続先の照合を外す・Wi‑Fi でなく先頭のポートを使う・目安の captive login の除外や resolv.conf の30秒を変える・出来事を4件にする・`--no-menubar` で消さない・`KeepAlive` を付ける）をすべて検出（最初は2通りを見逃したので、試験の行の並びと `status` の30秒の境目を足した）。アイコンの組み込みでは4通り（1x・2x のどちらかを入れない・`--no-menubar` と uninstall で画像を残す）をすべて検出 |
 | 実際の curl の Cookie の保存と送信 | OK。空の jar で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る（ローカルの HTTPS サーバーと実網） |
 | LaunchAgent からの知らせ | `display notification` は **NG**（macOS 27。終了コード 0 だが表示されず、許可も求められない）。`display alert … giving up after 120` は表示された |
 | アプレット経由の通知（試作） | **NG**。`osacompile` のアプレットを LaunchAgent から `open -g` で起動しても、bundle ID を付けて署名し直しても、usernoted が `Denying message … LegacyConnection` で拒否した（2026-09-30） |
 | メニューバーの表示（試作） | OK。JXA の `NSStatusItem` と SF Symbols で、動作中・✓・停止中の3状態とメニューの中身を画面で確かめた（2026-09-30。✓ と停止中は偽のログ・登録名で確認） |
 | メニューバーの表示（実装） | OK。LaunchAgent（`LimitLoadToSessionType=Aqua`）から起動して `state = running`。動作中（実際の記録）・✓・!・…・停止中の5状態のアイコンとメニューをスクリーンショットで確かめた（2026-09-30。✓・! は偽の HOME、… は既定経路の問い合わせだけを外した判定の写し、停止中は登録名を変えた写しで。本体の登録と記録には触れていない）。直近の出来事は2列にそろい、状態の行は押せない行の色で出る |
+| メニューバーのアイコン（`assets/icon`） | OK。導入先と同じ名前の組（`.js` と同じ名前の `.png`・`@2x.png`）とリポジトリの `assets/icon` のどちらからも読めて、5状態を Retina のダークのメニューバーでスクリーンショットで確かめた（2026-09-30。停止中は薄く、印は右に付く）。画像がなければ `--check` が失敗する。ライトのメニューバーでは未確認（外観の設定を変えていない。テンプレート画像なので色は macOS が替える） |
 | メニューバーのツールチップ（`Next Time-out`） | 未確認。カーソルを行に載せる操作を自動で再現できなかった。状態の行は無効の項目なので、無効の項目でツールチップが出るかを実機で確かめる |
 | `menubar.js --check` | OK。手元（`ok:  9 items`）と GitHub Actions の macOS（`macos-26-arm64`。`ok:  5 items`。本体が未登録なので停止中の表示）で、画面のない CI でも `NSStatusBar` とメニューを作れた（2026-09-30） |
 | 入店時の同意の記録 | OK（ドトール・ガストで `consent recorded … (online)`） |
@@ -607,7 +610,7 @@ Today 13:19<TAB>Reconnected · Skylark · 2 s
 | `install.sh status`: 今の接続先が同意済み / 未同意 / 既定経路なし | ブランドと自動再認証 on / off / `none` |
 | `install.sh status`: 最後の認証（`re-authenticated`・`consent recorded` の最後の行）が60分以内 / 60分より前 / ない | 時刻・経過・種類とブランド・60分後の目安 / 目安を出さない / `none logged yet` |
 | `install.sh status`: 最後の認証が別の接続先 / 行の30秒より後に resolv.conf が書き換わった / そのあとに `consent recorded … usen (captive login)` | どれも最後の認証の行は出す。目安は出さない / 出さない / その前の再認証から出す |
-| `install.sh`: 既定 / `--no-menubar` / そのあとの再導入 / 削除 | メニューバーの2ファイルと plist（`osascript -l JavaScript <js>`・`RunAtLoad`・`Aqua`・`KeepAlive` なし）を入れて登録 / 本体だけ更新し、メニューバーを外して消す / 戻る / 両方の登録を外し、ログ以外は残らない |
+| `install.sh`: 既定 / `--no-menubar` / そのあとの再導入 / 削除 | メニューバーの4ファイル（アイコンの 1x・2x を含む）と plist（`osascript -l JavaScript <js>`・`RunAtLoad`・`Aqua`・`KeepAlive` なし）を入れて登録 / 本体だけ更新し、メニューバーを外して消す / 戻る / 両方の登録を外し、ログ以外は残らない |
 | `install.sh status`: メニューバーが動いている / 止まっている / 入っていない | `Menu bar  running` / `not running` / `not installed` |
 
 `test/run.sh` で確認しているメニューバーの表示（`menubar.sh` の出力。模擬の `networksetup` は有線のポートを先に並べ、`ipconfig getifaddr` は Wi‑Fi の en0 だけ IPv4 を返す）:

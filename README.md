@@ -88,7 +88,7 @@ A successful reconnection shows no dialog; the menu bar icon shows ✓ for 10 mi
 
 ### The menu bar icon
 
-The coffee cup in the menu bar shows the tool's state. It only reads the tool's files; it sends nothing over the network.
+The coffee cup in the menu bar (its steam is drawn as Wi‑Fi waves, with an arrow for "a refill") shows the tool's state. It only reads the tool's files; it sends nothing over the network.
 
 | Icon | Meaning |
 |---|---|
@@ -96,7 +96,7 @@ The coffee cup in the menu bar shows the tool's state. It only reads the tool's 
 | Cup ✓ | Reconnected automatically within the last 10 minutes |
 | Cup ! | You need to act on this Wi‑Fi: accept the terms yourself once, or check the login page because reconnecting failed. The menu says which |
 | Cup … | macOS is waiting for you to accept on the login page (on any network with a login page, not only supported ones). If the login page does not appear, open `http://captive.apple.com` in a browser |
-| Faded outline cup | Stopped (the background job is not registered). Run `./install.sh` to restart |
+| Faded cup | Stopped (the background job is not registered). Run `./install.sh` to restart |
 
 Click it to see whether automatic reconnection is on for this Wi‑Fi, the estimated next time-out, and the last three events (reconnected, terms accepted, could not reconnect, stopped). The menu is in English only. It shows no MAC or IP addresses or SSIDs, so it is safe to show in screen sharing. The estimate is shown only when the last authentication was on the current network within 60 minutes, and not after you rejoined the Wi‑Fi. It assumes the shop's limit is 60 minutes.
 
