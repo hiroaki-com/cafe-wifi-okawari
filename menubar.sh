@@ -81,7 +81,7 @@ else
   kind=off rows=('cafe-wifi-okawari — Stopped' 'Run ./install.sh to Restart')
 fi
 
-# 直近の出来事（新しい順に3件）。時刻・種類・ブランド・秒数だけ（MAC・IP・SSID は出さない）
+# 直近の出来事（新しい順に3件）。時刻・種類・ブランド・秒数だけ（MAC・IP は出さない）
 strftime -s today %F $now; strftime -r -s md %F $today; strftime -s yday %F $(( md - 1 ))
 (( $#hits )) && rows+=''
 for l in ${${(Oa)hits}[1,3]}; do
