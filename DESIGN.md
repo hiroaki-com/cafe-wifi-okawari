@@ -2,14 +2,14 @@
 
 公衆 Wi‑Fi のキャプティブポータルで時間切れ（30分・60分など）により認証画面へ戻されたとき、自動で再認証する macOS 常駐ツール。
 
-**現状**: Wi2 のワンタップ認証は実装済みで、現地で確かめた（§3・§7）。USEN（USPOT-02）は実装済みで、時間切れからの自動再認証をタリーズの1店舗で1回確かめた（§1.2・§3.1・§7）。入店時の同意の検知（§3.1 の b'）は現地で未確認（§7 の現地の項目 4〜6）。状態を見せるメニューバーの表示は実装済み（§3.2）。
+**現状**: Wi2 のワンタップ認証は実装済みで、現地で確かめた（§3・§7）。USEN（USPOT-02）は実装済みで、タリーズで入店時の同意の検知（§3.1 の b'）を1回、時間切れからの自動再認証を3回確かめた（§1.2・§3.1・§7）。コメダは現地で未確認（§7 の現地の項目 4〜6）。状態を見せるメニューバーの表示は実装済み（§3.2）。
 
 ## 1. 要件と対象
 
 | 項目 | 内容 |
 |---|---|
 | 対象 PC | macOS 15 以降（標準の `/usr/bin/jq` を使うため）。Apple Silicon・Intel。実機の確認は macOS 27.0 / arm64。追加依存なし（`/bin/zsh`・`/usr/bin/curl`・`/usr/bin/jq`・launchd など OS 標準のみ） |
-| 対象 Wi‑Fi | Wi2（Wire and Wireless, AS131160）のワンタップ認証。ドトール・すかいらーく（ガスト）で実測、スタバ・ルノアールは同じ方式の見込み（§1.1）。USEN（USPOT-02）は実装済み。タリーズで時間切れからの自動再認証を1回実測、入店時の検知は未確認（§1.2） |
+| 対象 Wi‑Fi | Wi2（Wire and Wireless, AS131160）のワンタップ認証。ドトール・すかいらーく（ガスト）で実測、スタバ・ルノアールは同じ方式の見込み（§1.1）。USEN（USPOT-02）は実装済み。タリーズで入店時の検知と時間切れからの自動再認証まで実測、コメダは未確認（§1.2） |
 | 時間制限 | 固定タイマーを持たず、ポータルに戻されたことを検知して再認証する。制限時間が何分でもそのまま動く。回数は数えない |
 | 前提 | 規約に同意するだけで使える網に限る。ID・パスワード・メールアドレスは扱わない。任意の入力欄（USEN の誕生年・性別）は空で送り、保存しない。OSS として公開する |
 
@@ -45,6 +45,7 @@
 | 90d7097 | OK（ドトール、周期10秒）。`t=2s` |
 | 4c0a7c3 | OK（ガスト）。入店時に `consent recorded … skylark (online)`、時間切れで `t=2s`。通信が止まったのは約6秒 |
 | e2053c8 | OK（タリーズ、USEN）。時間切れで `consent recorded … usen (captive login)` → `re-authenticated … usen t=1s`。macOS の接続画面は出なかった。見張りの行は、接続画面での同意をシステムログで確かめてから手で書いた（入店時の検知 b' は通っていない） |
+| e2053c8（2回目） | OK（タリーズ、USEN）。入店時に接続画面で同意すると、本ツールが `captive login seen` を書いた（b'）。時間切れで `consent recorded … usen (captive login)` → `re-authenticated … usen t=1s`、次の時間切れも `t=1s` |
 
 ### 1.1 主要チェーンの認証方式（2026-09-30 時点）
 
@@ -56,7 +57,7 @@
 | スターバックス | at_STARBUCKS_Wi2 | Wi2 | 同意のみ | 1時間・繰り返し利用可 | 対応見込み（JS 一致） |
 | ガスト等すかいらーく | .Wi2_Free_at_【SK.GROUP】 | Wi2 | 同意のみ | 60分・再認証で継続 | 対応（入店時の記録と自動再認証まで実測）。バーミヤンなどは 2025-06-30 で提供終了 |
 | ルノアール・ミヤマ珈琲 | Renoir_Miyama_Wi-Fi | Wi2 | 同意のみ | 1日1回3時間 | 対応見込み（JS 一致）。上限後は延長されない想定 |
-| タリーズ | tullys_Wi-Fi | USEN | 同意（誕生年・性別は任意） | 60分 | 実装済み。1店舗で時間切れからの自動再認証まで実測、入店時の検知は未確認（§1.2） |
+| タリーズ | tullys_Wi-Fi | USEN | 同意（誕生年・性別は任意） | 60分 | 実装済み。入店時の検知と時間切れからの自動再認証まで実測（§1.2） |
 | コメダ珈琲 | Komeda_Wi-Fi（一部 .FREE_Wi-Fi_PASSPORT_J） | USEN | 同意（誕生年・性別は任意） | 60分・回数無制限 | 実装済み・現地未確認（§1.2） |
 | マクドナルド | 00_MCD-FREE-WIFI | 日本マクドナルド | 会員登録・ログイン | 60分 | 対象外 |
 | モスバーガー | —（d Wi-Fi） | ドコモ | ドコモ回線の契約と d アカウント | — | 対象外 |
@@ -514,7 +515,8 @@ Today 13:19<TAB>Reconnected · Skylark · 2 s
 | `/var/run/resolv.conf` が書き換わる時刻 | 接続画面で同意して通信できるようになった時刻（`Online (websheet: success)`）と一致 |
 | 現行版（USEN 未対応）が USEN の網で何もしないか | OK（入店時・時間切れ時とも、ログは増えず何も送らなかった） |
 | USEN の `stamac` | あとで読んだ ether・`chaddr` と一致。捕捉中も本ツールの照合（ether）を通った |
-| USEN の実際の時間切れでの自動再認証 | OK（タリーズ1回。`consent recorded … usen (captive login)` → `re-authenticated … usen t=1s`）。誕生年・性別は空のまま受け付けられた。見張りの行は手で書いた（下の項目 4） |
+| USEN の入店時の同意の検知（b'） | OK（タリーズ1回。接続画面で同意したあと、本ツールが `captive login seen` を書いた） |
+| USEN の実際の時間切れでの自動再認証 | OK（タリーズ3回、どれも `t=1s`。見張りの網では `consent recorded … usen (captive login)` → `re-authenticated … usen`）。誕生年・性別は空のまま受け付けられた。1回目は見張りの行を手で書いた |
 | USEN の macOS との競争 | 本ツールが先（1回）。通信が戻った約2秒後に macOS が気づき、確かめの問い合わせが通ったので接続画面は出なかった（§1.2） |
 
 次の現地試験で見ること:
@@ -522,7 +524,7 @@ Today 13:19<TAB>Reconnected · Skylark · 2 s
 1. スタバ・ルノアールで、入店時の `consent recorded … (online)` と、時間切れ後の `re-authenticated` が出るか。`agreement.html` へ転送されれば `redirect failed … to=…` に出る（§1.1）
 2. 10秒周期で、捕捉から通信が戻るまでの秒数（回数を重ねて平均を見る）
 3. 失敗したら、ログの `redirect failed`・`portal …`・`login failed … curl=… res=…`・`probe failed`・`network changed` で原因を切り分ける（黙って終わるのは、記録も Wi2 のドメイン名もない網と、既定経路がないときだけ）
-4. USEN: 入店時に接続画面で同意したあと、本ツールが `captive login seen` を書くか（b'。手で書かずに）。コメダでも、時間切れで `consent recorded … usen (captive login)` と `re-authenticated … usen` が続くか
+4. USEN: コメダでも、入店時に `captive login seen` を書き、時間切れで `consent recorded … usen (captive login)` と `re-authenticated … usen` が続くか（タリーズでは確かめた）
 5. USEN: macOS との競争を重ねて見る。接続画面が先に出たときに、ログが `network changed` だけで拒否に数えていないか
 6. USEN: 捕捉中の `scutil` の CaptiveNetwork の値（復帰後は `Online`・`WaitingOnUI` が `FALSE`）。同じ網につなぎ直したとき `LeaseStartTime` が更新されるか（§3.1 の a'・b' の前提）
 7. メニューバー（§3.2）: macOS が接続画面を開いている間の、Wi‑Fi の IPv4（`ipconfig getifaddr`）と `WaitingOnUI` の値（接続画面待ちの条件）。再認証の前後とリースの更新（約30分ごと）で `resolv.conf` が書き換わるか（次の時間切れの目安の条件）
