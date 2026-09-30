@@ -528,6 +528,7 @@ Today 13:19<TAB>Reconnected · Skylark · 2 s
 5. USEN: macOS との競争を重ねて見る。接続画面が先に出たときに、ログが `network changed` だけで拒否に数えていないか
 6. USEN: 捕捉中の `scutil` の CaptiveNetwork の値（復帰後は `Online`・`WaitingOnUI` が `FALSE`）。同じ網につなぎ直したとき `LeaseStartTime` が更新されるか（§3.1 の a'・b' の前提）
 7. メニューバー（§3.2）: macOS が接続画面を開いている間の、Wi‑Fi の IPv4（`ipconfig getifaddr`）と `WaitingOnUI` の値（接続画面待ちの条件）。再認証の前後とリースの更新（約30分ごと）で `resolv.conf` が書き換わるか（次の時間切れの目安の条件）
+8. （任意・将来の調査）USEN: 機器の応答からチェーン（タリーズ・コメダ）を見分けられるか。転送先・DHCP のドメイン名・ゲートウェイの MAC では見分けられないので、残る候補は2つ。捕捉中に取得だけする（同意は送らない）。① `/captive/` の HTML と `page.js` にチェーン名・ロゴの参照があるか ② `GET /capi/welcome/info` の JSON のうち、`sess_time`・`status_code` 以外の項目と、画面が読む `/capi/…` の一覧。見分けられれば、ログとメニューで `usen` の代わりにチェーンを出せる（時間切れごとの通信は GET 1本増える）。店名は記録しない（ログにも文書にも書かない）
 
 `test/run.sh` で確認している USEN の分岐（`run` の `posts` は `xhr/login` と `/capi/welcome` の両方を数え、USEN の項目では `uposts` で宛先も確かめる。模擬の `log show`・`ipconfig getsummary`・`route -n get <IP>`・USEN の機器を使う）:
 
