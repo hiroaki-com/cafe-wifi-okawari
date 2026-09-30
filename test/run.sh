@@ -21,21 +21,57 @@ mkdir -p "$HOME" $T/bin
 #       違えば $M/badlogin に残し、拒否（HTTP 403・result:false）を返す。
 #       プローブは $PROBE=down なら通信失敗、$PROBEHTTP があればその HTTP コードを返す。
 #       $SWITCH があれば既定経路の接続先を別の MAC に切り替える（login なら送信後、pre なら redirect の時点）。
+#       USEN の機器 $UD（10.9.8.7:8080）: 画面 /captive/ は $UPAGE、/captive/dist/page.js は $UJS
+#       （ok/notitle・nomark・noterm/big（上限超え）/404/timeout。changed は規約の文面 $TJ2）。同意の POST /capi/welcome は
+#       本文を $M/ubody に残し、本文 $ULOGIN と HTTP コード $UHTTP（既定 200。000 ならタイムアウト）を返す。$RECOVER は login と同じ。
+#       $USWITCH（page/js/post）なら、その要求の時点で既定経路をなくす（$M/noroute）。機器への要求の --max-filesize は $M/mfs に、
+#       --proto '=http' がなければ $M/badproto に残す。どの要求でも --noproxy '*' がなければ $M/proxied に残す。
 cat > $T/bin/curl <<'EOS'
 #!/bin/zsh
-url=${@[-1]} jar= bjar= data=
+url=${@[-1]} jar= bjar= data= proto= mfs= np=0
 for ((i = 1; i <= $#; i++)); do
   [[ ${@[i]} == -c ]] && jar=${@[i+1]}
   [[ ${@[i]} == -b ]] && bjar=${@[i+1]}
   [[ ${@[i]} == --data ]] && data=${@[i+1]}
+  [[ ${@[i]} == --proto ]] && proto=${@[i+1]}
+  [[ ${@[i]} == --max-filesize ]] && mfs=${@[i+1]}
+  [[ ${@[i]} == --noproxy && ${@[i+1]} == '*' ]] && np=1
   [[ ${@[i]} == -[He] ]] && print -r -- "${@[i+1]}" >> $M/headers
 done
 print -r -- "$url" >> $M/calls
+(( np )) || print -r -- "$url" >> $M/proxied
 W=https://service.wi2.ne.jp
 land() { printf '.service.wi2.ne.jp\tFALSE\t/\tTRUE\t0\tsession_id\tabc\n' > $jar
          [[ ${SWITCH-} == pre ]] && touch $M/switched
          printf '302 %s/freewifi/%s/%s%s' $W "${BRAND-doutor}" "${2-landing.html}" "${1-}" }
+recover() { if [[ ${RECOVER-} == <-> ]]; then print $RECOVER > $M/late; elif [[ -n ${RECOVER-} ]]; then touch $M/authed; fi }
+# USEN の機器の GET。$1=模擬の状態 $2=本文
+uget() {
+  [[ -n $mfs ]] && print -r -- $mfs >> $M/mfs
+  case $1 in
+    big) printf '%s\n200' "${2[1,10]}"; exit 63 ;;
+    404) printf 'Not Found\n404' ;;
+    timeout) printf '\n000'; exit 28 ;;
+    *) printf '%s\n200' "$2" ;;
+  esac
+}
 case $url in
+  http://10.9.8.7:8080/*)
+    [[ $proto == '=http' ]] || print -r -- "$url" >> $M/badproto
+    case $url in
+      */captive/) [[ ${USWITCH-} == page ]] && touch $M/noroute
+        [[ ${UPAGE-ok} == notitle ]] && t=Portal || t=USPOT-02
+        uget "${UPAGE-ok}" "<!DOCTYPE html><html><head><title>$t</title></head><body><div id=\"app\"></div></body></html>" ;;
+      */captive/dist/page.js) [[ ${USWITCH-} == js ]] && touch $M/noroute
+        j=$TJ; [[ ${UJS-} == changed ]] && j=$TJ2
+        k=DAVOLINK_; [[ ${UJS-} == nomark ]] && k=OTHER_
+        s="term:{title:\"利用規約\"$j]}},E={}"; [[ ${UJS-} == noterm ]] && s='E={}'
+        uget "${UJS-ok}" "(function(){var k=\"${k}lang\",t={$s,u={term:{title:\"Terms of Use\",content:[\"x\"]}}})()" ;;
+      */capi/welcome) print -r -- "$data" > $M/ubody
+        [[ ${UHTTP-} == 000 ]] && { printf '\n000'; exit 28 }
+        [[ ${USWITCH-} == post ]] && touch $M/noroute
+        printf '%s\n%s' "${ULOGIN-}" "${UHTTP-200}"; recover ;;
+    esac ;;
   *hotspot-detect*)
     [[ ${PROBE-} == down ]] && { printf '\n000 '; exit 7 }
     [[ -n ${PROBEHTTP-} ]] && { printf 'x\n%s ' $PROBEHTTP; exit 0 }
@@ -66,15 +102,53 @@ case $url in
       print -r -- "cookie=$bjar data=$data" >> $M/badlogin; printf '{"result":false}\n403'; exit 0
     fi
     [[ ${SWITCH-} == 1 ]] && touch $M/switched
-    printf '%s\n%s' "${LOGIN-}" "${LHTTP-200}"; if [[ ${RECOVER-} == <-> ]]; then print $RECOVER > $M/late; elif [[ -n ${RECOVER-} ]]; then touch $M/authed; fi; exit 0 ;;
+    printf '%s\n%s' "${LOGIN-}" "${LHTTP-200}"; recover; exit 0 ;;
 esac
 EOS
-# route: $NOROUTE があれば既定経路なし
-print '#!/bin/sh\n[ -n "$NOROUTE" ] && exit 1\necho "   route to: default"\necho "    gateway: 10.0.0.1"\necho "  interface: en0"' > $T/bin/route
-# arp: 既定ゲートウェイの MAC は $MAC（$M/switched があれば別の回線 cc:cc:cc:cc:cc:03）
-print '#!/bin/sh\n[ -e $M/switched ] && MAC=cc:cc:cc:cc:cc:03\necho "? ($2) at $MAC on en0 ifscope [ethernet]"' > $T/bin/arp
-# ipconfig: DHCP のドメイン名は $DOM（既定は空）、自分の IP は $MYIP（既定 10.0.0.5）
-print '#!/bin/sh\ncase $1 in getoption) printf "%s\\n" "$DOM" ;; getifaddr) echo "${MYIP-10.0.0.5}" ;; esac' > $T/bin/ipconfig
+# route: 既定経路は、$NOROUTE か $M/noroute があればなし。機器（default 以外）への経路は $DEVRT
+# （既定は既定経路と同じ。ifc=別のインターフェース、gw=別のゲートウェイ、direct=同じインターフェースの直結）
+cat > $T/bin/route <<'EOS'
+#!/bin/sh
+if [ "$3" = default ]; then
+  { [ -n "$NOROUTE" ] || [ -e $M/noroute ]; } && exit 1
+  printf '   route to: default\n    gateway: 10.0.0.1\n  interface: en0\n'; exit 0
+fi
+echo "   route to: $3"
+case $DEVRT in
+  ifc) printf '    gateway: 10.8.0.1\n  interface: utun4\n' ;;
+  gw) printf '    gateway: 10.0.0.9\n  interface: en0\n' ;;
+  direct) printf '  interface: en0\n' ;;
+  *) printf '    gateway: 10.0.0.1\n  interface: en0\n' ;;
+esac
+EOS
+# arp: 既定ゲートウェイの MAC は $MAC（ゲートウェイがなければ失敗。$M/switched があれば別の回線 cc:cc:cc:cc:cc:03）
+print '#!/bin/sh\n[ -z "$2" ] && exit 1\n[ -e $M/switched ] && MAC=cc:cc:cc:cc:cc:03\necho "? ($2) at $MAC on en0 ifscope [ethernet]"' > $T/bin/arp
+# ipconfig: DHCP のドメイン名は $DOM（既定は空）、自分の IP は $MYIP（既定 10.0.0.5）。
+# getsummary のリース開始は $LEASE（エポック秒。既定は resolv.conf の更新時刻、none なら行なし）
+cat > $T/bin/ipconfig <<'EOS'
+#!/bin/sh
+case $1 in
+  getoption) printf "%s\n" "$DOM" ;;
+  getifaddr) echo "${MYIP-10.0.0.5}" ;;
+  getsummary) [ "$LEASE" = none ] ||
+    printf '        LeaseStartTime : %s\n' "$(date -r "${LEASE:-$(stat -f %m $M/resolv)}" '+%m/%d/%Y %H:%M:%S')" ;;
+esac
+EOS
+# log show: 呼び出しを $M/logcalls に残す。--start 以後の $WEBSHEET（エポック秒、空白区切り）に websheet: success の行を出す。
+# $LOGFAIL なら失敗、$LOGSWITCH なら読む間に接続先を切り替える。
+cat > $T/bin/log <<'EOS'
+#!/bin/zsh
+zmodload zsh/datetime
+print -r -- "$*" >> $M/logcalls
+[[ -n ${LOGSWITCH-} ]] && touch $M/switched
+[[ -n ${LOGFAIL-} ]] && exit 1
+s=$(strftime -r '%Y-%m-%d %H:%M:%S' "${@[${@[(i)--start]}+1]}") || exit 64
+print 'Timestamp               Ty Process[PID:TID]'
+for w in ${=WEBSHEET-}; do
+  (( w >= s )) && print -r -- "$(strftime '%F %T' $w).000 Df configd[370:12ee] [com.apple.captive:Controller] Online (websheet: success)"
+done
+exit 0
+EOS
 print '#!/bin/sh\nprintf "en0: flags=8863<UP>\\n\\tether %s\\n" "${MYMAC-aa:bb:cc:dd:ee:0f}"' > $T/bin/ifconfig
 print '#!/bin/sh\nprintf "%s\\n" "$2" >> $M/notify' > $T/bin/osascript
 # defaults: macOS の優先言語を $LANGS（既定は ja-JP）として返す。
@@ -95,7 +169,7 @@ chmod +x $T/bin/*
 sed -e "s#/usr/bin/curl#$T/bin/curl#" -e "s#/sbin/route#$T/bin/route#" -e "s#/usr/sbin/arp#$T/bin/arp#" \
     -e "s#/usr/bin/osascript#$T/bin/osascript#" -e "s#/usr/bin/defaults#$T/bin/defaults#" -e 's/sleep 1;/:;/' \
     -e "s#/usr/sbin/ipconfig#$T/bin/ipconfig#" -e "s#/sbin/ifconfig#$T/bin/ifconfig#" \
-    -e "s#/var/run/resolv.conf#$M/resolv#" \
+    -e "s#/var/run/resolv.conf#$M/resolv#" -e "s#/usr/bin/log #$T/bin/log #" \
     $root/cafe-wifi-okawari.sh > $T/s.sh
 
 ST=$HOME/Library/Caches/cafe-wifi-okawari
@@ -103,25 +177,31 @@ PD=$ST.pending
 SN=$ST.seen
 DG=$ST.probe
 KN="$HOME/Library/Application Support/cafe-wifi-okawari/consented"
+WT="$HOME/Library/Application Support/cafe-wifi-okawari/watched"
 mkdir -p ${ST:h}
 W=https://service.wi2.ne.jp
+# USEN の規約の文面（模擬の page.js の term:{title:"利用規約" から ]} の前まで）と、変更後の文面
+export TJ=',desc:"USEN Free Wi-Fiは株式会社USENが提供する模擬のサービスです。",content:["① 模擬の禁止事項","② 模擬の禁止事項"'
+export TJ2=${TJ/②/③}
 
 # --- 補助 ----------------------------------------------------------------------
 pass=0 failed=0
-# run VAR=val...: 1回実行し、rc・out・通信回数を残す
+# run VAR=val...: 1回実行し、rc・out・通信回数を残す（posts は Wi2 と USEN の同意の送信、uposts はそのうち USEN、reads はシステムログの読み取り）
 run() {
-  rm -f $M/calls $M/notify $M/headers $M/badlogin
+  rm -f $M/calls $M/notify $M/headers $M/badlogin $M/logcalls $M/ubody $M/proxied $M/badproto $M/mfs
   env "$@" zsh $T/s.sh > $M/out 2>&1; rc=$?
   out=$(<$M/out)
-  posts=$(grep -c xhr/login $M/calls 2>/dev/null); redirs=$(grep -c wi2auth/redirect $M/calls 2>/dev/null)
+  posts=$(grep -cE 'xhr/login|capi/welcome' $M/calls 2>/dev/null); redirs=$(grep -c wi2auth/redirect $M/calls 2>/dev/null)
+  uposts=$(grep -c capi/welcome $M/calls 2>/dev/null)
   notes=$( [[ -e $M/notify ]] && wc -l < $M/notify | tr -d ' ' || print 0)
+  reads=$( [[ -e $M/logcalls ]] && wc -l < $M/logcalls | tr -d ' ' || print 0)
 }
 ok() {  # ok <名前> <条件式...>
   local name=$1; shift
-  if eval "$*"; then (( pass++ )); else (( failed++ )); print -r -- "NG: $name  [$*]  rc=$rc posts=$posts redirs=$redirs notes=$notes out=$out"; fi
+  if eval "$*"; then (( pass++ )); else (( failed++ )); print -r -- "NG: $name  [$*]  rc=$rc posts=$posts uposts=$uposts redirs=$redirs notes=$notes reads=$reads out=$out"; fi
 }
 # 既定は「接続してから時間が経っている」状態。joined で「今つないだ」状態にする。
-reset() { rm -rf $ST $PD $SN $DG ${KN:h} $M/authed $M/late $M/switched; touch -t 202001010000 $M/resolv }
+reset() { rm -rf $ST $PD $SN $DG ${KN:h} $M/authed $M/late $M/switched $M/noroute; touch -t 202001010000 $M/resolv }
 joined() { touch $M/resolv }
 A=aa:aa:aa:aa:aa:01 B=bb:bb:bb:bb:bb:02
 consent() { print -r -- "$1 ${2-doutor}" >> $KN }   # 同意済みの接続先を用意する
@@ -448,6 +528,240 @@ reset; mkknown $A
 run MAC=$A 'LOC=https://portal.example.com/?mac=aa:bb:cc:dd:ee:0f'
                            ok '同意済みの網で Wi2 以外のポータル: 送らずに記録' '(( redirs == 0 && posts == 0 && notes == 0 )) && [[ $out == *"portal unknown x1 http=302 to=https://portal.example.com/" ]]'
 
+# --- USEN（USPOT-02） ----------------------------------------------------------
+UD=http://10.9.8.7:8080
+UL="LOC=$UD/captive/?url=captive.apple.com/hotspot-detect.html&stamac=aa:bb:cc:dd:ee:0f"
+HASH=$(/sbin/sha256 -q -s "$TJ") HASH2=$(/sbin/sha256 -q -s "$TJ2")
+now() { print $(( EPOCHSECONDS - ${1-0} )) }
+watch() { mkdir -p ${WT:h}; print -r -- "$1 $(now ${2-60})" >> $WT }   # 見張り中の網を用意する（$2 秒前に記録）
+mkpend() { print -r -- "$A usen $(now ${1-100})${2:+ $2}" > $PD }        # USEN の同意待ち（基準時刻は $1 秒前）
+rewind() { local p=(${=$(<$PD)}); p[3]=$(( p[3] - 100 )); print -r -- "$p" > $PD }   # 同意待ちの基準時刻を100秒前にする
+snap() { cat $KN $WT $PD 2>/dev/null }
+PRED='--predicate subsystem == "com.apple.captive" AND eventMessage CONTAINS "websheet: success"'
+
+# 入店時: 通信できていて、今の接続のリース開始より後に接続画面での同意があれば見張る
+reset; ago 20 $M/resolv; touch $M/authed
+run MAC=$A WEBSHEET=$(now 10)
+ok 'USEN 入店時: リース開始より後に接続画面での同意があれば見張る' '[[ $(<$WT) == "$A "<-> && $out == *"captive login seen net=$A" ]] && (( reads == 1 && posts == 0 )) && [[ ! -e $KN ]]'
+ok 'USEN 入店時: 読むのは captive の websheet: success の行だけで、リース開始から' 'grep -qF -- "$PRED" $M/logcalls && grep -qF -- "--start $(strftime "%F %T" $(stat -f %m $M/resolv))" $M/logcalls'
+ok 'USEN 入店時: ログにシステムログの行を残さない' '[[ $out != *websheet* ]]'
+run MAC=$A WEBSHEET=$(now 10)
+ok 'USEN 入店時: 見張ったら読み直さない' '(( reads == 0 )) && [[ -z $out ]]'
+for w verdict in '' 'ない' $(now 30) 'リース開始より前にしかない'; do
+  reset; ago 20 $M/resolv; touch $M/authed
+  run MAC=$A WEBSHEET=$w
+  ok "USEN 入店時: 接続画面での同意が${verdict}なら見張らない" '[[ ! -e $WT && -z $out ]] && (( reads == 1 ))'
+  run MAC=$A WEBSHEET=$(now 10)
+  ok "USEN 入店時: 同意が${verdict}接続でも読み直さない" '(( reads == 0 )) && [[ ! -e $WT ]]'
+done
+reset; ago 20 $M/resolv; touch $M/authed
+run MAC=$A WEBSHEET=$(now 10) LEASE=none
+ok 'USEN 入店時: リース開始が読めなければシステムログを読まない' '(( reads == 0 )) && [[ ! -e $WT ]]'
+reset; ago 20 $M/resolv; touch $M/authed
+run MAC=$A WEBSHEET=$(now 10) LEASE=$(now 400)
+ok 'USEN 入店時: リース開始が resolv.conf の更新より5分以上前なら読まない' '(( reads == 0 )) && [[ ! -e $WT ]]'
+reset; ago 5 $M/resolv; touch $M/authed
+run MAC=$A WEBSHEET=$(now 1)
+ok 'USEN 入店時: resolv.conf の更新から15秒たっていなければまだ読まない' '(( reads == 0 )) && [[ ! -e $WT && ! -e $SN ]]'
+ago 15 $M/resolv
+run MAC=$A WEBSHEET=$(now 1)
+ok 'USEN 入店時: 15秒たてば読む' '(( reads == 1 )) && [[ -s $WT ]]'
+reset; ago 20 $M/resolv; touch $M/authed
+run MAC=$A WEBSHEET=$(now 10) LOGSWITCH=1
+ok 'USEN 入店時: ログを読む間に接続先が変わったら見張らない' '[[ ! -e $WT && $out == *"network changed net=$A before watching" ]]'
+reset; ago 20 $M/resolv; touch $M/authed
+run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 10)
+ok 'USEN 入店時: Wi2 の網ではシステムログを読まない' '(( reads == 0 )) && [[ ! -e $WT && $out == *"consent recorded net=$A doutor (online)" ]]'
+reset; ago 20 $M/resolv; touch $M/authed; mkknown $A
+run MAC=$A WEBSHEET=$(now 10);   ok 'USEN 入店時: 同意済みの網ではシステムログを読まない' '(( reads == 0 )) && [[ ! -e $WT ]]'
+reset; ago 20 $M/resolv; touch $M/authed; watch $A
+run MAC=$A WEBSHEET=$(now 10);   ok 'USEN 入店時: 見張り中の網ではシステムログを読まない' '(( reads == 0 )) && [[ -z $out ]]'
+reset; ago 20 $M/resolv; touch $M/authed; print -r -- "$A doutor" > $PD
+run MAC=$A WEBSHEET=$(now 10);   ok 'USEN 入店時: 同意待ちの網ではシステムログを読まない' '(( reads == 0 )) && [[ ! -e $WT ]]'
+reset; ago 400 $M/resolv; touch $M/authed
+run MAC=$A WEBSHEET=$(now 10);   ok 'USEN 入店時: 接続から5分以上たっていれば読まない（通信もしない）' '(( reads == 0 )) && [[ ! -s $M/calls ]]'
+
+# 見張り中の網で時間切れ
+reset; watch $A
+run MAC=$A "$UL" RECOVER=1
+ok 'USEN 見張り中の網で捕捉: 画面と page.js を確かめる' 'grep -qx "$UD/captive/" $M/calls && grep -qx "$UD/captive/dist/page.js" $M/calls'
+ok 'USEN 見張り中の網で捕捉: 規約のハッシュ付きで記録し、見張りから外し、送って再認証' '[[ $(<"$KN") == "$A usen $HASH" && ! -s $WT ]] && [[ $out == *"consent recorded net=$A usen (captive login)"$'"'"'\n'"'"'*"re-authenticated api=ok probe=ok net=$A usen t="<->s ]] && (( posts == 1 && uposts == 1 && redirs == 0 ))'
+ok 'USEN 同意の要求: 誕生年・性別は空、自分の MAC、言語' '[[ $(<$M/ubody) == "{\"gender\":\"\",\"birth\":\"\",\"macaddr\":\"aa:bb:cc:dd:ee:0f\",\"lang\":\"ja\"}" ]]'
+ok 'USEN 同意の要求: Content-Type・Origin・Referer・空の authorization' 'grep -qx "Content-Type: application/json" $M/headers && grep -qx "Origin: $UD" $M/headers && grep -qx "$UD/captive/step2" $M/headers && grep -qx "authorization;" $M/headers'
+ok 'USEN 機器へは平文 HTTP だけ、応答の大きさに上限、プロキシなし' '[[ ! -e $M/badproto && ! -e $M/proxied && $(<$M/mfs) == 65536$'"'"'\n'"'"'1048576 ]]'
+ok 'USEN ログに誘導先のクエリ・端末の MAC を残さない' '[[ $out != *aa:bb:cc* && $out != *stamac* && $out != *hotspot* ]]'
+reset; mkknown $A "usen $HASH"
+run MAC=$A "$UL" RECOVER=1 LANGS=en-US
+ok 'USEN 同意の要求: 英語環境では lang=en' '[[ $(<$M/ubody) == *",\"lang\":\"en\"}" ]] && (( uposts == 1 ))'
+reset; mkknown $A "usen $HASH"
+run MAC=$A "$UL" RECOVER=1 http_proxy=http://127.0.0.1:9 ALL_PROXY=socks5://127.0.0.1:9
+ok '環境変数のプロキシがあっても使わない（USEN）' '[[ ! -e $M/proxied ]] && (( uposts == 1 ))'
+reset; mkknown $A
+run MAC=$A $OKL RECOVER=1 http_proxy=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9
+ok '環境変数のプロキシがあっても使わない（Wi2）' '[[ ! -e $M/proxied ]] && (( posts == 1 ))'
+reset; mkknown $A "usen $HASH"; consent $A
+run MAC=$A "$UL" RECOVER=1
+ok 'USEN 同意済みの照合: ハッシュ付きの行も「MAC usen」で見つかる（同じ MAC の Wi2 の行とは別）' '(( uposts == 1 )) && [[ $out == *"re-authenticated api=ok probe=ok net=$A usen"* && $(<"$KN") == "$A usen $HASH"$'"'"'\n'"'"'"$A doutor" ]]'
+reset; watch $A 86401; joined
+run MAC=$A "$UL" RECOVER=1
+ok 'USEN 見張りの記録から24時間を過ぎた網: 送らずに同意待ち' '(( posts == 0 )) && [[ $(<$PD) == "$A usen "<-> && $out == *"consent pending net=$A usen" && ! -e $KN ]]'
+
+# 見張りも同意もない網で捕捉 → 同意待ち → 接続画面での同意で記録
+reset; joined
+run MAC=$A "$UL" RECOVER=1
+ok 'USEN 見張りも同意もない網で捕捉: 送らず、同意待ちに「MAC usen 時刻」' '(( posts == 0 && notes == 0 )) && [[ $(<$PD) == "$A usen "<-> && $out == *"consent pending net=$A usen" && ! -e $KN ]]'
+p0=$(<$PD); touch -t 202001010000 $M/resolv
+run MAC=$A "$UL";         ok 'USEN 同意待ち: 30秒たつまでは知らせない' '(( notes == 0 && posts == 0 )) && ! grep -q "$UD" $M/calls'
+ago 30 $PD
+run MAC=$A "$UL";         ok 'USEN 同意待ち: 捕捉が続けば1回だけ知らせる（基準時刻は変えない）' '(( notes == 1 && posts == 0 )) && [[ $(<$PD) == "$p0 notified" ]] && grep -q 最初の1回 $M/notify'
+run MAC=$A "$UL";         ok 'USEN 同意待ち: 知らせるのは1回だけ' '(( notes == 0 && posts == 0 ))'
+touch $M/authed
+run MAC=$A;               ok 'USEN 同意待ち: 平文の Success だけでは記録しない' '[[ ! -e $KN && -e $PD ]] && (( reads == 1 ))'
+rewind; ago 30 $SN
+run MAC=$A WEBSHEET=$(now 5)
+ok 'USEN 同意待ち: 基準時刻とリース開始より後に接続画面での同意があれば記録' '[[ $(<"$KN") == "$A usen" && ! -e $PD && $out == *"consent recorded net=$A usen" ]]'
+rm $M/authed
+run MAC=$A "$UL" RECOVER=1
+ok 'USEN 記録したあとの最初の送信で、規約のハッシュを記録する' '[[ $(<"$KN") == "$A usen $HASH" && $out == *"re-authenticated api=ok probe=ok net=$A usen"* ]] && (( uposts == 1 ))'
+
+reset; mkpend; touch $M/authed
+run MAC=$A;               ok 'USEN 同意待ち: 同意の行がなければ記録せず、同意待ちを残す' '[[ ! -e $KN && -e $PD ]] && (( reads == 1 && posts == 0 ))'
+run MAC=$A;               ok 'USEN 同意待ち: すぐには読み直さない' '(( reads == 0 ))'
+ago 25 $SN; run MAC=$A;   ok 'USEN 同意待ち: 30秒たつまでは読み直さない' '(( reads == 0 ))'
+ago 30 $SN; run MAC=$A;   ok 'USEN 同意待ち: 30秒たてば読み直す' '(( reads == 1 ))'
+ago 55 $SN; run MAC=$A;   ok 'USEN 同意待ち: 次は60秒空ける' '(( reads == 0 ))'
+ago 60 $SN; run MAC=$A LOGFAIL=1
+                          ok 'USEN 同意待ち: ログが読めなくても同意待ちを残す' '[[ ! -e $KN && -e $PD ]] && (( reads == 1 ))'
+for i in {1..6}; do ago 1800 $SN; run MAC=$A LEASE=none; done
+ago 1790 $SN; run MAC=$A; ok 'USEN 同意待ち: 読み直す間隔は最大30分' '(( reads == 0 )) && [[ -e $PD ]]'
+ago 1800 $SN; run MAC=$A WEBSHEET=$(now 5)
+                          ok 'USEN 同意待ち: 読み直して同意の行があれば記録' '[[ $(<"$KN") == "$A usen" && ! -e $PD ]]'
+reset; mkpend; touch $M/authed
+run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 5)
+ok 'USEN 同意待ちの網が Wi2 の網なら、同意待ちを消して Wi2 として確かめる' '[[ ! -e $PD && $(<"$KN") == "$A doutor" && $out == *"consent recorded net=$A doutor (online)" ]] && (( reads == 0 ))'
+
+# 同意待ちの基準時刻
+reset; mkpend; touch $M/authed
+run MAC=$A WEBSHEET=$(now 2); ok 'USEN 基準時刻（対照）: そのまま戻れば同じ行で記録できる' 'grep -qx "$A usen" "$KN"'
+reset; mkpend; touch $M/authed
+w1=$(now 2)
+run MAC=$B WEBSHEET=$w1;  ok 'USEN 同意待ちがあっても、別の網では確かめない（自宅などで通信しない）' '[[ ! -s $M/calls ]] && (( reads == 0 ))'
+                          ok 'USEN 別の網にいる間は、同意待ちの基準時刻を今に進める' '(( ${$(<$PD)[(w)3]} >= w1 + 2 ))'
+run MAC=$A WEBSHEET=$w1;  ok 'USEN 別の網で同意してから戻っても、その行では記録しない（同意待ちは残る）' '[[ ! -e $KN && -e $PD ]] && (( reads == 1 ))'
+reset; mkpend; touch $M/authed
+run MAC=$A WEBSHEET=${$(<$PD)[(w)3]}
+                          ok 'USEN 基準時刻と同じ秒の行は数えない（別の網での同意と区別できない）' '[[ ! -e $KN && -e $PD ]] && (( reads == 1 ))'
+reset; mkpend; touch $M/authed
+run MAC=$B DOM=wi2.ne.jp BRAND=starbucks
+                          ok 'USEN の同意待ちは、別の Wi2 の網で入店時の同意を記録しても残る' '[[ $(<"$KN") == "$B starbucks" && $(<$PD) == "$A usen "<-> ]]'
+reset; mkpend; p0=$(<$PD)
+run MAC=$A NOROUTE=1;     ok 'USEN 同意待ちの網で既定経路がなくなっても、基準時刻は進めない' '[[ $(<$PD) == "$p0" && ! -s $M/calls ]]'
+touch $M/authed
+run MAC=$A WEBSHEET=$(now 5)
+                          ok 'USEN 既定経路がなくなったあとに利用者が同意すれば記録' 'grep -qx "$A usen" "$KN"'
+
+# 拒否が続いたときの停止と再開
+ureject() { skip; run MAC=$A "$UL" "$@" }
+reset; mkknown $A "usen $HASH"
+ureject UHTTP=403; ureject UHTTP=403; o2=$out; ureject UHTTP=403
+ok 'USEN が HTTP 403 を返し疎通なし×3: 自動を止める' '[[ $o2 == *"login failed x2 api=ng probe=ng http=403"* && $out == *"auto stopped net=$A usen rejected x3 http=403"* ]] && (( notes == 1 )) && [[ $(<$PD) == "$A usen "<->" notified" && ! -e $ST ]]'
+ok 'USEN 自動の停止: ハッシュ付きの行が消え、「MAC usen」の行も残らない' '! grep -q "^$A usen" "$KN"'
+posts_total=0
+touch $M/authed; run MAC=$A LOGFAIL=1; (( posts_total += posts ))
+ago 1800 $SN; rm $M/authed
+run MAC=$A "$UL"; (( posts_total += posts ))
+ok 'USEN 停止のあと、ログが読めず30分たっても同意待ちが残り、送らない' '[[ -e $PD ]] && ! grep -q "^$A usen" "$KN" && (( posts_total == 0 ))'
+touch $M/authed; rewind; run MAC=$A WEBSHEET=$(now 1)
+ok 'USEN 停止のあと、接続から5分を過ぎてから利用者が同意すれば記録し直す' 'grep -qx "$A usen" "$KN" && [[ ! -e $PD ]] && (( posts == 0 ))'
+rm $M/authed; run MAC=$A "$UL" RECOVER=1
+ok 'USEN 記録し直したあとは再開する' '(( uposts == 1 )) && [[ $out == *re-authenticated* && $(<"$KN") == "$A usen $HASH" ]]'
+reset; mkknown $A "usen $HASH"
+ureject; o1=$out; ureject; ureject
+ok 'USEN が HTTP 200 を返しても疎通なし×3 なら止める' '[[ $o1 == *"login failed x1 api=ok probe=ng http=200"* && $out == *"auto stopped net=$A usen rejected x3 http=200"* && ! -s $KN ]]'
+touch $M/authed; run MAC=$A
+ok 'USEN 停止のあと、平文の Success だけでは再開しない' '[[ ! -s $KN && -e $PD ]] && (( posts == 0 ))'
+rewind; ago 1800 $SN; run MAC=$A WEBSHEET=$(now 5)
+ok 'USEN 停止のあと、接続画面での同意があれば再開する' 'grep -qx "$A usen" "$KN" && [[ ! -e $PD ]]'
+reset; mkknown $A "usen $HASH"
+for i in {1..4}; do ureject UHTTP=000; done
+ok 'USEN の送信がタイムアウト×4 なら止めない' 'grep -qx "$A usen $HASH" "$KN" && [[ $out == *"login failed x4 api=ng probe=ng http=000 curl=28"* ]]'
+reset; mkknown $A "usen $HASH"
+for i in {1..4}; do ureject UHTTP=500; done
+ok 'USEN が 5xx を返し続けても止めない' 'grep -qx "$A usen $HASH" "$KN"'
+
+# 規約の変更
+reset; mkknown $A "usen 0000"
+run MAC=$A "$UL" RECOVER=1
+ok 'USEN 規約の文面が変わったら送らず、止めて知らせる' '(( posts == 0 && notes == 1 )) && [[ $out == *"terms changed net=$A usen" && ! -s $KN && $(<$PD) == "$A usen "<->" notified" ]] && grep -q 利用規約が変わった $M/notify'
+touch $M/authed; run MAC=$A
+ok 'USEN 規約の変更のあと、平文の Success だけでは記録し直さない' '[[ ! -s $KN && -e $PD ]]'
+rewind; ago 1800 $SN; run MAC=$A WEBSHEET=$(now 5)
+ok 'USEN 規約の変更のあと、接続画面での同意で記録し直す' '[[ $(<"$KN") == "$A usen" ]]'
+rm $M/authed; run MAC=$A "$UL" RECOVER=1 UJS=changed
+ok 'USEN 規約の変更のあと、次の送信で今の文面のハッシュを記録する' '[[ $(<"$KN") == "$A usen $HASH2" ]] && (( uposts == 1 ))'
+
+# 誘導先の形と経路
+for l in "http://8.8.8.8:8080/captive/?stamac=aa:bb:cc:dd:ee:0f" "http://portal.example.com/captive/?stamac=aa:bb:cc:dd:ee:0f" \
+         "https://10.9.8.7:8080/captive/?stamac=aa:bb:cc:dd:ee:0f" "http://10.9.8.7:8080/login/?stamac=aa:bb:cc:dd:ee:0f" \
+         "http://172.32.0.1/captive/?stamac=aa:bb:cc:dd:ee:0f" "http://10.09.8.7/captive/?stamac=aa:bb:cc:dd:ee:0f" \
+         "http://10.9.8.7:8080@example.com/captive/?stamac=aa:bb:cc:dd:ee:0f"; do
+  reset; mkknown $A "usen $HASH"
+  run MAC=$A "LOC=$l" RECOVER=1
+  ok "USEN として扱わない誘導先（$l）: 何も送らない" '(( posts == 0 )) && [[ $(grep -vc hotspot-detect $M/calls) == 0 && $out == *"portal unknown x1 http=302 to="* ]]'
+done
+for r in ifc gw; do
+  reset; mkknown $A "usen $HASH"
+  run MAC=$A "$UL" RECOVER=1 DEVRT=$r
+  ok "USEN 機器への経路が既定経路と別（$r）なら何も送らない" '(( posts == 0 )) && ! grep -q "$UD" $M/calls'
+done
+reset; mkknown $A "usen $HASH"
+run MAC=$A "$UL" RECOVER=1 DEVRT=direct
+ok 'USEN 機器が同じインターフェースの直結なら送る' '(( uposts == 1 ))'
+for q in 'stamac=11:22:33:44:55:66' 'stamac=' 'x=1' 'stamac=aa:bb:cc:dd:ee:0f%22'; do
+  reset; mkknown $A "usen $HASH"
+  run MAC=$A "LOC=$UD/captive/?url=captive.apple.com/hotspot-detect.html&$q" RECOVER=1
+  ok "USEN の stamac が自分と違う・ない・不正（$q）なら送らない" '(( posts == 0 )) && [[ $out == *"portal mismatch x1 mac=ng" ]] && ! grep -q "$UD" $M/calls'
+done
+reset; mkknown $A "usen $HASH"
+run MAC=$A "LOC=$UD/captive/?url=captive.apple.com/hotspot-detect.html&stamac=AA-BB-CC-DD-EE-F" RECOVER=1
+ok 'USEN の stamac の表記の違いは吸収する' '(( uposts == 1 ))'
+
+# 画面と page.js の中身
+for up uj in notitle ok  big ok  ok nomark  ok noterm  ok big; do
+  reset; watch $A
+  run MAC=$A "$UL" RECOVER=1 UPAGE=$up UJS=$uj
+  ok "USEN の目印がない・上限を超える（画面 $up・page.js $uj）: 送らず、見張りから外す" '(( posts == 0 )) && [[ $out == *"portal unknown x1 http=200 to=$UD/captive/"* && ! -s $WT && ! -e $KN ]]'
+done
+for up uj in timeout ok  404 ok  ok timeout  ok 404; do
+  reset; watch $A; w0=$(<$WT)
+  run MAC=$A "$UL" RECOVER=1 UPAGE=$up UJS=$uj
+  ok "USEN の画面・page.js が取れない（画面 $up・page.js $uj）: 送らず、見張りは残して待機（有効期限は延ばさない）" '(( posts == 0 && notes == 0 )) && [[ $out == *"portal check failed x1 curl="*" to=$UD/captive/"* && $(<$WT) == "$w0" && -e $ST && ! -e $KN ]]'
+done
+run MAC=$A "$UL" RECOVER=1; ok 'USEN 確かめられなかったあとの待機中は通信しない' '! grep -q "$UD" $M/calls'
+skip; run MAC=$A "$UL" RECOVER=1
+ok 'USEN 確かめられなかったあとの捕捉で取得できれば、記録して送る' '[[ $out == *"consent recorded net=$A usen (captive login)"* ]] && (( uposts == 1 ))'
+reset; watch $A; joined
+run MAC=$A;               ok 'USEN 見張り中の網が Wi2 へ転送したら見張りから外す（Wi2 の分岐はこれまでどおり）' '[[ ! -s $WT && $(<$PD) == "$A doutor" && $out == *"consent pending net=$A doutor" ]] && (( posts == 0 && redirs == 1 ))'
+reset; watch $A
+run MAC=$A "LOC=https://portal.example.com/login?mac=aa:bb:cc:dd:ee:0f"
+ok 'USEN 見張り中の網が USEN でも Wi2 でもないポータルなら、何も送らず見張りから外す' '[[ ! -s $WT && -z $out ]] && [[ $(grep -vc hotspot-detect $M/calls) == 0 ]]'
+
+# 途中で既定経路がなくなる
+for st in watched known hashed changed none; do
+  for sw in page js; do
+    reset
+    case $st in
+      watched) watch $A ;; known) mkknown $A usen ;; hashed) mkknown $A "usen $HASH" ;; changed) mkknown $A "usen 0000" ;; none) joined ;;
+    esac
+    s0=$(snap)
+    run MAC=$A "$UL" RECOVER=1 USWITCH=$sw
+    ok "USEN（$st）で画面の GET の最中・送る直前（$sw）に既定経路がなくなったら、送らず何も書かない" '(( posts == 0 && notes == 0 )) && [[ $out == *"network changed net=$A usen before recording" && $(snap) == "$s0" ]]'
+  done
+done
+reset; mkknown $A "usen $HASH"; s0=$(snap)
+for i in 1 2 3; do skip; run MAC=$A "$UL" USWITCH=post; rm -f $M/noroute; done
+ok 'USEN 送ったあとに既定経路がなくなったら、成功とも拒否とも数えない' '(( uposts == 1 )) && [[ $out == *"network changed net=$A usen api=ok probe=ng" && $(snap) == "$s0" && ! -e $ST ]]'
+
 # --- install.sh ----------------------------------------------------------------
 H="$T/ho&me<x>"; mkdir -p "$H"
 plist="$H/Library/LaunchAgents/local.cafe-wifi-okawari.plist"
@@ -483,6 +797,13 @@ MAC=cc:cc:cc:cc:cc:09 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M
 ok '状態: 今の接続先が未同意ならそう表示' '[[ $out == *"Current network  gateway cc:cc:cc:cc:cc:09, not accepted: auto re-authentication off"* ]]'
 NOROUTE=1 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; out=$(<$M/out)
 ok '状態: 既定経路がなければ接続先なしと表示' '[[ $out == *"Current network  none ("* ]]'
+D=dd:dd:dd:dd:dd:04
+print -r -- "$D $(( EPOCHSECONDS - 3600 ))" > "$H/Library/Application Support/cafe-wifi-okawari/watched"
+MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 今の接続先が見張り中（24時間以内）なら、次の時間切れで自動で同意を送りうると表示' '[[ $out == *"Current network  gateway $D, you accepted on its login page: if it is USEN Wi-Fi, auto re-authentication starts at the next time-out"* ]]'
+print -r -- "$D $(( EPOCHSECONDS - 86401 ))" > "$H/Library/Application Support/cafe-wifi-okawari/watched"
+MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 見張りから24時間を過ぎていれば未同意と同じ表示' '[[ $out == *"Current network  gateway $D, not accepted: auto re-authentication off"* ]]'
 t1=$(date -v-70M '+%F %T') t2=$(date -v-10M '+%F %T') t3=$(date -v-5M '+%F %T')
 print -rl -- "$t1 consent recorded net=$A doutor (online)" "$t2 re-authenticated api=ok probe=ok net=$A doutor t=3s" \
   "$t3 login failed x1 api=ng probe=ng" > "$H/Library/Logs/cafe-wifi-okawari.log"

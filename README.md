@@ -8,7 +8,7 @@ English | [日本語](README.ja.md)
 
 Automatically re-accepts the captive portal terms when a free café Wi‑Fi in Japan sends you back to its login page after the time limit (e.g. 60 minutes). *Okawari* means "a refill" — like a coffee refill, but for Wi‑Fi.
 
-- On Wi2 Wi‑Fi where you have accepted the terms yourself, it checks every 10 seconds, notices a logout within about 10 seconds, and usually reconnects a few seconds later (your connection is down in between; see [Caveats](#caveats))
+- On Wi2 Wi‑Fi where you have accepted the terms yourself (USEN has not been tested at a shop; see [About USEN](#about-usen)), it checks every 10 seconds, notices a logout within about 10 seconds, and usually reconnects a few seconds later (your connection is down in between; see [Caveats](#caveats))
 - Works with any time limit — it reacts to the login page, not a timer
 - Uses no IDs, passwords, or email addresses, and stores nothing secret
 - Nothing extra to install: it runs on the zsh, curl, and launchd that ship with macOS
@@ -24,7 +24,24 @@ Free Wi‑Fi from Wire and Wireless (Wi2) where you only need to accept the term
 | Starbucks | `at_STARBUCKS_Wi2` | Expected to work (same portal) |
 | Renoir / Miyama Coffee | `Renoir_Miyama_Wi-Fi` | Expected to work (same portal). The 3-hour daily cap cannot be extended |
 
-Tully's Coffee (`tullys_Wi-Fi`) is not supported: its official guide now points to a USEN portal (not Wi2) that also asks for your birth year and gender (optional), and a field check at one shop in September 2026 confirmed that portal. Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported either. The survey is in [DESIGN.md](DESIGN.md) (Japanese).
+Tully's Coffee (`tullys_Wi-Fi`) and Komeda's Coffee (`Komeda_Wi-Fi`) use a USEN portal (not Wi2) that also asks for your birth year and gender (optional). The tool has code that re-sends the acceptance to this portal, but it has not been tested at a shop, so these networks are not listed as supported (see [About USEN](#about-usen)). Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported. The survey is in [DESIGN.md](DESIGN.md) (Japanese).
+
+### About USEN
+
+This part has not been tested at a shop. To see whether it worked, check `./install.sh status` and the log ([Troubleshooting](#troubleshooting)).
+
+- **Which networks**: only networks whose login page is USEN's "USPOT-02". According to their official guides, Tully's and Komeda's Coffee use it
+- **When it applies**: only when you accept the terms yourself on the login page within 5 minutes of joining the Wi‑Fi. The tool checks the Mac's system log (`/usr/bin/log show`) for that acceptance and then watches the network for 24 hours (it only reads the log; it sends nothing). It does nothing on a network you accepted before installing the tool, or more than 5 minutes after joining. It applies from the next time you join and accept on the login page yourself
+- **At the first time-out**: on a watched network, before sending anything, it checks all of the following and sends nothing if any of them fails
+  - The login page is on a device in the shop (a private IP address) that is reached through the current Wi‑Fi
+  - The device MAC address in the redirect is this Mac's (the macOS private Wi‑Fi address)
+  - The page and its JavaScript are USPOT-02's
+
+  If all pass, it records your acceptance at the start as your acceptance of USEN's terms and sends the acceptance. It does the same at later time-outs
+- **What it sends**: the same request as the login page's "connect to the internet" button, in plain HTTP to the device in the shop, as the login page does. It includes this Mac's MAC address. Birth year and gender are sent empty (the official guide says they are optional, and the page leaves them empty by default). The tool never asks for them, does not store them, and does not use values you entered on the login page
+- **Changes to the terms**: when it first sends the acceptance, it records a hash of the terms text on the page. If the text has changed, it sends nothing, stops re-accepting automatically, and tells you in a dialog. Read the terms on the login page and accept yourself to resume
+- **When it stops**: the USEN device does not say in its response whether it accepted. So if the device responds but the connection does not come back three times in a row, the tool stops re-accepting on that network. Accept on the login page yourself to resume
+- **If it is too late**: on USEN, macOS opens its login window about 12 seconds after the time-out, and the tool can no longer send anything after that. Whether the tool gets there first has not been tested yet. If it does not, accept in the login window yourself
 
 ## Requirements
 
@@ -72,7 +89,7 @@ A successful reconnection shows nothing. What can happen while the connection is
 ./install.sh status
 ```
 
-You will see something like this. "Current network" tells whether the network you are on now is one you accepted (the tool identifies a network by its gateway's MAC address). "Last auth" is when your own acceptance was recorded or the tool last re-accepted, and "Next time-out" is an estimate based on it:
+You will see something like this. "Current network" tells whether the network you are on now is one you accepted (the tool identifies a network by its gateway's MAC address). "Last auth" is when your own acceptance was recorded or the tool last re-accepted, and "Next time-out" is an estimate based on it. While the tool is watching a USEN network, "Current network" says so:
 
 ```text
 Service          loaded (LaunchAgent local.cafe-wifi-okawari)
@@ -102,29 +119,29 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 ### How it works
 
 - Networks are identified by the router's MAC address together with the brand (e.g. `doutor`). Shops of the same brand may share the same value, so it cannot always tell shops apart.
-- It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`), without sending anything. On other networks (e.g. at home) it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does, and sends nothing to Wi2.
+- It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`), without sending anything. On other networks (e.g. at home) it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does, and sends nothing to Wi2. During that time it also checks the Mac's system log once for an acceptance on the login page (to find USEN networks; it sends nothing).
 - Dialogs follow your macOS language (Japanese or English). Messages from `install.sh` are in English.
 
 ## Before you use it
 
-This is an unofficial tool that automates reconnecting to free Wi‑Fi that you yourself are allowed to use. It is not endorsed or recommended by Wi2 or any shop, and the author has not obtained Wi2's permission for automatic re-acceptance. The table above shows technical test results and expectations; it does not mean automated use is permitted.
+This is an unofficial tool that automates reconnecting to free Wi‑Fi that you yourself are allowed to use. It is not endorsed or recommended by Wi2, USEN, or any shop, and the author has not obtained Wi2's or USEN's permission for automatic re-acceptance. The table above shows technical test results and expectations; it does not mean automated use is permitted.
 
 ### When you may use it
 
-- Check the current terms of the Wi‑Fi you use (for Wi2, the [Free Wi‑Fi Service Terms](https://wi2.co.jp/rules/free-wifi.html), in Japanese), its connection conditions, and the shop's rules, and use the tool only within what you are allowed to do.
+- Check the current terms of the Wi‑Fi you use (for Wi2, the [Free Wi‑Fi Service Terms](https://wi2.co.jp/rules/free-wifi.html), in Japanese; for USEN, the terms shown on the login page), its connection conditions, and the shop's rules, and use the tool only within what you are allowed to do.
 - Being allowed to reconnect as often as you like is not the same as being allowed to automate it. If it is unclear whether automated use, or connecting without going through the login page, is allowed, please use the normal login page until you have confirmed it with the provider.
 - Do not use it to get around required steps such as time or usage limits, suspensions, identity checks, sign-ups, or surveys. The tool does not count usage time or reconnections. Please check the notices in the shop too (for example, Doutor's [flyer](https://www.doutor.co.jp/dcs/service/images/doutor_free_wi-fi.pdf) says "60min three times per day" in English, while the Japanese text only says you can re-authenticate after 60 minutes).
 - Stop using it if the shop or the provider asks you to. Even when Wi‑Fi can be reconnected, the shop's own rules, such as how long you may stay, still apply.
 
 ### About automatic acceptance
 
-Please accept the terms yourself on the login page the first time. macOS keeps a Wi‑Fi with a login page unusable until you accept, and the tool never sends an acceptance on a network it has not recorded. So when a Wi2 network works (or the connection comes back after the tool saw the login page), the tool infers that you accepted and records that network. At later time-outs it does not show the terms page; it sends the acceptance directly to the authentication API (the same request as the login page's "accept" button). Notices shown on the login page are not displayed either. Please use the tool only if you understand this and want automatic re-acceptance.
+Please accept the terms yourself on the login page the first time. macOS keeps a Wi‑Fi with a login page unusable until you accept, and the tool never sends an acceptance on a network it has not recorded. So when a Wi2 network works (or the connection comes back after the tool saw the login page), the tool infers that you accepted and records that network. On USEN, it records the network only after confirming in the system log that you accepted on the login page (see [About USEN](#about-usen)). At later time-outs it does not show the terms page; it sends the acceptance directly to the authentication API (the same request as the login page's "accept" button). Notices shown on the login page are not displayed either. Please use the tool only if you understand this and want automatic re-acceptance.
 
-The tool does not verify your act of accepting, and it does not detect changes to the terms. Because it skips the terms page, it cannot see a notice of changes shown there. Network identification is also limited, so it cannot guarantee a manual first acceptance at every shop (at another shop of the same brand, it may send the acceptance without one). If you learn that the terms have changed or new conditions apply, stop the tool and do not resume automatic reconnection until you have reviewed them.
+The tool does not verify your act of accepting, and it does not detect changes to the terms. Because it skips the terms page, it cannot see a notice of changes shown there. On USEN, all it checks is that an acceptance happened on a login page (the system log does not say on which network) and that the terms text on the page has not changed. Network identification is also limited, so it cannot guarantee a manual first acceptance at every shop (at another shop of the same brand, it may send the acceptance without one). If you learn that the terms have changed or new conditions apply, stop the tool and do not resume automatic reconnection until you have reviewed them.
 
 ### When to stop it
 
-The tool cannot tell a refusal due to a usage cap or suspension from a temporary network problem. If the auth server refuses the acceptance three times in a row on the same network and the connection does not come back, the tool stops re-accepting on that network and tells you in a dialog (accept on the login page yourself to resume). On timeouts and server errors it does not stop; it keeps retrying with a growing interval (up to 30 minutes). If a cap or suspension is shown, or failures continue, stop automatic reconnection and check the normal login page.
+The tool cannot tell a refusal due to a usage cap or suspension from a temporary network problem. If the auth server refuses the acceptance (on USEN, if the device responds) three times in a row on the same network and the connection does not come back, the tool stops re-accepting on that network and tells you in a dialog (accept on the login page yourself to resume). On timeouts and server errors it does not stop; it keeps retrying with a growing interval (up to 30 minutes). If a cap or suspension is shown, or failures continue, stop automatic reconnection and check the normal login page.
 
 Run `./install.sh uninstall` in the repository directory to remove the background job and the list of recorded networks.
 
@@ -152,12 +169,14 @@ A successful reconnection shows nothing (it is only logged; see `./install.sh st
 - You need to accept the terms yourself the first time
 - Automatic reconnection failed (once while failures continue)
 - The login was refused repeatedly and automatic re-acceptance was stopped
+- The USEN terms text changed and automatic re-acceptance was stopped
 
 Dialogs appear in the middle of the screen and close by themselves after 2 minutes. macOS does not show notifications from background jobs, so the usual top-right notifications are not available. Because they are not notifications, Focus modes (such as Do Not Disturb) do not hold them back, and they show up in screen sharing and screen recordings.
 
 ### When it cannot reconnect for you
 
 - **Rejoining the Wi‑Fi after a time-out** (waking from sleep, losing the signal, turning Wi‑Fi off and on): macOS opens its login window and keeps other apps off that Wi‑Fi until you accept, so the tool cannot help. Please accept in the login window yourself. It reconnects automatically again from the next time-out (this acceptance is not logged, so the estimate in `./install.sh status` does not include it)
+- **On USEN, when macOS opens its login window first**: the tool can no longer send anything. Please accept in the login window yourself (see [About USEN](#about-usen))
 - **While the Mac sleeps**: the tool does not run. If the session has timed out when the Mac wakes and the Wi‑Fi is still connected, it re-authenticates within about 10 seconds
 - **When a daily usage cap is reached** (e.g. Renoir): re-authentication is refused and the connection does not come back
 - **VPN / iCloud Private Relay** can prevent the tool from detecting the login page
@@ -174,7 +193,7 @@ Dialogs appear in the middle of the screen and close by themselves after 2 minut
 ./install.sh uninstall
 ```
 
-This also removes the list of networks you accepted. The log at `~/Library/Logs/cafe-wifi-okawari.log` is kept; delete it by hand if you no longer need it.
+This also removes the list of networks you accepted and the USEN networks being watched. The log at `~/Library/Logs/cafe-wifi-okawari.log` is kept; delete it by hand if you no longer need it.
 
 ## Troubleshooting
 
@@ -195,6 +214,10 @@ tail ~/Library/Logs/cafe-wifi-okawari.log
 | `consent recorded net=… (online)` | The Wi2 network worked although the tool had sent nothing, so it recorded that you accepted on the login page. It re-accepts automatically from the next time-out |
 | `consent recorded net=…` | You accepted after the tool had seen the login page; recorded as above |
 | `consent pending net=…` | The tool saw the login page on a network it has not recorded, and is waiting for you to accept yourself |
+| `captive login seen net=…` | Within 5 minutes of joining, the system log showed that you accepted on the login page. The tool watches this network for 24 hours and, if it is a USEN network, sends the acceptance from the first time-out |
+| `consent recorded net=… usen (captive login)` | The watched network turned out to be USEN (USPOT-02), so your acceptance at the start was recorded. The tool then sends the acceptance |
+| `consent recorded net=… usen` | On a USEN network waiting for your acceptance, the system log showed that you accepted on the login page, so it was recorded |
+| `terms changed net=… usen` | The USEN terms text differed from before, so the tool sent nothing and stopped re-accepting automatically. You get a dialog. Read the terms on the login page and accept yourself to resume |
 | `re-authenticated api=ok probe=ok net=… t=Ns` | Reconnected automatically (the connection came back N seconds after the tool started sending the acceptance) |
 | `network changed net=…` | The Mac switched to another network (e.g. tethering) during a re-authentication or a brand check. That attempt counts as neither a success nor a failure, and nothing is recorded as accepted |
 | `login failed xN api=ng probe=ok` | The tool's attempt failed, but the connection came back another way (e.g. the macOS login window) |
@@ -202,7 +225,8 @@ tail ~/Library/Logs/cafe-wifi-okawari.log
 | `auto stopped net=… rejected x3` | The auth server refused the acceptance three times in a row, so automatic re-acceptance on this network was stopped (possibly a usage cap, a suspension, or changed conditions). You get a dialog. Check the login page; accepting yourself resumes it |
 | `redirect failed xN curl=… http=…` | Could not reach the auth server (timeout or outage). No dialog |
 | `redirect failed xN http=… to=…` / `no session_id` | Unexpected response from the auth server (the portal may have changed). You get a dialog on a recorded network |
-| `portal unknown xN` | A Wi2 or recorded network showed a login page that is not Wi2's. The tool sends nothing |
+| `portal unknown xN` | A Wi2 or recorded network showed a login page that is not Wi2's, or a USEN-style redirect led to a page that is not USPOT-02. The tool sends nothing |
+| `portal check failed xN` | The tool could not check the USEN page (network error or a response other than 200). It sends nothing |
 | `portal mismatch xN mac=… ip=…` | The login page was for a different device (MAC or IP address not this Mac's), so the tool sent nothing |
 | `not free wi-fi xN` | A Wi2 network that is not a free "accept the terms" Wi‑Fi. The tool does nothing there |
 | `probe failed xN net=… curl=… http=…` | On a Wi2, recorded, or pending network, the connection state could not be checked (non-zero `curl` means a network error; `http` is an unexpected response). The tool sends nothing |

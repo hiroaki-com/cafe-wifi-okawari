@@ -51,6 +51,9 @@ case ${1-} in
       row 'Current network' 'none (offline, or macOS is waiting for you to accept on the login page)'
     elif kb=$(awk -v n="$net" '$1 == n { f = 1; if (NF > 1) b = b (b == "" ? "" : ", ") $2 } END { print b; exit !f }' "$kn" 2>/dev/null); then
       row 'Current network' "gateway $net${kb:+ ($kb)}, accepted: auto re-authentication on"
+    elif awk -v n="$net" -v t=$(( now - 86400 )) '$1 == n && $2 > t { f = 1 } END { exit !f }' "${kn:h}/watched" 2>/dev/null; then
+      # 接続画面での同意をシステムログで確かめた網（24時間以内）。USEN なら、次の時間切れで同意を記録して自動で送る。
+      row 'Current network' "gateway $net, you accepted on its login page: if it is USEN Wi-Fi, auto re-authentication starts at the next time-out"
     else
       row 'Current network' "gateway $net, not accepted: auto re-authentication off"
     fi
