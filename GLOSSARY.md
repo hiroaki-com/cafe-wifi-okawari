@@ -445,7 +445,7 @@ daemon（デーモン） — 利用者の操作と無関係に、裏で動き続
  - 背景　 : 悪魔（demon）ではなく、裏で黙々と働く守護霊の意。MIT の Project MAC で、マクスウェルの悪魔にちなんで名付けられたとされる
 
 LaunchAgent / LaunchDaemon — launchd に登録する常駐処理のうち、ログイン中の利用者の権限で動くもの／システム全体で動くもの
- - 本レポ : 本ツールは LaunchAgent（`~/Library/LaunchAgents/local.cafe-wifi-okawari.plist`）。sudo は不要
+ - 本レポ : 本ツールは LaunchAgent（`~/Library/LaunchAgents/local.cafe-wifi-okawari.plist`）。メニューバーの表示も別の LaunchAgent（`local.cafe-wifi-okawari.menubar.plist`）。sudo は不要
  - 背景　 : Wi‑Fi の再認証に root 権限は要らない。権限を最小にしておけば、スクリプトに不具合があっても被害は自分の利用者の範囲に留まる（第7節 least privilege）。LaunchDaemon を3つ root で常駐させる既存 OSS を採らなかった理由でもある
 
 ```text
@@ -484,7 +484,7 @@ WatchPaths — 指定したファイルが変更されたときに、launchd に
 
 RunAtLoad — launchd に登録した時点ですぐに1回起動させる設定
  - 直訳　 : 読み込み時に実行
- - 本レポ : `true`。導入直後やログイン直後に、最初の周期を待たずに判定する
+ - 本レポ : `true`。導入直後やログイン直後に、最初の周期を待たずに判定する。メニューバーの表示は、これでログイン時に起動する（周期の起動はない）
  - 背景　 : 無いと、導入してから最初の周期までは何も起きず、動いているのか分かりにくい
 
 ProcessType — launchd に、処理の性格を伝えてスケジューリングを調整させる設定
@@ -505,7 +505,7 @@ launchd domain（ドメイン） — launchd が処理を管理する範囲の�
  - 背景　 : `system` はシステム全体、`user/$UID` は画面の無いセッションも含む利用者の範囲。ダイアログを出す処理は画面のある `gui` に登録しないと表示できない
 
 osascript — AppleScript を端末のコマンドから実行する macOS 標準のコマンド
- - 本レポ : 知らせのダイアログを出す（`notify()`）。渡すのはコードに書いた固定文言だけ
+ - 本レポ : 知らせのダイアログを出す（`notify()`）。渡すのはコードに書いた固定文言だけ。メニューバーの表示も `osascript -l JavaScript`（JavaScript for Automation）で動かす（`menubar.js`）
  - 背景　 : AppleScript は文字列の組み立てがそのまま命令になるので、外部の値を混ぜると命令を差し込まれうる（第7節 injection）。ポータルの応答などを文言に含めないのはそのため
 
 display notification / display alert — AppleScript で、通知センターに通知を出す命令／ダイアログを出す命令
@@ -513,7 +513,7 @@ display notification / display alert — AppleScript で、通知センターに
  - 背景　 : 「成功を返したのに何も起きない」は最も見つけにくい失敗。実機で確かめるまで分からなかった。`giving up after 120` で2分後に自動で閉じるので、席を外していても処理が詰まり続けない
 
 AppleLanguages — macOS の「優先する言語」の並びを保持する設定
- - 本レポ : `defaults read -g AppleLanguages` の先頭が `ja` で始まれば日本語、それ以外は英語でダイアログと `install.sh` のメッセージを出す
+ - 本レポ : `defaults read -g AppleLanguages` の先頭が `ja` で始まれば日本語、それ以外は英語でダイアログを出す（USEN へ送る `lang` も同じ）。`install.sh` のメッセージとメニューバーは英語だけ
  - 背景　 : 端末の環境変数 `LANG` は launchd から起動された処理には渡らないことがあるので、GUI の言語設定を直接読む。2言語だけに絞り、翻訳ファイルの仕組みは持たない
 
 ~/Library/Caches / Application Support / Logs — macOS で、利用者ごとの一時データ／アプリの保存データ／ログを置く標準の場所
@@ -677,7 +677,7 @@ log rotation（ログローテーション） — ログが大きくなりすぎ
  - 背景　 : 書く量を最初から小さくしておけば、ローテーションという仕組みごと不要になる。「管理の仕組みを足す」より「管理が要らない量にする」方が安い
 
 notification fatigue（通知疲れ） — 知らせが多すぎて、利用者が知らせそのものを無視するようになること
- - 本レポ : ダイアログは失敗が続く間に1回だけ。成功時は知らせない（DESIGN.md §8）
+ - 本レポ : ダイアログは失敗が続く間に1回だけ。成功時は知らせず、メニューバーの ✓ で割り込まずに見せる（DESIGN.md §3.2・§8）
  - 背景　 : 知らせるたびに作業が止まるダイアログではなおさら。「利用者が何かをする必要があるときだけ」に絞ると、出たときに読まれる
 
 ## 7. セキュリティ
@@ -748,7 +748,7 @@ security audit（セキュリティ監査） — 独立した視点でコード�
 
 test double（テストダブル） — 試験のために本物の部品の代わりに置く偽物の総称
  - 直訳　 : 試験用の替え玉
- - 本レポ : `test/run.sh` が作る偽の curl・route・arp・ipconfig・ifconfig・osascript・launchctl など
+ - 本レポ : `test/run.sh` が作る偽の curl・route・arp・ipconfig・ifconfig・osascript・launchctl・networksetup・scutil など
  - 背景　 : 映画のスタントダブル（替え玉）から。役割に応じて stub・mock・fake などと呼び分けるが、境界は人によって揺れる
 
 mock（モック） — 本物の代わりに置き、呼ばれ方を記録して検証に使う偽物
@@ -775,7 +775,7 @@ mutation testing（ミューテーションテスト） — コードをわざ�
  - 背景　 : 「試験が通る」は「試験が正しい」を意味しない。何を壊しても通る試験は、何も守っていない。試験の試験にあたる
 
 syntax check（構文検査） — 実行せずに、文法として正しいかだけを確かめること
- - 本レポ : CI の `zsh -n`（3つのスクリプト）と `osacompile`（AppleScript）。導入時は `plutil -lint`
+ - 本レポ : CI の `zsh -n`（4つのスクリプト）と `osacompile`（AppleScript と `menubar.js`）。導入時は `plutil -lint`
  - 背景　 : 実行しないので安全で速く、最初に置く関門として向いている。ただし「文法が正しい」と「正しく動く」は別で、模擬試験と現地試験が続く
 
 lint（リント） — 文法の誤りや怪しい書き方を静的に検出すること
@@ -872,7 +872,7 @@ README — リポジトリを訪れた人が最初に読む説明書
 
 i18n / internationalization（国際化） — 複数の言語や地域に対応できるようにすること
  - 直訳　 : 国際化（i と n の間に18文字）
- - 本レポ : README の2言語、ダイアログと `install.sh` のメッセージの日英切り替え
+ - 本レポ : README の2言語と、ダイアログの日英切り替え（`install.sh` のメッセージとメニューバーは英語だけ）
  - 背景　 : 翻訳の仕組みを作るのが i18n、実際の翻訳が l10n（localization）。本レポは2言語だけなので、コード中に日英の文言を並べる最小の形にとどめている
 
 ## 10. 規約・文書・設計

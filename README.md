@@ -217,7 +217,7 @@ This also removes the menu bar icon, the list of networks you accepted, and the 
 
 ## Troubleshooting
 
-To check that it is running (shows whether it is registered and its last exit code, whether the menu bar icon is running, whether the current network is one you accepted, the brands of the networks you accepted, when it last authenticated and the estimated next time-out, and the last 5 log lines; it sends nothing over the network, and exits with 1 if it is not registered):
+To check that it is running (what it shows is described in [Check that it is working](#check-that-it-is-working); it sends nothing over the network, and exits with 1 if it is not registered):
 
 ```sh
 ./install.sh status
