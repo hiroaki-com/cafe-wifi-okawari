@@ -116,7 +116,7 @@ Schedule         every 10 s, and whenever the network settings change
 Program          /Users/you/.local/bin/cafe-wifi-okawari
 Last exit code   0 (412 runs since loaded)
 Menu bar         running
-Current network  gateway 0:0:5e:0:1:46 (doutor), accepted: auto re-authentication on
+Current network  gateway 0:0:5e:0:1:1 (doutor), accepted: auto re-authentication on
 Accepted         1 network (brand: doutor)
 Last auth        2026-10-01 10:05:12 (12 min ago), consent recorded on doutor
 Next time-out    around 11:05, in 47 min (if the shop's limit is 60 minutes)

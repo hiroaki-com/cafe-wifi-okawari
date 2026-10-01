@@ -80,7 +80,7 @@
 
 ### 1.2 USEN（USPOT-02）対応の設計
 
-タリーズの1店舗で、認証画面の HTML・JS を GET で取得して調べ、時間切れを1回観測した（2026-09-30）。調べるときに同意の POST は送っていない。
+タリーズの1店舗で、認証画面の HTML・JS を GET で取得して調べ、時間切れを1回観測した。調べるときに同意の POST は送っていない。
 
 **実測**
 
@@ -336,11 +336,11 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 ```
 cafe-wifi-okawari — Running
 This Wi‑Fi: Skylark · Auto Reconnect On
-Next Time-out: ~15:12
+Next Time-out: ~11:05
 ────
-Today 13:19      Reconnected · USEN · 1 s
-Today 13:19      Terms Accepted · USEN
-Yesterday 14:11  Reconnected · Skylark · 2 s
+Today 10:05      Reconnected · USEN · 1 s
+Today 10:05      Terms Accepted · USEN
+Yesterday 16:40  Reconnected · Skylark · 2 s
 ────
 Open Log
 Hide from Menu Bar
@@ -356,7 +356,7 @@ Hide from Menu Bar
 | 接続画面待ち（…） | `This Wi‑Fi: Waiting for Login Page` と、続けて `If the login page doesn't appear, open http://captive.apple.com.` |
 | 注意: 再接続に失敗し、知らせたあと（!） | `Couldn't reconnect automatically. Check the login page.`（This Wi‑Fi の行の直後。下も同じ） |
 | 注意: 同意が要る（!。初めての網・自動の停止のあと） | `Accept the terms once on the login page. After that, it reconnects automatically.` |
-| 次の時間切れ | `Next Time-out: ~15:12`。項目にマウスを載せると `Estimated from the last authentication, if the shop's limit is 60 minutes.`（ツールチップ）。下の条件を満たさなければ行を出さない |
+| 次の時間切れ | `Next Time-out: ~11:05`。項目にマウスを載せると `Estimated from the last authentication, if the shop's limit is 60 minutes.`（ツールチップ）。下の条件を満たさなければ行を出さない |
 
 | ログの語 | 直近の出来事での表記 |
 |---|---|
@@ -387,9 +387,9 @@ warn
 cafe-wifi-okawari — Running
 This Wi‑Fi: Skylark · Auto Reconnect On
 Couldn't reconnect automatically. Check the login page.
-Next Time-out: ~15:12<TAB><TAB>Estimated from the last authentication, if the shop's limit is 60 minutes.
+Next Time-out: ~11:05<TAB><TAB>Estimated from the last authentication, if the shop's limit is 60 minutes.
 
-Today 13:19<TAB>Reconnected · Skylark · 2 s
+Today 10:05<TAB>Reconnected · Skylark · 2 s
 ```
 
 アイコンの種類は `off`・`warn`・`wait`・`check`・`on` のどれか。JXA 側はこれ以外の値や実行の失敗を `off` として扱う。右の列はタブ位置でそろえる。
