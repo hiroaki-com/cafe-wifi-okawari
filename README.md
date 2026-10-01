@@ -13,57 +13,57 @@
   <img src="https://img.shields.io/badge/macOS-15%2B-lightgrey" alt="macOS 15+">
 </p>
 
-<p align="center">English | <a href="README.ja.md">日本語</a></p>
+<p align="center">日本語 | <a href="README.en.md">English</a></p>
 
-Automatically re-accepts the captive portal terms when a free café Wi‑Fi in Japan sends you back to its login page after the time limit (e.g. 60 minutes). *Okawari* means "a refill" — like a coffee refill, but for Wi‑Fi.
+カフェの無料 Wi‑Fi で時間切れ（60分など）になり認証画面に戻されたとき、自動で規約に同意し直して接続を戻す macOS 用の常駐スクリプトです。名前は、コーヒーの「おかわり」のように Wi‑Fi をおかわりすることに由来します。
 
-- On Wi2 Wi‑Fi where you have accepted the terms yourself (USEN is only partly tested at a shop; see [About USEN](#about-usen)), it checks every 10 seconds, notices a logout within about 10 seconds, and usually reconnects a few seconds later (your connection is down in between; see [Caveats](#caveats))
-- Works with any time limit — it reacts to the login page, not a timer
-- Uses no IDs, passwords, or email addresses, and stores nothing secret
-- Shows its status as a coffee cup icon in the menu bar, without interrupting you
-- Nothing extra to install: it runs on the zsh, curl, launchd, and JavaScript for Automation that ship with macOS
+- 自分で規約に同意した Wi2 の Wi‑Fi（USEN は現地での確認が途中です。[USEN について](#usen-について)）を10秒ごとに確認し、認証画面に戻されていれば再認証します。時間切れには約10秒以内に気づき、通常はその数秒後に接続が戻ります（その間は通信が止まります。[使うときの注意](#使うときの注意)）
+- 制限時間の長さ（60分・30分など）に関係なく動きます
+- ID・パスワード・メールアドレスは使わず、保存もしません
+- 状態はメニューバーのコーヒーカップのアイコンで、画面に割り込まずに見られます
+- macOS 標準の zsh・curl・launchd・JavaScript for Automation だけで動くため、追加のインストールは不要です
 
-## Supported networks
+## 対応している Wi‑Fi
 
-Free Wi‑Fi from Wire and Wireless (Wi2) where you only need to accept the terms.
+ワイヤ・アンド・ワイヤレス（Wi2）の「規約に同意するだけ」の無料 Wi‑Fi に対応しています。
 
-| Shop | SSID | Status |
+| お店 | SSID | 状況 |
 |---|---|---|
-| Doutor / Excelsior Caffé | `DOUTOR_FREE_Wi-Fi` | Tested (recording your acceptance and automatic re-acceptance after the time limit each confirmed at one shop) |
-| Skylark group (Gusto, etc.) | `.Wi2_Free_at_【SK.GROUP】` | Tested (recording your acceptance and automatic re-acceptance after the time limit each confirmed at one shop). Some brands, such as Bamiyan, ended their Wi‑Fi in June 2025 |
-| Starbucks | `at_STARBUCKS_Wi2` | Expected to work (same portal) |
-| Renoir / Miyama Coffee | `Renoir_Miyama_Wi-Fi` | Expected to work (same portal). The 3-hour daily cap cannot be extended |
+| ドトール・エクセルシオール | `DOUTOR_FREE_Wi-Fi` | 動作確認済み（同意の記録と、時間切れ後の自動の再同意を1店舗で確認） |
+| ガストなど すかいらーくグループ | `.Wi2_Free_at_【SK.GROUP】` | 動作確認済み（同意の記録と、時間切れ後の自動の再同意を1店舗で確認）。バーミヤンなど一部のブランドは2025年6月で Wi‑Fi の提供を終えています |
+| スターバックス | `at_STARBUCKS_Wi2` | 同じ仕組みのため動く見込み |
+| ルノアール・ミヤマ珈琲 | `Renoir_Miyama_Wi-Fi` | 同じ仕組みのため動く見込み（1日3時間の上限は延長できません） |
 
-Tully's Coffee (`tullys_Wi-Fi`) and Komeda's Coffee (`Komeda_Wi-Fi`) use a USEN portal (not Wi2) that also asks for your birth year and gender (optional). The tool has code that re-sends the acceptance to this portal. At two Tully's shops, detecting your acceptance when you join was tested once, and automatic re-acceptance after a time-out three times. Komeda's Coffee has not been tested at a shop yet, and the checks so far are few, so these networks are not listed as supported (see [About USEN](#about-usen)). Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported. The survey is in [DESIGN.md](DESIGN.md) (Japanese).
+タリーズ（`tullys_Wi-Fi`）とコメダ珈琲（`Komeda_Wi-Fi`）は、Wi2 ではなく USEN の認証画面（誕生年・性別の入力欄つき。入力は任意）を使っています。本ツールには USEN の画面に同意を送り直す処理があり、タリーズの2店舗で入店時の同意を見つける処理を1回、時間切れからの自動の再同意を3回確かめました。コメダ珈琲はまだ現地で確かめておらず、確かめた回数も少ないため、対応とはしていません（「[USEN について](#usen-について)」）。会員登録・メール登録・アンケートが必要な Wi‑Fi（マクドナルドなど）には対応していません。調査結果は [DESIGN.md](DESIGN.md) にあります。
 
-### About USEN
+### USEN について
 
-It has been tested only at two Tully's shops: detecting your acceptance when you join (see "When it applies" below) once, and automatic re-acceptance after a time-out three times. Komeda's Coffee has not been tested at a shop yet. To see whether it worked, check `./install.sh status` and the log ([Troubleshooting](#troubleshooting)).
+現地で確かめたのはタリーズの2店舗だけで、入店時の同意を見つける処理（下の「動く条件」）を1回、時間切れからの自動の再同意を3回です。コメダ珈琲はまだ現地で確かめていません。動いたかどうかは、`./install.sh status` とログ（[困ったとき](#困ったとき)）で確かめてください。
 
-- Which networks: only networks whose login page is USEN's "USPOT-02". According to their official guides, Tully's and Komeda's Coffee use it
-- When it applies: only when you accept the terms yourself on the login page within 5 minutes of joining the Wi‑Fi. The tool checks the Mac's system log (`/usr/bin/log show`) for that acceptance and then watches the network for 24 hours (it only reads the log; it sends nothing). It does nothing on a network you accepted before installing the tool, or more than 5 minutes after joining. It applies from the next time you join and accept on the login page yourself
-- At the first time-out: on a watched network, before sending anything, it checks all of the following and sends nothing if any of them fails
-  - The login page is on a device in the shop (a private IP address) that is reached through the current Wi‑Fi
-  - The device MAC address in the redirect is this Mac's (the macOS private Wi‑Fi address)
-  - The page and its JavaScript are USPOT-02's
+- 動く網: 認証画面が USEN の「USPOT-02」の網だけです。公式の案内では、タリーズとコメダ珈琲がこの画面を使っています
+- 動く条件: Wi‑Fi につないでから5分以内に、接続画面でご自身で同意したときだけです。本ツールは Mac のシステムログ（`/usr/bin/log show`）で接続画面での同意を確かめ、その網を24時間見張ります（ログを読むだけで、通信はしません）。本ツールを入れる前に同意した網や、つないでから5分を過ぎた網では何もしません。次に Wi‑Fi につないで、接続画面でご自身で同意したときから対象になります
+- 最初の時間切れ: 見張っている網で時間切れになると、送る前に次をすべて確かめ、どれかが違えば何も送りません
+  - 誘導先が店内の機器（プライベート IP）で、そこへの経路がいまの Wi‑Fi と同じであること
+  - 誘導先に書かれた端末の MAC アドレスが、この Mac のもの（macOS のプライベート Wi‑Fi アドレス）であること
+  - 画面と JavaScript が USPOT-02 のものであること
 
-  If all pass, it records your acceptance at the start as your acceptance of USEN's terms and sends the acceptance. It does the same at later time-outs
-- What it sends: the same request as the login page's "connect to the internet" button, in plain HTTP to the device in the shop, as the login page does. It includes this Mac's MAC address. Birth year and gender are sent empty (the official guide says they are optional, and the page leaves them empty by default). The tool never asks for them, does not store them, and does not use values you entered on the login page
-- Changes to the terms: when it first sends the acceptance, it records a hash of the terms text on the page. If the text has changed, it sends nothing, stops re-accepting automatically, and tells you in a dialog. Read the terms on the login page and accept yourself to resume
-- When it stops: the USEN device does not say in its response whether it accepted. So if the device responds but the connection does not come back three times in a row, the tool stops re-accepting on that network. Accept on the login page yourself to resume
-- If it is too late: on USEN, macOS opens its login window about 12 seconds after the time-out, and the tool can no longer send anything after that. In the one test at a shop, the tool got there first: the connection came back in about 1 second and the login window did not open. But the tool checks only every 10 seconds, so it can be too late. If so, accept in the login window yourself
+  確かめられたら、入店時の同意を USEN への同意として記録して、同意を送ります。以後の時間切れでも同じように送り直します
+- 送る内容: 接続画面の「インターネットに接続する」と同じ要求を、接続画面と同じく店内の機器へ平文の HTTP で送ります。この Mac の MAC アドレスを含みます。誕生年・性別は空のまま送ります（公式の案内でも入力は任意で、画面の初期値も空です）。本ツールはこれらを尋ねず、保存もせず、接続画面で入力した値も使いません
+- 規約の変更: 最初に送るときに、画面に書かれた規約の文面のハッシュを記録します。文面が変わっていたら送らずに自動の再同意を止め、ダイアログで知らせます。接続画面で規約を読み、ご自身で同意し直すと再開します
+- 止める条件: USEN の機器は、同意を受け付けたかどうかを応答で示しません。そのため、機器が応答したのに通信が戻らないことが3回続いたら、その網での自動の再同意を止めます。接続画面でご自身で同意し直すと再開します
+- 間に合わないとき: USEN では、時間切れから約12秒で macOS が接続画面を開き、以後は本ツールから送れなくなります。現地で確かめた1回では本ツールが先に送り、約1秒で接続が戻って、接続画面は開きませんでした。ただし本ツールの確認は10秒ごとなので、間に合わないこともあります。そのときは、接続画面でご自身で同意してください
 
-## Requirements
+## 動作環境
 
-macOS 15 or later (uses the built-in `/usr/bin/jq`). Apple silicon and Intel. Tested on macOS 27.
+macOS 15 以降（標準の `/usr/bin/jq` を使います）。Apple Silicon・Intel のどちらでも動きます。動作確認は macOS 27 で行いました。
 
-## Install and use
+## 導入と使い方
 
-> Before installing, please read [Before you use it](#before-you-use-it). It explains the conditions of use and how the tool re-sends your acceptance automatically.
+> 導入の前に「[利用前に確認してください](#利用前に確認してください)」をお読みください。規約上の条件と、本ツールが自動で同意を送り直す仕組みを説明しています。
 
-### 1. Install
+### 1. 導入する
 
-Run this in Terminal:
+ターミナルで次を実行します。
 
 ```sh
 git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git
@@ -71,53 +71,53 @@ cd cafe-wifi-okawari
 ./install.sh
 ```
 
-No `sudo` needed. The installer copies the script to `~/.local/bin/cafe-wifi-okawari` and registers a user LaunchAgent. From then on it runs in the background every 10 seconds, so you can close Terminal. After a restart, it starts again automatically when you log in.
+管理者権限（`sudo`）は不要です。スクリプトを `~/.local/bin/cafe-wifi-okawari` にコピーし、ログインユーザーの LaunchAgent として登録します。以後はバックグラウンドで10秒ごとに動くので、ターミナルは閉じてかまいません。Mac を再起動しても、ログインすれば自動で動き始めます。
 
-It also adds a coffee cup icon to the menu bar ([The menu bar icon](#the-menu-bar-icon)). To install without it, run `./install.sh --no-menubar` instead (this also removes the icon if it is already installed).
+メニューバーにコーヒーカップのアイコンも追加します（[メニューバーのアイコン](#メニューバーのアイコン)）。アイコンが不要なら、代わりに `./install.sh --no-menubar` を実行してください（すでに入っていれば消します）。
 
-### 2. Accept the terms yourself once at the shop
+### 2. お店の Wi‑Fi で、最初の1回だけ自分で同意する
 
-When you join the shop's Wi‑Fi (e.g. `DOUTOR_FREE_Wi-Fi`), macOS opens its login window. Please read the terms and press "accept" as usual.
+お店の Wi‑Fi（`DOUTOR_FREE_Wi-Fi` など）につなぐと、macOS が接続画面を開きます。規約を読み、いつもどおり「同意する」を押してください。
 
-Once the connection works, the tool records the shop as one where you accepted the terms yourself. You can check this with `./install.sh status` (see below). If you had already accepted at the shop before installing, it is recorded right after installation.
+通信できるようになると、本ツールがそのお店を「自分で同意したお店」として記録します。記録されたかどうかは、次の「動いているか確かめる」で確認できます。すでにお店の Wi‑Fi で同意を済ませてから導入した場合も、導入の直後に記録されます。
 
-### 3. Keep using the Wi‑Fi
+### 3. あとはそのまま使う
 
-There is nothing else to do. At each time-out (about 60 minutes at Doutor), the tool accepts the terms again for you.
+以後は何もする必要はありません。時間切れ（ドトールでは約60分）のたびに、本ツールが自動で同意し直します。
 
 ```text
-You accept (first time only)
-  → about 60 minutes later, the session times out: you are sent back to the login page and the connection stops
-  → the tool notices (within 10 seconds)
-  → it re-sends the acceptance; the connection comes back a few seconds later
-  → the same happens at every time-out
+自分で同意（初回だけ）
+  → 約60分後に時間切れ。認証画面に戻され、通信が止まる
+  → 本ツールが気づく（最大10秒）
+  → 同意を送り直す。数秒で通信が戻る
+  → 次の時間切れも同じように繰り返す
 ```
 
-A successful reconnection shows no dialog; the menu bar icon shows ✓ for 10 minutes. What can happen while the connection is down is described in [Caveats](#caveats).
+自動で戻ったときはダイアログを出しません。メニューバーのアイコンに10分間 ✓ が付きます。通信が止まっている間に起こりうることは「[使うときの注意](#使うときの注意)」にまとめています。
 
-### The menu bar icon
+### メニューバーのアイコン
 
-The coffee cup in the menu bar (its steam is drawn as Wi‑Fi waves, with an arrow for "a refill") shows the tool's state. It only reads the tool's files; it sends nothing over the network.
+メニューバーのコーヒーカップ（湯気を Wi‑Fi に見立て、矢印で「おかわり」を表しています）で、本ツールの状態がわかります。本ツールのファイルを読むだけで、通信はしません。
 
-| Icon | Meaning |
+| アイコン | 意味 |
 |---|---|
-| Cup | Running |
-| Cup ✓ | Reconnected automatically within the last 10 minutes |
-| Cup ! | You need to act on this Wi‑Fi: accept the terms yourself once, or check the login page because reconnecting failed. The menu says which |
-| Cup … | macOS is waiting for you to accept on the login page (on any network with a login page, not only supported ones). If the login page does not appear, open `http://captive.apple.com` in a browser |
-| Faded cup | Stopped (the background job is not registered). Run `./install.sh` to restart |
+| カップ | 動作中 |
+| カップ ✓ | 10分以内に自動で再接続した |
+| カップ ! | この Wi‑Fi で対応が要る（最初の1回だけ自分で同意する、または再接続に失敗したので接続画面を確かめる）。どちらかはメニューに出ます |
+| カップ … | macOS が接続画面での同意を待っている（対応している Wi‑Fi に限らず、接続画面のある網ならどこでも出ます）。接続画面が出なければ、ブラウザで `http://captive.apple.com` を開いてください |
+| 薄いカップ | 停止中（常駐処理が登録されていない）。`./install.sh` で戻ります |
 
-Click it to see whether automatic reconnection is on for this Wi‑Fi, the estimated next time-out, and the last three events (reconnected, terms accepted, could not reconnect, stopped). The menu is in English only. It shows no MAC or IP addresses, so it is safe to show in screen sharing. The estimate is shown only when the last authentication was on the current network within 60 minutes, and not after you rejoined the Wi‑Fi. It assumes the shop's limit is 60 minutes.
+クリックすると、この Wi‑Fi で自動再接続が有効か、次の時間切れの目安、直近の出来事3件（再接続・同意の記録・再接続の失敗・自動の停止）が出ます。メニューは英語だけです。MAC アドレス・IP アドレスは出さないので、画面共有に写っても差し支えありません。目安は、今の接続先で60分以内に認証したときだけ出し、Wi‑Fi につなぎ直したあとは出しません。お店の制限時間が60分の場合の目安です。
 
-"Hide from Menu Bar" quits the icon; it comes back the next time you log in or run `./install.sh`. The tool itself keeps running either way.
+「Hide from Menu Bar」はアイコンを終了します。次のログインか `./install.sh` で戻ります。どちらの場合も本ツール自体は動き続けます。
 
-### Check that it is working
+### 動いているか確かめる
 
 ```sh
 ./install.sh status
 ```
 
-You will see something like this. "Menu bar" tells whether the menu bar icon is running (`running`, `not running`, or `not installed`). "Current network" tells whether the network you are on now is one you accepted (the tool identifies a network by its gateway's MAC address). "Last auth" is when your own acceptance was recorded or the tool last re-accepted, on any network. "Next time-out" is an estimate from the last authentication on the current network, shown under the same conditions as in the menu bar. While the tool is watching a USEN network, "Current network" says so:
+次のように表示されます（表示は英語です）。`Menu bar` はメニューバーのアイコンが動いているか（`running`・`not running`・`not installed`）、`Current network` は今つないでいる接続先が同意済みかどうか（接続先はゲートウェイの MAC アドレスで見分けます）、`Last auth` はご自身の同意が記録されたときか自動で同意し直したときの時刻（接続先を問いません）、`Next time-out` は今の接続先での最後の認証から求めた次の時間切れの目安です（メニューバーと同じ条件のときだけ出ます）。USEN の網を見張っている間は、`Current network` にその旨が出ます。
 
 ```text
 Service          loaded (LaunchAgent local.cafe-wifi-okawari)
@@ -135,141 +135,141 @@ Recent log:
   2026-10-01 10:05:12 consent recorded net=… doutor (online)
 ```
 
-What each log line means is listed in [Troubleshooting](#troubleshooting).
+ログの各行の意味は「[困ったとき](#困ったとき)」にあります。
 
-### Common situations
+### こんなときは
 
-- You go to another shop: when the login window appears after you join, accept the terms yourself, as in step 2
-- A dialog asks you to accept the terms yourself once: the session timed out at a shop the tool has not recorded. It sent nothing, so please accept on the login page yourself. To get the login page, reconnect to the Wi‑Fi or open `http://captive.apple.com` in a browser
-- A dialog says it could not reconnect, or that it stopped reconnecting: please check the login page in the same way and accept yourself if needed. The log tells you why ([Troubleshooting](#troubleshooting))
-- You want to update: run `git pull` in the repository directory, then `./install.sh` again
-- You want to stop using it: run `./install.sh uninstall` ([Uninstall](#uninstall))
+- 別のお店に行ったとき: Wi‑Fi につないで接続画面が出たら、2 と同じくご自身で同意してください
+- 「最初の1回だけ…同意してください」というダイアログが出たとき: 記録していないお店で時間切れになりました。本ツールは何も送っていないので、接続画面でご自身で同意してください。接続画面は、Wi‑Fi につなぎ直すか、ブラウザで `http://captive.apple.com` を開くと表示されます
+- 「自動で再接続できませんでした」「自動再接続を止めました」というダイアログが出たとき: 同じく接続画面を確認し、必要ならご自身で同意してください。原因はログで確かめられます（[困ったとき](#困ったとき)）
+- 更新したいとき: リポジトリのディレクトリで `git pull` のあと `./install.sh` を再実行してください
+- 使うのをやめたいとき: `./install.sh uninstall` で削除できます（[削除](#削除)）
 
-### How it works
+### 仕組み
 
-- Networks are identified by the router's MAC address together with the brand (e.g. `doutor`). Shops of the same brand may share the same value, so it cannot always tell shops apart.
-- It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`), without sending anything. On other networks (e.g. at home) it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does, and sends nothing to Wi2. During that time it also checks the Mac's system log once for an acceptance on the login page (to find USEN networks; it sends nothing).
-- Dialogs follow your macOS language (Japanese or English). Messages from `install.sh` and the menu bar are in English.
+- 接続先は、店内の Wi‑Fi ルーターの MAC アドレスとブランド（`doutor` など）の組で見分けます。同じブランドの店どうしで同じ値になることがあるため、店舗を一意に見分けられるとは限りません
+- Wi2 の網かどうかは、網から配られるドメイン名（`wi2.ne.jp`）で判別します（通信はしません）。自宅など Wi2 以外の Wi‑Fi では、つないでから5分間だけ macOS と同じく Apple の `captive.apple.com` で認証画面の有無を確かめ、Wi2 には何も送りません。その間に1回だけ、接続画面で同意したかを Mac のシステムログで確かめます（USEN の網を見つけるため。通信はしません）
+- ダイアログは、macOS の言語設定に合わせて日本語か英語で表示されます。`install.sh` のメッセージとメニューバーは英語です
 
-## Before you use it
+## 利用前に確認してください
 
-This is an unofficial tool that automates reconnecting to free Wi‑Fi that you yourself are allowed to use. It is not endorsed or recommended by Wi2, USEN, or any shop, and the author has not obtained Wi2's or USEN's permission for automatic re-acceptance. The table above shows technical test results and expectations; it does not mean automated use is permitted.
+本ツールは、利用者本人に認められた無料 Wi‑Fi の再接続操作を自動化するための非公式ツールです。Wi2・USEN および各店舗による公認・推奨を示すものではなく、作者も自動の再同意について Wi2・USEN の許諾を得ていません。上の対応一覧は技術的な動作確認・見込みを示すもので、自動操作についての許諾を示すものではありません。
 
-### When you may use it
+### 利用できる範囲
 
-- Check the current terms of the Wi‑Fi you use (for Wi2, the [Free Wi‑Fi Service Terms](https://wi2.co.jp/rules/free-wifi.html), in Japanese; for USEN, the terms shown on the login page), its connection conditions, and the shop's rules, and use the tool only within what you are allowed to do.
-- Being allowed to reconnect as often as you like is not the same as being allowed to automate it. If it is unclear whether automated use, or connecting without going through the login page, is allowed, please use the normal login page until you have confirmed it with the provider.
-- Do not use it to get around required steps such as time or usage limits, suspensions, identity checks, sign-ups, or surveys. The tool does not count usage time or reconnections. Please check the notices in the shop too (for example, Doutor's [flyer](https://www.doutor.co.jp/dcs/service/images/doutor_free_wi-fi.pdf) says "60min three times per day" in English, while the Japanese text only says you can re-authenticate after 60 minutes).
-- Stop using it if the shop or the provider asks you to. Even when Wi‑Fi can be reconnected, the shop's own rules, such as how long you may stay, still apply.
+- 利用する Wi‑Fi の最新の規約（Wi2 は [フリーWi-Fiサービス利用規約](https://wi2.co.jp/rules/free-wifi.html)、USEN は接続画面に表示される規約）、接続条件、店舗の利用ルールを確認し、本人が利用を認められている範囲でお使いください。
+- 再接続の回数制限がないことと、自動操作が許されていることは別です。自動操作や画面を経由しない接続方法の扱いが不明な場合は、提供者に確認できるまで通常の接続方法をお使いください。
+- 利用時間・回数の上限、利用停止、本人確認、会員登録、アンケートなどの必要な手続きを回避する目的では使わないでください。本ツールは利用時間や回数を数えません。店頭の案内も確認してください（たとえばドトールの[案内](https://www.doutor.co.jp/dcs/service/images/doutor_free_wi-fi.pdf)は、日本語では「60分経過後は再認証で接続可能」、英語では「60min three times per day」と書かれています）。
+- 店舗や提供者から中止を求められた場合は、使用を中止してください。Wi‑Fi に再接続できても、滞在時間などの店舗のルールは別に適用されます。
 
-### About automatic acceptance
+### 同意の自動送信について
 
-Please accept the terms yourself on the login page the first time. macOS keeps a Wi‑Fi with a login page unusable until you accept, and the tool never sends an acceptance on a network it has not recorded. So when a Wi2 network works (or the connection comes back after the tool saw the login page), the tool infers that you accepted and records that network. On USEN, it records the network only after confirming in the system log that you accepted on the login page (see [About USEN](#about-usen)). At later time-outs it does not show the terms page; it sends the acceptance directly to the authentication API (the same request as the login page's "accept" button). Notices shown on the login page are not displayed either. Please use the tool only if you understand this and want automatic re-acceptance.
+初回は、接続画面で規約を確認し、ご自身で同意してください。macOS は認証画面つきの Wi‑Fi を同意するまで使わせず、本ツールも記録していない接続先には同意を送りません。そのため本ツールは、Wi2 の Wi‑Fi で通信できていれば（または、認証画面を見たあとに通信が戻れば）利用者が同意したと推定し、その接続先を記録します。USEN では、接続画面で同意したことをシステムログで確かめてから記録します（[USEN について](#usen-について)）。以後の時間切れでは、規約画面を表示せずに、認証 API へ同意を示す情報（接続画面の「同意する」と同じ内容）を再送します。接続画面に出るお知らせも表示されません。この動作を理解し、自動の再同意を希望する場合にお使いください。
 
-The tool does not verify your act of accepting, and it does not detect changes to the terms. Because it skips the terms page, it cannot see a notice of changes shown there. On USEN, all it checks is that an acceptance happened on a login page (the system log does not say on which network) and that the terms text on the page has not changed. Network identification is also limited, so it cannot guarantee a manual first acceptance at every shop (at another shop of the same brand, it may send the acceptance without one). If you learn that the terms have changed or new conditions apply, stop the tool and do not resume automatic reconnection until you have reviewed them.
+本ツールは、本人の同意操作そのものや規約の変更を検証しません。規約画面を表示しないので、画面に変更のお知らせが出ても気づけません。USEN で確かめるのは、接続画面で同意があったこと（システムログには、どの網での同意かまでは出ません）と、画面の規約の文面が変わっていないことだけです。接続先の識別に限界があり、店舗ごとの初回同意を保証するものではありません（同じブランドの別の店では、初回の同意なしに自動で送ることがあります）。規約の変更や新しい条件の提示を知った場合は、本ツールを停止し、内容を確認するまで自動再接続を再開しないでください。
 
-### When to stop it
+### 利用を停止する場合
 
-The tool cannot tell a refusal due to a usage cap or suspension from a temporary network problem. If the auth server refuses the acceptance (on USEN, if the device responds) three times in a row on the same network and the connection does not come back, the tool stops re-accepting on that network and tells you in a dialog (accept on the login page yourself to resume). On timeouts and server errors it does not stop; it keeps retrying with a growing interval (up to 30 minutes). If a cap or suspension is shown, or failures continue, stop automatic reconnection and check the normal login page.
+本ツールは、利用上限や利用停止による拒否と、一時的な通信障害を区別できません。同じ接続先で認証サーバーが3回続けて同意を受け付けず（USEN では、機器が応答したのに）、接続も戻らなかったときは、その接続先での自動の再同意を止めてダイアログでお知らせします（接続画面でご自身で同意し直すと再開します）。タイムアウトやサーバーエラーでは止めず、間隔を延ばしながら（最大30分）再試行を続けます。上限到達や利用停止が表示された場合や、失敗が続く場合は、自動再接続を停止して通常の接続画面を確認してください。
 
-Run `./install.sh uninstall` in the repository directory to remove the background job and the list of recorded networks.
+リポジトリのディレクトリで `./install.sh uninstall` を実行すると、常駐処理と記録した接続先を削除できます。
 
-The license of this tool does not grant any right to use a Wi‑Fi service, nor permission for any action that violates the provider's terms.
+本ツールのライセンスは、Wi‑Fi サービスを利用する権利や、提供者の規約に反する操作の許可を与えるものではありません。
 
-## Caveats
+## 使うときの注意
 
-### Each time-out briefly interrupts your connection
+### 時間切れのたびに、通信が少し止まります
 
-At each time-out (at Doutor, about 60 minutes after you accept or the tool re-authenticates), your connection is down until re-authentication completes: up to 10 seconds for the tool to notice, plus a few seconds after it sends the acceptance, so expect at most a dozen or so seconds (latest measurement: about 6 seconds at Gusto).
+時間切れ（ドトールでは、同意または再認証から約60分ごと）になると、再認証が済むまで通信が止まります。気づくまでに最大10秒、同意を送ってから通信が戻るまでに数秒かかるので、止まるのは長くても十数秒が目安です（最新の実測: ガストで約6秒）。
 
-The Wi‑Fi stays connected and your IP address does not change. Many apps carry on once the connection is back, but the effect of the gap varies by app. For example:
+Wi‑Fi は切れず、IP アドレスも変わりません。多くのアプリは通信が戻れば自動で続きますが、止まっている間の影響はアプリによって異なります。たとえば次のようなことがあります。
 
-- Video calls and online meetings: video or audio may freeze or show "reconnecting". You may be dropped from the call
-- Screen sharing and live streaming: what others see stops. A stream may end
-- Large uploads and downloads: may fail (apps that cannot resume start over)
-- SSH, remote desktop, online games: the session may disconnect
+- ビデオ通話・オンライン会議: 映像や音声が固まる、「再接続中」になる、退出扱いになる
+- 画面共有・ライブ配信: 相手に届く画面や配信が止まる、配信が切れる
+- 大きなファイルのアップロード・ダウンロード: 失敗する（途中から再開できないアプリでは、最初からやり直しになる）
+- SSH・リモートデスクトップ・オンラインゲーム: 接続が切れる
 
-Before an important call, stream, or presentation, please check the next time-out in the menu bar or with `./install.sh status` and plan around it, or use another connection such as tethering. The tool re-authenticates only after a time-out; it does not renew ahead of time.
+大事な通話・配信・発表の前は、メニューバーか `./install.sh status` で次の時間切れの目安を確かめて予定を組むか、テザリングなど別の回線をお使いください。本ツールは時間切れを見つけてから再認証するため、先回りして認証し直すことはしません。
 
-### Dialogs appear only when you are offline
+### ダイアログが出るのは、つながっていないときだけです
 
-A successful reconnection shows no dialog (the menu bar icon shows ✓, and it is logged; see `./install.sh status`), so the tool does not interrupt your screen every hour. A dialog appears only in these cases, all of them while you have no internet connection:
+自動で再接続できたときはダイアログを出しません（メニューバーのアイコンに ✓ が付き、ログにも記録します。`./install.sh status` で確認できます）。1時間ごとに画面に割り込まないためです。ダイアログが出るのは次の場合だけで、どれもインターネットにつながっていないときです。
 
-- You need to accept the terms yourself the first time
-- Automatic reconnection failed (once while failures continue)
-- The login was refused repeatedly and automatic re-acceptance was stopped
-- The USEN terms text changed and automatic re-acceptance was stopped
+- 最初の1回の同意が必要なとき
+- 自動で再接続できなかったとき（失敗が続く間に1回）
+- 認証が続けて拒否され、自動の再同意を止めたとき
+- USEN の規約の文面が変わり、自動の再同意を止めたとき
 
-Dialogs appear in the middle of the screen and close by themselves after 2 minutes. macOS does not show notifications from background jobs, so the usual top-right notifications are not available. Because they are not notifications, Focus modes (such as Do Not Disturb) do not hold them back, and they show up in screen sharing and screen recordings.
+ダイアログは画面の中央に出て、2分で自動的に閉じます。macOS は常駐処理からの通知を表示しないため、画面右上の通知は使えません。通知ではないので、集中モード（おやすみモードなど）でも表示され、画面共有や画面収録にも写ります。
 
-### When it cannot reconnect for you
+### 自動では戻せない場面
 
-- Rejoining the Wi‑Fi after a time-out (waking from sleep, losing the signal, turning Wi‑Fi off and on): macOS opens its login window and keeps other apps off that Wi‑Fi until you accept, so the tool cannot help. Please accept in the login window yourself. It reconnects automatically again from the next time-out (this acceptance is not logged, so the next time-out estimate in the menu bar and `./install.sh status` is not shown until the next automatic reconnection)
-- On USEN, when macOS opens its login window first: the tool can no longer send anything. Please accept in the login window yourself (see [About USEN](#about-usen))
-- While the Mac sleeps: the tool does not run. If the session has timed out when the Mac wakes and the Wi‑Fi is still connected, it re-authenticates within about 10 seconds
-- When a daily usage cap is reached (e.g. Renoir): re-authentication is refused and the connection does not come back
-- VPN / iCloud Private Relay can prevent the tool from detecting the login page
+- 時間切れのあとに Wi‑Fi につなぎ直したとき（スリープからの復帰、電波の途切れ、Wi‑Fi のオフ・オンなど）: macOS が接続画面を開き、同意するまでその Wi‑Fi をほかのアプリに使わせないため、本ツールは何もできません。接続画面でご自身で同意してください。次の時間切れからは、また自動で戻ります（この同意はログに残らないので、次に自動で再接続するまで、メニューバーと `./install.sh status` に次の時間切れの目安は出ません）
+- USEN で macOS が先に接続画面を開いたとき: 以後は本ツールから送れません。接続画面でご自身で同意してください（[USEN について](#usen-について)）
+- スリープ中: 本ツールは動きません。復帰したときにすでに時間切れで、Wi‑Fi がつながったままなら、約10秒以内に再認証します
+- 1日の利用時間の上限に達したとき（ルノアールなど）: 再認証は受け付けられず、通信は戻りません
+- VPN・iCloud プライベートリレーの使用中: 認証画面に戻されたことを正しく判定できないことがあります
 
-### Other notes
+### そのほか
 
-- Free Wi‑Fi is unencrypted: this tool only reconnects; please protect your traffic with HTTPS or a VPN.
-- Terms of use: the tool has no way to lift server-side time or usage limits, and it does not spoof MAC addresses or open multiple sessions. For how it re-sends the acceptance without showing the terms page, please read [Before you use it](#before-you-use-it).
-- Unofficial and not affiliated with any of the companies above. It may break if a portal changes. How it relates to the terms and the law is reviewed in [DESIGN.md](DESIGN.md) §4 (Japanese).
+- 通信の暗号化: 無料 Wi‑Fi の通信は暗号化されていません。本ツールはつなぎ直すだけなので、大事な通信は HTTPS や VPN で守ってください
+- 利用規約: サーバー側の利用時間・回数の制限を解除する機能はなく、MAC アドレスの偽装や多重接続もしません。規約画面を表示せずに同意を再送する点については、「[利用前に確認してください](#利用前に確認してください)」をお読みください
+- 非公式のツールで、上記の各社とは関係ありません。各社の仕様が変わると動かなくなることがあります。規約・法令との関係の検討は [DESIGN.md](DESIGN.md) の §4 にあります
 
-## Uninstall
+## 削除
 
 ```sh
 ./install.sh uninstall
 ```
 
-This also removes the menu bar icon, the list of networks you accepted, and the USEN networks being watched. The log at `~/Library/Logs/cafe-wifi-okawari.log` is kept; delete it by hand if you no longer need it.
+メニューバーのアイコンと、同意した接続先と、見張っている USEN の網の記録も削除されます。ログ（`~/Library/Logs/cafe-wifi-okawari.log`）は残るので、不要なら手動で削除してください。
 
-## Troubleshooting
+## 困ったとき
 
-To check that it is running (what it shows is described in [Check that it is working](#check-that-it-is-working); it sends nothing over the network, and exits with 1 if it is not registered):
+動作の確認（表示の見方は「[動いているか確かめる](#動いているか確かめる)」にあります。通信はしません。登録されていなければ終了コード 1 で終わります）:
 
 ```sh
 ./install.sh status
 ```
 
-The log is written only when something happens:
+ログは、何かが起きたときだけ記録されます:
 
 ```sh
 tail ~/Library/Logs/cafe-wifi-okawari.log
 ```
 
-| Log line | Meaning |
+| ログ | 意味 |
 |---|---|
-| `consent recorded net=… (online)` | The Wi2 network worked although the tool had sent nothing, so it recorded that you accepted on the login page. It re-accepts automatically from the next time-out |
-| `consent recorded net=…` | You accepted after the tool had seen the login page; recorded as above |
-| `consent pending net=…` | The tool saw the login page on a network it has not recorded, and is waiting for you to accept yourself |
-| `captive login seen net=…` | Within 5 minutes of joining, the system log showed that you accepted on the login page. The tool watches this network for 24 hours and, if it is a USEN network, sends the acceptance from the first time-out |
-| `consent recorded net=… usen (captive login)` | The watched network turned out to be USEN (USPOT-02), so your acceptance at the start was recorded. The tool then sends the acceptance |
-| `consent recorded net=… usen` | On a USEN network waiting for your acceptance, the system log showed that you accepted on the login page, so it was recorded |
-| `terms changed net=… usen` | The USEN terms text differed from before, so the tool sent nothing and stopped re-accepting automatically. You get a dialog. Read the terms on the login page and accept yourself to resume |
-| `re-authenticated api=ok probe=ok net=… t=Ns` | Reconnected automatically (the connection came back N seconds after the tool started sending the acceptance) |
-| `network changed net=…` | The Mac switched to another network (e.g. tethering) during a re-authentication or a brand check. That attempt counts as neither a success nor a failure, and nothing is recorded as accepted |
-| `login failed xN api=ng probe=ok` | The tool's attempt failed, but the connection came back another way (e.g. the macOS login window) |
-| `login failed xN api=… probe=ng` | Could not reconnect. You get a dialog. This also happens when a daily cap (e.g. Renoir) is reached |
-| `auto stopped net=… rejected x3` | The auth server refused the acceptance three times in a row, so automatic re-acceptance on this network was stopped (possibly a usage cap, a suspension, or changed conditions). You get a dialog. Check the login page; accepting yourself resumes it |
-| `redirect failed xN curl=… http=…` | Could not reach the auth server (timeout or outage). No dialog |
-| `redirect failed xN http=… to=…` / `no session_id` | Unexpected response from the auth server (the portal may have changed). You get a dialog on a recorded network |
-| `portal unknown xN` | A Wi2 or recorded network showed a login page that is not Wi2's, or a USEN-style redirect led to a page that is not USPOT-02. The tool sends nothing |
-| `portal check failed xN` | The tool could not check the USEN page (network error or a response other than 200). It sends nothing |
-| `portal mismatch xN mac=… ip=…` | The login page was for a different device (MAC or IP address not this Mac's), so the tool sent nothing |
-| `not free wi-fi xN` | A Wi2 network that is not a free "accept the terms" Wi‑Fi. The tool does nothing there |
-| `probe failed xN net=… curl=… http=…` | On a Wi2, recorded, or pending network, the connection state could not be checked (non-zero `curl` means a network error; `http` is an unexpected response). The tool sends nothing |
+| `consent recorded net=… (online)` | 本ツールが何も送っていないのに Wi2 の網で通信できたため、ご自身で同意した接続先として記録しました。次の時間切れからは自動で再認証します |
+| `consent recorded net=…` | 認証画面を見たあとにご自身で同意されたので、上と同じく記録しました |
+| `consent pending net=…` | 記録していない接続先で認証画面を見ました。ご自身で同意されるのを待っています |
+| `captive login seen net=…` | つないでから5分以内に、接続画面での同意をシステムログで確かめました。この網を24時間見張り、USEN の網なら最初の時間切れから同意を送ります |
+| `consent recorded net=… usen (captive login)` | 見張っていた網が USEN（USPOT-02）だと確かめたので、入店時の同意を記録しました。続けて同意を送ります |
+| `consent recorded net=… usen` | 同意待ちの USEN の網で、接続画面での同意をシステムログで確かめたので記録しました |
+| `terms changed net=… usen` | USEN の規約の文面が前と違ったので、送らずに自動の再同意を止めました。ダイアログが出ます。接続画面で規約を読み、ご自身で同意し直すと再開します |
+| `re-authenticated api=ok probe=ok net=… t=Ns` | 自動で再認証しました（同意を送り始めてから N 秒で通信が戻りました） |
+| `network changed net=…` | 再認証やブランドの確認の途中で、別の回線（テザリングなど）に切り替わりました。その回は成功とも失敗とも数えず、同意済みとしても記録しません |
+| `login failed xN api=ng probe=ok` | 本ツールの認証は失敗しましたが、別の経路（macOS の接続画面など）で通信は戻りました |
+| `login failed xN api=… probe=ng` | 再認証できず、通信も戻っていません。ダイアログが出ます。1日の利用時間の上限（ルノアールなど）に達したときもこうなります |
+| `auto stopped net=… rejected x3` | 認証サーバーが3回続けて同意を受け付けなかったため、この接続先での自動の再同意を止めました（利用上限・利用停止・条件の変更などの可能性があります）。ダイアログが出ます。接続画面を確認し、ご自身で同意し直すと再開します |
+| `redirect failed xN curl=… http=…` | 認証サーバーに届きませんでした（タイムアウト・障害）。ダイアログは出ません |
+| `redirect failed xN http=… to=…` / `no session_id` | 認証サーバーの応答が想定と違いました（仕様変更の可能性があります）。記録済みの接続先ではダイアログが出ます |
+| `portal unknown xN` | Wi2 の網か記録済みの接続先で Wi2 以外の認証画面が出たか、USEN の形の誘導先の画面が USPOT-02 のものではありませんでした。何も送りません |
+| `portal check failed xN` | USEN の画面を確かめられませんでした（通信の失敗か、200 以外の応答）。何も送りません |
+| `portal mismatch xN mac=… ip=…` | この Mac 以外の端末（MAC や IP アドレスが違う）向けの認証画面だったため、何も送りません |
+| `not free wi-fi xN` | 「規約に同意するだけ」の無料 Wi‑Fi ではない Wi2 の網です。何もしません |
+| `probe failed xN net=… curl=… http=…` | Wi2 の網・記録済み・同意待ちの接続先で、接続の状態を確かめられませんでした（`curl` が 0 以外なら通信失敗、`http` は想定外の応答）。何も送りません |
 
-On repeated failures, the retry interval backs off from 30 seconds up to 30 minutes. Every failure is logged (failed status checks only on the 1st, 2nd, 4th, 8th…), and you get a single dialog (plus one more if it stops after repeated refusals). Moving to another shop resets the backoff.
+失敗が続くと、試す間隔を 30秒 → 60秒 → … → 最大30分 と広げます。失敗は毎回ログに記録します（接続の状態を確かめられない失敗だけは 1・2・4・8… 回目）。ダイアログは失敗が続く間に1回だけです（拒否が続いて自動の再同意を止めるときは、もう1回出ます）。別のお店に移ると、前のお店での待ち時間を引き継がずにすぐ試します。
 
-## Development
+## 開発
 
 ```sh
-zsh test/run.sh   # branch tests with mocked curl, launchctl, etc. (no real network access)
+zsh test/run.sh   # 模擬の curl などで分岐を確かめる（実際の網にはつながない）
 ```
 
-Design notes, security model, and verification status: [DESIGN.md](DESIGN.md) (Japanese).
+設計・安全性・検証状況は [DESIGN.md](DESIGN.md) にあります。
 
-## License
+## ライセンス
 
 [MIT](LICENSE)

@@ -487,7 +487,7 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 ./install.sh uninstall   # 停止・削除（同意の記録も消す。ログは残す）
 ```
 
-スクリプトは `~/.local/bin` へ複製するので、導入後にリポジトリを移動・削除しても動く。利用者向けの説明は README.md（英語）と README.ja.md（日本語）。ダイアログは macOS の優先言語（`defaults read -g AppleLanguages` の先頭）が日本語なら日本語、それ以外は英語。
+スクリプトは `~/.local/bin` へ複製するので、導入後にリポジトリを移動・削除しても動く。利用者向けの説明は README.md（日本語）と README.en.md（英語）。ダイアログは macOS の優先言語（`defaults read -g AppleLanguages` の先頭）が日本語なら日本語、それ以外は英語。
 
 ## 7. 検証
 

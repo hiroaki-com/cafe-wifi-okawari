@@ -28,7 +28,7 @@ swift assets/icon/prepare.swift
 
 ## 組み込み
 
-メニューバーのアイコンとして使う（DESIGN.md §3.2）。README.md・README.ja.md の見出しには `icon.png` を、ダークモードでは `<picture>` で `icon-white.png` を表示する。`menuBarTemplate.png`・`menuBarTemplate@2x.png` を
+メニューバーのアイコンとして使う（DESIGN.md §3.2）。README.md・README.en.md の見出しには `icon.png` を、ダークモードでは `<picture>` で `icon-white.png` を表示する。`menuBarTemplate.png`・`menuBarTemplate@2x.png` を
 `install.sh` が `~/.local/bin/cafe-wifi-okawari-menubar.png`・`cafe-wifi-okawari-menubar@2x.png` へコピーし、
 `menubar.js` が1x・2xを同じ18 × 18 ptのNSImageの表現として読み込み、`template = true` を指定する。
 ファイル名だけでのテンプレート判定には依存しない。状態で画像は替えず、停止中は薄く表示し、印（! … ✓）は右に付く。
