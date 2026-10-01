@@ -119,7 +119,7 @@ Click it to see whether automatic reconnection is on for this Wi‑Fi, the estim
 ./install.sh status
 ```
 
-You will see something like this. "Menu bar" tells whether the menu bar icon is running (`running`, `not running`, or `not installed`). "Current network" tells whether the network you are on now is one you accepted (the tool identifies a network by its gateway's MAC address). "Last auth" is when your own acceptance was recorded or the tool last re-accepted, on any network. "Next time-out" is an estimate from the last authentication on the current network, shown under the same conditions as in the menu bar. While the tool is watching a USEN network, "Current network" says so:
+You will see something like this:
 
 ```text
 Service          loaded (LaunchAgent local.cafe-wifi-okawari)
@@ -136,6 +136,15 @@ Log              /Users/you/Library/Logs/cafe-wifi-okawari.log (1 line)
 Recent log:
   2026-10-01 10:05:12 consent recorded net=… doutor (online)
 ```
+
+The main fields mean:
+
+| Field | Meaning |
+|---|---|
+| `Menu bar` | Whether the menu bar icon is running (`running`, `not running`, or `not installed`) |
+| `Current network` | Whether the network you are on now is one you accepted. The tool identifies a network by its gateway's MAC address. While the tool is watching a USEN network, it says so |
+| `Last auth` | When your own acceptance was recorded or the tool last re-accepted, on any network |
+| `Next time-out` | An estimate from the last authentication on the current network, shown under the same conditions as in the menu bar |
 
 What each log line means is listed in [Troubleshooting](#troubleshooting).
 

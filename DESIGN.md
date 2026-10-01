@@ -17,7 +17,7 @@
 
 ### Wi2 の認証 API と実測した応答
 
-同意ページの `login-min.js` が呼ぶ API は `POST https://service.wi2.ne.jp/wi2auth/xhr/login`、`Content-Type: application/json`、本文 `{"login_method":"onetap","login_params":{"agree":"1"}}`。応答は `{"result":true,"licensed":null,"message":"AUTHENTICATED"}`。
+同意ページの `login-min.js` は、`POST https://service.wi2.ne.jp/wi2auth/xhr/login` に `Content-Type: application/json` で本文 `{"login_method":"onetap","login_params":{"agree":"1"}}` を送る。応答は `{"result":true,"licensed":null,"message":"AUTHENTICATED"}`。
 
 | 状態 | 要求 | 応答 |
 |---|---|---|
@@ -29,13 +29,13 @@
 
 `mac`・`ip` は Wi2 が見ているこの Mac の値（ログには残さない）。
 
-現地で分かった制約:
+現地では次の制約が分かった。
 
-- **接続直後は見えない**: macOS は一度つないだことのある認証画面つきの網では、接続画面（Captive Network Assistant）で同意するまでその網を他のアプリに使わせない（`interface rank Never`）。既定経路も DNS もなく、本ツールからは無接続に見える。このため、入店時の同意は「捕捉 → 回復」では記録できない。同意の直後に `resolv.conf` が書き換わる
+- **接続直後は見えない**: macOS は一度つないだことのある認証画面つきの網では、接続画面（Captive Network Assistant）で同意するまでその網を他のアプリに使わせない（`interface rank Never`）。既定経路も DNS もなく、本ツールからは無接続に見える。このため、入店時の同意は「捕捉 → 回復」では記録できない。同意すると、その直後に `resolv.conf` が書き換わる
 - **時間切れのあとは見える**: macOS は網を使わせたままにし、Wi2 では接続画面も開かない
 - **Wi2 は時間切れで Wi‑Fi を切らない**（観測した切断は利用者の操作だった）。時間切れは同意から約60分
 
-現地試験の結果（版は試した時点のコミット）:
+現地試験の結果は次のとおり（版は試した時点のコミット）。
 
 | 版 | 結果 |
 |---|---|
@@ -64,7 +64,7 @@
 
 サンマルクカフェ・サイゼリヤ・ケンタッキー・デニーズは、公式の資料に方式の記載がないので載せない。
 
-出典:
+出典は次のとおり。
 
 - ドトール: [店頭の案内 PDF](https://www.doutor.co.jp/dcs/service/images/doutor_free_wi-fi.pdf)（日本語は「60分経過後は再認証で接続可能」、英語は「60min three times per day」）
 - スターバックス: [利用方法](https://starbucks.wi2.co.jp/pc/menu2_jp.html)、[2016-10-26 のプレスリリース](https://www.starbucks.co.jp/press_release/pr2017-1936.php)（「1時間（繰り返しご利用いただけます）」）。会員向けの `espresso_STARBUCKS` は対象外
@@ -87,7 +87,7 @@
 | 項目 | 内容 |
 |---|---|
 | 網の目印 | ない。DHCP のドメイン名は `lan`（家庭のルーターにもある）で、ゲートウェイの MAC は VRRP の共通 MAC ではない |
-| 捕捉中の captive.apple.com | 本ツールと同じ curl には `302`。Location は `http://<機器のプライベート IP>:<ポート>/captive/?url=captive.apple.com/hotspot-detect.html&stamac=<端末の MAC>`。macOS の問い合わせには 200（HTML）を返す（User-Agent で変えていると見られる） |
+| 捕捉中の captive.apple.com | 本ツールと同じ curl の要求には `302` を返す。Location は `http://<機器のプライベート IP>:<ポート>/captive/?url=captive.apple.com/hotspot-detect.html&stamac=<端末の MAC>`。macOS の問い合わせには 200（HTML）を返す（User-Agent で変えていると見られる） |
 | 機器の位置 | 端末とは別のサブネットで、既定のゲートウェイ経由で届いた（`route -n get <機器>` のインターフェースは既定経路と同じ） |
 | `stamac` | macOS のプライベート Wi‑Fi アドレス。あとで読んだ `ifconfig en0` の ether、DHCP の `chaddr`（`ipconfig getpacket en0`・`getsummary`）と一致した。捕捉中も、本ツールの照合（`ifconfig` の ether と比べる）を通った。`networksetup -getmacaddress` のハードウェア MAC とは違う。`getsummary` の行は `chaddr = <MAC>` の形 |
 | 時間切れのときの macOS | 捕捉から約12秒で気づき、接続画面を開いて既定経路を外した（Wi2 では起きない）。誕生年・性別を空のまま手動で同意すると通信が戻り、ゲートウェイと IP は変わらなかった。本ツールが先に送ったときは接続画面を開かなかった（下の「macOS との競争」）。時間切れは同意から約60分（2回） |
@@ -121,7 +121,7 @@
 | 同意の記録 | Wi2 と同じ `consented` に「MAC usen <ハッシュ>」。拒否3回の停止・同意待ち・知らせ方の仕組みを共用する | 仕組みを増やさない |
 | `lang` | macOS の優先言語が日本語なら `ja`、それ以外は `en` | 画面もブラウザの言語で決める |
 
-**macOS との競争**: 捕捉から約12秒で macOS が既定経路を外すと、本ツールは何もしない（§3 の 0）。現地の1回では、本ツールが画面と JS を確かめて同意を送り、約1秒で通信が戻った。macOS はその約2秒後に気づいたが、確かめの問い合わせが通ったので接続画面を開かなかった。起動は10秒ごと（気づくまで平均5秒・最大10秒）なので、捕捉の直後に起動を逃すと差は1〜2秒と見込まれ、負けることもありうる。負ければ、利用者が開いた接続画面で同意する（何も送らない側に倒れる）。途中で経路が外れても、送らないか、成功とも拒否とも数えない（§3.1 の 5'・6'）。
+**macOS との競争**: 捕捉から約12秒で macOS が既定経路を外すと、本ツールは何もしない（§3 の 0）。現地の1回では、本ツールが画面と JS を確かめて同意を送り、約1秒で通信が戻った。macOS はその約2秒後に気づいたが、確かめの問い合わせが通ったので接続画面を開かなかった。起動は10秒ごと（気づくまで平均5秒・最大10秒）なので、捕捉の直後に起動を逃すと差は1〜2秒と見込まれ、負けることもありうる。負ければ、利用者が開いた接続画面で同意する（何も送らない側に倒れる）。途中で経路が外れたら、送る前なら送らず、送ったあとなら成功とも拒否とも数えない（§3.1 の 5'・6'）。
 
 **制約**: システムログの文言が変わると網を見つけられず、何もしない。POST の応答の意味（受け付けたか）は分からない（`GET /capi/welcome/info` には `status_code` があるが、POST が同じ形かは不明）。そのため成功は疎通の回復で判断し、「応答したが通信が戻らない」も拒否に数える（§3.1 の 6'）。
 
@@ -135,7 +135,7 @@
 | [captive-portal-manager](https://github.com/AlpBora/captive-portal-manager) | LaunchAgent + Hammerspoon | Hammerspoon への依存が増える |
 | [Qiita: relu](https://qiita.com/relu/items/6356093451d1f4bf742f) | NetworkManager dispatcher + wget | **Wi2 の API はこれと同じ**。ただし Linux 専用 |
 
-**判断**: 汎用ツールは Wi2 の XHR 認証に合わないか、依存や権限が過剰。Wi2 の API 手順は既存の知見を使い、常駐は launchd に任せ、書くのはシェルスクリプトと導入スクリプト（と、メニューバーの表示の小さな2ファイル。§3.2）だけにする。
+**判断**: 汎用ツールは Wi2 の XHR 認証に合わないか、依存や権限が過剰。Wi2 の API 手順は既存の知見を使い、常駐は launchd に任せ、書くのはシェルスクリプトと導入スクリプト、それにメニューバーの表示の小さな2ファイル（§3.2）だけにする。
 
 ## 3. 構成
 
@@ -288,7 +288,7 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 - **別の網にいる間は、起動のたびに基準時刻を書き直す**（0'）。USEN の同意待ちが残っている間は、別の網で10秒ごとに1行のファイルを書く（通信はしない）
 - **same() は、GET のあとに1回（記録を書く前と POST の前を兼ねる）と、疎通の確認のあとに1回**確かめる。その間は通信しない。POST のあとに網が変わった場合、POST の前に書いた記録（見張りからの同意の記録・ハッシュ）は残し、拒否にも失敗にも数えない
 
-**curl の実行条件**: USEN の機器へは `--proto '=http'`・リダイレクト非追従・各5秒まで・`--max-filesize`（HTML 64KB、page.js 1MB）。共通の curl に `--noproxy '*'` を加える（Wi2 も一緒に変わる）。`-q` は `~/.curlrc` を読まないが、環境変数のプロキシ（`http_proxy`・`ALL_PROXY` など。`launchctl setenv` で LaunchAgent にも渡る）は読むので、平文の要求（端末の MAC を含む）がプロキシへ届き、プローブの判定も狂うため。
+**curl の実行条件**: USEN の機器へは `--proto '=http'`・リダイレクト非追従・各5秒まで・`--max-filesize`（HTML 64KB、page.js 1MB）。共通の curl に `--noproxy '*'` を加える（Wi2 も一緒に変わる）。`--noproxy` を足すのは、`-q` で `~/.curlrc` を読まなくても環境変数のプロキシ（`http_proxy`・`ALL_PROXY` など。`launchctl setenv` で LaunchAgent にも渡る）は使われ、平文の要求（端末の MAC を含む）がプロキシへ届き、プローブの判定も狂うため。
 
 ### 3.2 メニューバーの表示
 
@@ -305,7 +305,9 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | `assets/icon/menuBarTemplate.png`・`menuBarTemplate@2x.png` → `~/.local/bin/cafe-wifi-okawari-menubar.png`・`cafe-wifi-okawari-menubar@2x.png` | アイコンの画像（18 × 18 pt の 1x・2x。素材の由来と作り方は `assets/icon/README.md`）。`menubar.js` は、自分のパスの `.js` を外した名前の `.png` があればそれを（導入先）、なければ同じ場所の `assets/icon/menuBarTemplate.png` を使う（リポジトリ） |
 | `~/Library/LaunchAgents/local.cafe-wifi-okawari.menubar.plist` | `ProgramArguments=/usr/bin/osascript -l JavaScript <js>`、`RunAtLoad`、`LimitLoadToSessionType=Aqua`。`KeepAlive` は付けない（下の「止まったとき」） |
 
-**アイコン**（優先の高い順。画像は `assets/icon` のカップ1つ（Wi‑Fi に見立てた2本の湯気と、外側の線の先の矢印で「おかわり」）。テンプレート画像なので、ライト・ダーク・色付きのメニューバーに合わせて色が変わる）
+**アイコン**（優先の高い順）
+
+画像は `assets/icon` のカップ1つで、Wi‑Fi に見立てた2本の湯気と、外側の線の先の矢印で「おかわり」を表す。テンプレート画像なので、ライト・ダーク・色付きのメニューバーに合わせて色が変わる。
 
 | 状態 | 条件 | 表示 |
 |---|---|---|
@@ -315,7 +317,7 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | 再認証直後 | ログの最後の `re-authenticated` から10分以内 | カップ＋「✓」 |
 | 動作中 | それ以外 | カップ |
 
-注意の条件（どちらも本体の記録ファイルを読むだけで、ログは解析しない）:
+注意の条件は次の2つ。どちらも本体の記録ファイルを読むだけで、ログは解析しない。
 
 - 状態ファイル（`~/Library/Caches/cafe-wifi-okawari`）があり、「知らせたか」が 1 で、接続先が今の接続先と同じ。再認証に失敗し続けていて、ダイアログで知らせたあと。成功・認証済みになれば本体が消すので、「!」も消える
 - 同意待ち（`.pending`）の接続先が今の接続先と同じで、`notified` がある。初めての網で「最初の1回は自分で同意して」と知らせたあとと、拒否3回で自動を止めたあと（`auto stopped`）。利用者が同意して記録されれば消える
@@ -324,7 +326,7 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 
 **接続画面待ち**: 既定経路がないと今の接続先が求まらず、注意の2条件はどちらも成り立たない。ところが macOS が接続画面での同意を待つ間はまさに既定経路がない（§1 の「接続直後は見えない」、§1.2 の USEN の時間切れ）。これを「別の網へ移った」や「未接続」と同じに扱うと、利用者の同意が要る間にアイコンが「動作中」に戻るので、別の状態にする。
 
-- 条件: 既定経路がなく、次のどちらかが成り立つ。Wi‑Fi のインターフェース（`networksetup -listallhardwareports` の Wi‑Fi の行のデバイス）に IPv4 がある（`ipconfig getifaddr`）/ `scutil` の `State:/Network/Interface/<Wi‑Fi>/CaptiveNetwork` の `WaitingOnUI` が `TRUE`
+- 条件: 既定経路がなく、Wi‑Fi のインターフェース（`networksetup -listallhardwareports` の Wi‑Fi の行のデバイス）に IPv4 がある（`ipconfig getifaddr`）か、`scutil` の `State:/Network/Interface/<Wi‑Fi>/CaptiveNetwork` の `WaitingOnUI` が `TRUE`
 - どちらも満たさなければ「未接続」（アイコンは動作中）。Wi‑Fi を切った・どこにもつないでいないとき
 - この間はどの網か分からないので、本ツールの対象の網かどうかは言わない（ホテルなど対象外の網でも出る）。メニューは「macOS が接続画面での同意を待っている」ことと、画面が出ていなければ `http://captive.apple.com` を開くという案内だけ
 - 捕捉中に上の2つの値がどうなるかは未確認（`scutil` は認証済みの `Online`・`FALSE` しか見ていない。§1.2）。現地で確かめて、片方で足りれば条件を絞る（§7 の現地の項目 7）
@@ -374,7 +376,7 @@ Hide from Menu Bar
 - 画面共有や録画に写るので、端末とゲートウェイの MAC・IP は出さない（直近の出来事は時刻・種類・ブランド・秒数だけ）。SSID・店舗名は画面共有を理由に除かない（SSID は macOS が位置情報の許可なしには返さないので、今は出していない）
 - ログは末尾の 16KB だけ読む（ローテーションしないので、全体を読むと年単位で重くなる）
 - 次の時間切れの目安は、次をすべて満たすログの最後の行から60分とする。1つでも欠ければ行を出さない（間違った時刻を出すより、出さない側に倒す）
-  - 種類が `re-authenticated` か `consent recorded`。ただし `consent recorded … usen (captive login)` は除く。これは最初の時間切れで、過去の接続画面での同意を記録する行で、同意を送る**前**に書く（本体の USEN の分岐）。送信に失敗しても残るので、通信が戻った時刻にならない。成功すれば続けて `re-authenticated` が出るので、そちらを使う
+  - 種類が `re-authenticated` か `consent recorded`。ただし `consent recorded … usen (captive login)` は除く。この行は、最初の時間切れのときに過去の接続画面での同意を記録するもので、同意を送る**前**に書く（本体の USEN の分岐）。送信に失敗しても残るので、通信が戻った時刻にならない。成功すれば続けて `re-authenticated` が出るので、そちらを使う
   - `net=` が今の接続先。店 A で再認証したあと店 B へ移ったときに、A の時刻から B の時間切れを出さないため
   - 行の時刻から30秒より後に `resolv.conf` が書き換わっていない。本体は、同意済みの網で利用者が自分で同意し直してもログを書かない（記録済みなら何もしない）ので、1時間以内に同じ店へ戻って同意し直すと、今の接続先の古い行しか残らない。`resolv.conf` はつなぎ直したときと接続画面で同意したときに書き換わる（§7）ので、行より後に書き換わっていれば、その行は今の接続の認証ではない。30秒は、再認証に続いて書き換わる場合の幅。リースの更新では書き換わらない（Wi2 で実測）。再認証で書き換わるかは未確認で、書き換わるなら目安が途中で消える（現地の項目 7）
   - 行の時刻から60分以内
@@ -438,7 +440,7 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 - **システムログの読み取り**: 読むのは captive のサブシステムの `websheet: success` の行だけ。行の中身は保存もログへの書き込みもしない
 - **同意の証拠を今の接続に結び付ける**: ログの行は網を示さないので時刻で結び付ける。入店時（b'）は今のリース開始より後、同意待ちから（a'）は基準時刻と今のリース開始のどちらよりも後の行だけを数え、記録の直前に same() を確かめる。基準時刻は別の網を見るたびに進むので、同意待ちのあと別の網で同意して戻っても数えない。残る限界: 同じ時間帯に別のインターフェース（有線 LAN など）でも接続画面で同意していれば取り違えうる
 - **見張りの根拠**: 「その網の接続画面で利用者が同意した」こと。どの画面かは分からないので、最初の捕捉で USPOT-02 と確かめてから USEN への同意として記録する。見張りは24時間で無効にし、Wi2 の網と分かったら外す（入店時の証拠を別の日に持ち越さない）
-- **平文の Success では記録も再開もしない**: Wi2 は Success のあと TLS 検証済みのランディングを確かめるが、USEN にはその相手がない。そのため同意待ちからの記録も、停止からの再開も、利用者が接続画面を操作した証拠（`websheet: success`）を要る。第三者が Success を偽っても自動の送信は始まらない
+- **平文の Success では記録も再開もしない**: Wi2 は Success のあと TLS 検証済みのランディングを確かめるが、USEN にはその相手がない。そのため同意待ちからの記録も、停止からの再開も、利用者が接続画面を操作した証拠（`websheet: success`）が要る。第三者が Success を偽っても自動の送信は始まらない
 - **規約の変更（TOFU）**: 検知できるのは最初に記録したあとの変更だけ。(1) 記録したハッシュが入店時に読んだ文面と同じこと（入店時の画面は読めない）、(2) 最初に取得した page.js が本物であること、は保証しない。既知のハッシュをコードに持つ案は、機器の版や店ごとの差で止まりすぎるおそれがあるので採らない
 - **応答の大きさ**: 機器からの応答には上限を付ける（HTML 64KB、page.js 1MB）
 
@@ -519,7 +521,7 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 | USEN の実際の時間切れでの自動再認証 | OK（タリーズの2店舗で3回、どれも `t=1s`。見張りの網では `consent recorded … usen (captive login)` → `re-authenticated … usen`）。誕生年・性別は空のまま受け付けられた。1回目は見張りの行を手で書いた |
 | USEN の macOS との競争 | 本ツールが先（1回）。通信が戻った約2秒後に macOS が気づき、確かめの問い合わせが通ったので接続画面は出なかった（§1.2） |
 
-次の現地試験で見ること:
+今後の現地試験で見ることは次のとおり。
 
 1. スタバ・ルノアールで、入店時の `consent recorded … (online)` と、時間切れ後の `re-authenticated` が出るか。`agreement.html` へ転送されれば `redirect failed … to=…` に出る（§1.1）
 2. 10秒周期で、捕捉から通信が戻るまでの秒数（回数を重ねて平均を見る）
@@ -530,7 +532,7 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 7. メニューバー（§3.2）: macOS が接続画面を開いている間の、Wi‑Fi の IPv4（`ipconfig getifaddr`）と `WaitingOnUI` の値（接続画面待ちの条件）。再認証の前後で `resolv.conf` が書き換わるか（リースの更新では書き換わらないことを Wi2 で確かめた）（次の時間切れの目安の条件）
 8. （任意・将来の調査）USEN: 機器の応答からチェーン（タリーズ・コメダ）を見分けられるか。転送先・DHCP のドメイン名・ゲートウェイの MAC では見分けられないので、残る候補は2つ。捕捉中に取得だけする（同意は送らない）。① `/captive/` の HTML と `page.js` にチェーン名・ロゴの参照があるか ② `GET /capi/welcome/info` の JSON のうち、`sess_time`・`status_code` 以外の項目と、画面が読む `/capi/…` の一覧。見分けられれば、ログとメニューで `usen` の代わりにチェーンを出せる（時間切れごとの通信は GET 1本増える）。店名は記録しない（ログにも文書にも書かない）
 
-`test/run.sh` で確認している USEN の分岐（`run` の `posts` は `xhr/login` と `/capi/welcome` の両方を数え、USEN の項目では `uposts` で宛先も確かめる。模擬の `log show`・`ipconfig getsummary`・`route -n get <IP>`・USEN の機器を使う）:
+`test/run.sh` で確かめている USEN の分岐は次のとおり（`run` の `posts` は `xhr/login` と `/capi/welcome` の両方を数え、USEN の項目では `uposts` で宛先も確かめる。模擬の `log show`・`ipconfig getsummary`・`route -n get <IP>`・USEN の機器を使う）。
 
 | 状況 | 期待する結果 |
 |---|---|
@@ -563,7 +565,7 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 | システムログの行・誘導先の URL | ログに URL のクエリ・SSID・端末の MAC を残さない |
 | `install.sh status`: 今の接続先が見張り中（24時間以内）/ 24時間を過ぎている | 見張り中で次の時間切れに自動で同意を送りうると表示 / 未同意と同じ表示 |
 
-`test/run.sh` で確認している分岐:
+`test/run.sh` で確かめている分岐は次のとおり。
 
 | 状況 | 結果 |
 |---|---|
@@ -616,7 +618,7 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 | `install.sh`: 既定 / `--no-menubar` / そのあとの再導入 / 削除 | メニューバーの4ファイル（アイコンの 1x・2x を含む）と plist（`osascript -l JavaScript <js>`・`RunAtLoad`・`Aqua`・`KeepAlive` なし）を入れて登録 / 本体だけ更新し、メニューバーを外して消す / 戻る / 両方の登録を外し、ログ以外は残らない |
 | `install.sh status`: メニューバーが動いている / 止まっている / 入っていない | `Menu bar  running` / `not running` / `not installed` |
 
-`test/run.sh` で確認しているメニューバーの表示（`menubar.sh` の出力。模擬の `networksetup` は有線のポートを先に並べ、`ipconfig getifaddr` は Wi‑Fi の en0 だけ IPv4 を返す）:
+`test/run.sh` で確かめているメニューバーの表示は次のとおり（`menubar.sh` の出力。模擬の `networksetup` は有線のポートを先に並べ、`ipconfig getifaddr` は Wi‑Fi の en0 だけ IPv4 を返す）。
 
 | 状況 | 期待する結果 |
 |---|---|
