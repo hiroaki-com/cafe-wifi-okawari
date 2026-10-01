@@ -7,7 +7,8 @@ Wi-Fi に見立てた2本の湯気と、外側の線の先端の矢印で「お�
 | ファイル | 用途 |
 | --- | --- |
 | `source.png` | 採用した生成画像の原本（1254 × 1254 px）。加工せず保管 |
-| `icon.png` | 余白調整済みマスター（1024 × 1024 px、黒一色・透過） |
+| `icon.png` | 余白調整済みマスター（1024 × 1024 px、黒一色・透過）。README の見出しにも使う |
+| `icon-white.png` | `icon.png` の白一色版。README をダークモードで見たときに使う |
 | `menuBarTemplate.png` | メニューバー用 1x（18 × 18 px、72 dpi） |
 | `menuBarTemplate@2x.png` | メニューバー用 2x（36 × 36 px、144 dpi） |
 | `prepare.swift` | 原本から配布用PNGを再作成するmacOS標準フレームワークのスクリプト |
@@ -27,7 +28,7 @@ swift assets/icon/prepare.swift
 
 ## 組み込み
 
-メニューバーのアイコンとして使う（DESIGN.md §3.2）。`menuBarTemplate.png`・`menuBarTemplate@2x.png` を
+メニューバーのアイコンとして使う（DESIGN.md §3.2）。README.md・README.ja.md の見出しには `icon.png` を、ダークモードでは `<picture>` で `icon-white.png` を表示する。`menuBarTemplate.png`・`menuBarTemplate@2x.png` を
 `install.sh` が `~/.local/bin/cafe-wifi-okawari-menubar.png`・`cafe-wifi-okawari-menubar@2x.png` へコピーし、
 `menubar.js` が1x・2xを同じ18 × 18 ptのNSImageの表現として読み込み、`template = true` を指定する。
 ファイル名だけでのテンプレート判定には依存しない。状態で画像は替えず、停止中は薄く表示し、印（! … ✓）は右に付く。

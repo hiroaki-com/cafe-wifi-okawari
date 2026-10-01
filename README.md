@@ -1,10 +1,19 @@
-# cafe-wifi-okawari
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/icon/icon-white.png">
+    <img src="assets/icon/icon.png" width="112" alt="">
+  </picture>
+</p>
 
-[![test](https://github.com/hiroaki-com/cafe-wifi-okawari/actions/workflows/test.yml/badge.svg)](https://github.com/hiroaki-com/cafe-wifi-okawari/actions/workflows/test.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![macOS 15+](https://img.shields.io/badge/macOS-15%2B-lightgrey)
+<h1 align="center">cafe-wifi-okawari</h1>
 
-English | [日本語](README.ja.md)
+<p align="center">
+  <a href="https://github.com/hiroaki-com/cafe-wifi-okawari/actions/workflows/test.yml"><img src="https://github.com/hiroaki-com/cafe-wifi-okawari/actions/workflows/test.yml/badge.svg" alt="test"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/macOS-15%2B-lightgrey" alt="macOS 15+">
+</p>
+
+<p align="center">English | <a href="README.ja.md">日本語</a></p>
 
 Automatically re-accepts the captive portal terms when a free café Wi‑Fi in Japan sends you back to its login page after the time limit (e.g. 60 minutes). *Okawari* means "a refill" — like a coffee refill, but for Wi‑Fi.
 
@@ -31,18 +40,18 @@ Tully's Coffee (`tullys_Wi-Fi`) and Komeda's Coffee (`Komeda_Wi-Fi`) use a USEN 
 
 It has been tested only at two Tully's shops: detecting your acceptance when you join (see "When it applies" below) once, and automatic re-acceptance after a time-out three times. Komeda's Coffee has not been tested at a shop yet. To see whether it worked, check `./install.sh status` and the log ([Troubleshooting](#troubleshooting)).
 
-- **Which networks**: only networks whose login page is USEN's "USPOT-02". According to their official guides, Tully's and Komeda's Coffee use it
-- **When it applies**: only when you accept the terms yourself on the login page within 5 minutes of joining the Wi‑Fi. The tool checks the Mac's system log (`/usr/bin/log show`) for that acceptance and then watches the network for 24 hours (it only reads the log; it sends nothing). It does nothing on a network you accepted before installing the tool, or more than 5 minutes after joining. It applies from the next time you join and accept on the login page yourself
-- **At the first time-out**: on a watched network, before sending anything, it checks all of the following and sends nothing if any of them fails
+- Which networks: only networks whose login page is USEN's "USPOT-02". According to their official guides, Tully's and Komeda's Coffee use it
+- When it applies: only when you accept the terms yourself on the login page within 5 minutes of joining the Wi‑Fi. The tool checks the Mac's system log (`/usr/bin/log show`) for that acceptance and then watches the network for 24 hours (it only reads the log; it sends nothing). It does nothing on a network you accepted before installing the tool, or more than 5 minutes after joining. It applies from the next time you join and accept on the login page yourself
+- At the first time-out: on a watched network, before sending anything, it checks all of the following and sends nothing if any of them fails
   - The login page is on a device in the shop (a private IP address) that is reached through the current Wi‑Fi
   - The device MAC address in the redirect is this Mac's (the macOS private Wi‑Fi address)
   - The page and its JavaScript are USPOT-02's
 
   If all pass, it records your acceptance at the start as your acceptance of USEN's terms and sends the acceptance. It does the same at later time-outs
-- **What it sends**: the same request as the login page's "connect to the internet" button, in plain HTTP to the device in the shop, as the login page does. It includes this Mac's MAC address. Birth year and gender are sent empty (the official guide says they are optional, and the page leaves them empty by default). The tool never asks for them, does not store them, and does not use values you entered on the login page
-- **Changes to the terms**: when it first sends the acceptance, it records a hash of the terms text on the page. If the text has changed, it sends nothing, stops re-accepting automatically, and tells you in a dialog. Read the terms on the login page and accept yourself to resume
-- **When it stops**: the USEN device does not say in its response whether it accepted. So if the device responds but the connection does not come back three times in a row, the tool stops re-accepting on that network. Accept on the login page yourself to resume
-- **If it is too late**: on USEN, macOS opens its login window about 12 seconds after the time-out, and the tool can no longer send anything after that. In the one test at a shop, the tool got there first: the connection came back in about 1 second and the login window did not open. But the tool checks only every 10 seconds, so it can be too late. If so, accept in the login window yourself
+- What it sends: the same request as the login page's "connect to the internet" button, in plain HTTP to the device in the shop, as the login page does. It includes this Mac's MAC address. Birth year and gender are sent empty (the official guide says they are optional, and the page leaves them empty by default). The tool never asks for them, does not store them, and does not use values you entered on the login page
+- Changes to the terms: when it first sends the acceptance, it records a hash of the terms text on the page. If the text has changed, it sends nothing, stops re-accepting automatically, and tells you in a dialog. Read the terms on the login page and accept yourself to resume
+- When it stops: the USEN device does not say in its response whether it accepted. So if the device responds but the connection does not come back three times in a row, the tool stops re-accepting on that network. Accept on the login page yourself to resume
+- If it is too late: on USEN, macOS opens its login window about 12 seconds after the time-out, and the tool can no longer send anything after that. In the one test at a shop, the tool got there first: the connection came back in about 1 second and the login window did not open. But the tool checks only every 10 seconds, so it can be too late. If so, accept in the login window yourself
 
 ## Requirements
 
@@ -130,11 +139,11 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 
 ### Common situations
 
-- **You go to another shop**: when the login window appears after you join, accept the terms yourself, as in step 2
-- **A dialog asks you to accept the terms yourself once**: the session timed out at a shop the tool has not recorded. It sent nothing, so please accept on the login page yourself. To get the login page, reconnect to the Wi‑Fi or open `http://captive.apple.com` in a browser
-- **A dialog says it could not reconnect, or that it stopped reconnecting**: please check the login page in the same way and accept yourself if needed. The log tells you why ([Troubleshooting](#troubleshooting))
-- **You want to update**: run `git pull` in the repository directory, then `./install.sh` again
-- **You want to stop using it**: run `./install.sh uninstall` ([Uninstall](#uninstall))
+- You go to another shop: when the login window appears after you join, accept the terms yourself, as in step 2
+- A dialog asks you to accept the terms yourself once: the session timed out at a shop the tool has not recorded. It sent nothing, so please accept on the login page yourself. To get the login page, reconnect to the Wi‑Fi or open `http://captive.apple.com` in a browser
+- A dialog says it could not reconnect, or that it stopped reconnecting: please check the login page in the same way and accept yourself if needed. The log tells you why ([Troubleshooting](#troubleshooting))
+- You want to update: run `git pull` in the repository directory, then `./install.sh` again
+- You want to stop using it: run `./install.sh uninstall` ([Uninstall](#uninstall))
 
 ### How it works
 
@@ -175,10 +184,10 @@ At each time-out (at Doutor, about 60 minutes after you accept or the tool re-au
 
 The Wi‑Fi stays connected and your IP address does not change. Many apps carry on once the connection is back, but the effect of the gap varies by app. For example:
 
-- **Video calls and online meetings**: video or audio may freeze or show "reconnecting". You may be dropped from the call
-- **Screen sharing and live streaming**: what others see stops. A stream may end
-- **Large uploads and downloads**: may fail (apps that cannot resume start over)
-- **SSH, remote desktop, online games**: the session may disconnect
+- Video calls and online meetings: video or audio may freeze or show "reconnecting". You may be dropped from the call
+- Screen sharing and live streaming: what others see stops. A stream may end
+- Large uploads and downloads: may fail (apps that cannot resume start over)
+- SSH, remote desktop, online games: the session may disconnect
 
 Before an important call, stream, or presentation, please check the next time-out in the menu bar or with `./install.sh status` and plan around it, or use another connection such as tethering. The tool re-authenticates only after a time-out; it does not renew ahead of time.
 
@@ -195,16 +204,16 @@ Dialogs appear in the middle of the screen and close by themselves after 2 minut
 
 ### When it cannot reconnect for you
 
-- **Rejoining the Wi‑Fi after a time-out** (waking from sleep, losing the signal, turning Wi‑Fi off and on): macOS opens its login window and keeps other apps off that Wi‑Fi until you accept, so the tool cannot help. Please accept in the login window yourself. It reconnects automatically again from the next time-out (this acceptance is not logged, so the next time-out estimate in the menu bar and `./install.sh status` is not shown until the next automatic reconnection)
-- **On USEN, when macOS opens its login window first**: the tool can no longer send anything. Please accept in the login window yourself (see [About USEN](#about-usen))
-- **While the Mac sleeps**: the tool does not run. If the session has timed out when the Mac wakes and the Wi‑Fi is still connected, it re-authenticates within about 10 seconds
-- **When a daily usage cap is reached** (e.g. Renoir): re-authentication is refused and the connection does not come back
-- **VPN / iCloud Private Relay** can prevent the tool from detecting the login page
+- Rejoining the Wi‑Fi after a time-out (waking from sleep, losing the signal, turning Wi‑Fi off and on): macOS opens its login window and keeps other apps off that Wi‑Fi until you accept, so the tool cannot help. Please accept in the login window yourself. It reconnects automatically again from the next time-out (this acceptance is not logged, so the next time-out estimate in the menu bar and `./install.sh status` is not shown until the next automatic reconnection)
+- On USEN, when macOS opens its login window first: the tool can no longer send anything. Please accept in the login window yourself (see [About USEN](#about-usen))
+- While the Mac sleeps: the tool does not run. If the session has timed out when the Mac wakes and the Wi‑Fi is still connected, it re-authenticates within about 10 seconds
+- When a daily usage cap is reached (e.g. Renoir): re-authentication is refused and the connection does not come back
+- VPN / iCloud Private Relay can prevent the tool from detecting the login page
 
 ### Other notes
 
-- **Free Wi‑Fi is unencrypted.** This tool only reconnects; please protect your traffic with HTTPS or a VPN.
-- **Terms of use.** The tool has no way to lift server-side time or usage limits, and it does not spoof MAC addresses or open multiple sessions. For how it re-sends the acceptance without showing the terms page, please read [Before you use it](#before-you-use-it).
+- Free Wi‑Fi is unencrypted: this tool only reconnects; please protect your traffic with HTTPS or a VPN.
+- Terms of use: the tool has no way to lift server-side time or usage limits, and it does not spoof MAC addresses or open multiple sessions. For how it re-sends the acceptance without showing the terms page, please read [Before you use it](#before-you-use-it).
 - Unofficial and not affiliated with any of the companies above. It may break if a portal changes. How it relates to the terms and the law is reviewed in [DESIGN.md](DESIGN.md) §4 (Japanese).
 
 ## Uninstall

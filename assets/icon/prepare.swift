@@ -42,9 +42,10 @@ guard maxX >= minX, maxY >= minY,
     fatalError("Source has no visible silhouette")
 }
 
-for (name, size, dpi) in [("icon.png", 1024, 72),
-                           ("menuBarTemplate.png", 18, 72),
-                           ("menuBarTemplate@2x.png", 36, 144)] {
+for (name, size, dpi, white) in [("icon.png", 1024, 72, false),
+                                  ("icon-white.png", 1024, 72, true),
+                                  ("menuBarTemplate.png", 18, 72, false),
+                                  ("menuBarTemplate@2x.png", 36, 144, false)] {
     guard let output = CGContext(data: nil, width: size, height: size,
                                  bitsPerComponent: 8, bytesPerRow: size * 4,
                                  space: colorSpace, bitmapInfo: bitmapInfo) else {
@@ -57,6 +58,12 @@ for (name, size, dpi) in [("icon.png", 1024, 72),
     output.interpolationQuality = .high
     output.draw(cropped, in: CGRect(x: (CGFloat(size) - w) / 2,
                                    y: (CGFloat(size) - h) / 2, width: w, height: h))
+    if white {
+        // README on a dark background: same alpha, white instead of black.
+        output.setBlendMode(.sourceIn)
+        output.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        output.fill(CGRect(x: 0, y: 0, width: size, height: size))
+    }
     guard let image = output.makeImage(),
           let destination = CGImageDestinationCreateWithURL(
             directory.appendingPathComponent(name) as CFURL,
