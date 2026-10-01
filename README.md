@@ -20,8 +20,10 @@
 - 自分で規約に同意した Wi2 の Wi‑Fi（USEN は現地での確認が途中です。[USEN について](#usen-について)）を10秒ごとに確認し、認証画面に戻されていれば再認証します。時間切れには約10秒以内に気づき、通常はその数秒後に接続が戻ります（その間は通信が止まります。[使うときの注意](#使うときの注意)）
 - 制限時間の長さ（60分・30分など）に関係なく動きます
 - ID・パスワード・メールアドレスは使わず、保存もしません
+- 通信するのは、つながっているかの確認に使う Apple のページ（macOS 自身も使うもの）と、お店の Wi‑Fi の認証画面だけです。作者やほかのサーバーへは何も送りません
+- この Mac の MAC アドレス・IP アドレスは、ログにもメニューにも出しません
 - 状態はメニューバーのコーヒーカップのアイコンで、画面に割り込まずに見られます
-- macOS 標準の zsh・curl・launchd・JavaScript for Automation だけで動くため、追加のインストールは不要です
+- macOS 標準の zsh・curl・launchd・JavaScript for Automation だけで動くため、追加のインストールは不要です。中身は短いスクリプトなので、すべて読んで確かめられます
 
 ## 対応している Wi‑Fi
 
@@ -101,11 +103,11 @@ cd cafe-wifi-okawari
 
 | アイコン | 意味 |
 |---|---|
-| カップ | 動作中 |
-| カップ ✓ | 10分以内に自動で再接続した |
-| カップ ! | この Wi‑Fi で対応が要る（最初の1回だけ自分で同意する、または再接続に失敗したので接続画面を確かめる）。どちらかはメニューに出ます |
-| カップ … | macOS が接続画面での同意を待っている（対応している Wi‑Fi に限らず、接続画面のある網ならどこでも出ます）。接続画面が出なければ、ブラウザで `http://captive.apple.com` を開いてください |
-| 薄いカップ | 停止中（常駐処理が登録されていない）。`./install.sh` で戻ります |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-on-white.png"><img src="assets/icon/state-on.png" width="33" height="22" alt="カップ"></picture> | 動作中 |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-check-white.png"><img src="assets/icon/state-check.png" width="33" height="22" alt="カップ ✓"></picture> | 10分以内に自動で再接続した |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-warn-white.png"><img src="assets/icon/state-warn.png" width="33" height="22" alt="カップ !"></picture> | この Wi‑Fi で対応が要る（最初の1回だけ自分で同意する、または再接続に失敗したので接続画面を確かめる）。どちらかはメニューに出ます |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="カップ …"></picture> | macOS が接続画面での同意を待っている（対応している Wi‑Fi に限らず、接続画面のある網ならどこでも出ます）。接続画面が出なければ、ブラウザで `http://captive.apple.com` を開いてください |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="薄いカップ"></picture> | 停止中（常駐処理が登録されていない）。`./install.sh` で戻ります |
 
 クリックすると、この Wi‑Fi で自動再接続が有効か、次の時間切れの目安、直近の出来事3件（再接続・同意の記録・再接続の失敗・自動の停止）が出ます。メニューは英語だけです。MAC アドレス・IP アドレスは出さないので、画面共有に写っても差し支えありません。目安は、今の接続先で60分以内に認証したときだけ出し、Wi‑Fi につなぎ直したあとは出しません。お店の制限時間が60分の場合の目安です。
 

@@ -12,6 +12,8 @@ Wi-Fi に見立てた2本の湯気と、外側の線の先端の矢印で「お�
 | `menuBarTemplate.png` | メニューバー用 1x（18 × 18 px、72 dpi） |
 | `menuBarTemplate@2x.png` | メニューバー用 2x（36 × 36 px、144 dpi） |
 | `prepare.swift` | 原本から配布用PNGを再作成するmacOS標準フレームワークのスクリプト |
+| `state-*.png`・`state-*-white.png` | README の「メニューバーのアイコン」の表に載せる5状態（on・check・warn・wait・off）の見本。白版はダークモード用（2x、表示は 33 × 22 pt） |
+| `states.swift` | `menuBarTemplate@2x.png` から状態の見本を作るスクリプト。`menubar.js` と同じく印を右に付け、停止中は薄く描く |
 
 ## 最適化
 
@@ -24,11 +26,12 @@ Wi-Fi に見立てた2本の湯気と、外側の線の先端の矢印で「お�
 
 ```sh
 swift assets/icon/prepare.swift
+swift assets/icon/states.swift
 ```
 
 ## 組み込み
 
-メニューバーのアイコンとして使う（DESIGN.md §3.2）。README.md・README.en.md の見出しには `icon.png` を、ダークモードでは `<picture>` で `icon-white.png` を表示する。`menuBarTemplate.png`・`menuBarTemplate@2x.png` を
+メニューバーのアイコンとして使う（DESIGN.md §3.2）。README.md・README.en.md の見出しには `icon.png` を、ダークモードでは `<picture>` で `icon-white.png` を表示する。「メニューバーのアイコン」の表には `state-*.png` を同じく `<picture>` で表示する。`menuBarTemplate.png`・`menuBarTemplate@2x.png` を
 `install.sh` が `~/.local/bin/cafe-wifi-okawari-menubar.png`・`cafe-wifi-okawari-menubar@2x.png` へコピーし、
 `menubar.js` が1x・2xを同じ18 × 18 ptのNSImageの表現として読み込み、`template = true` を指定する。
 ファイル名だけでのテンプレート判定には依存しない。状態で画像は替えず、停止中は薄く表示し、印（! … ✓）は右に付く。

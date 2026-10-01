@@ -20,8 +20,10 @@ Automatically re-accepts the captive portal terms when a free café Wi‑Fi in J
 - On Wi2 Wi‑Fi where you have accepted the terms yourself (USEN is only partly tested at a shop; see [About USEN](#about-usen)), it checks every 10 seconds, notices a logout within about 10 seconds, and usually reconnects a few seconds later (your connection is down in between; see [Caveats](#caveats))
 - Works with any time limit — it reacts to the login page, not a timer
 - Uses no IDs, passwords, or email addresses, and stores nothing secret
+- It talks only to Apple's connectivity check page (the one macOS itself uses) and the shop Wi‑Fi's login page. Nothing is sent to the author or any other server
+- Its log and menu never show this Mac's MAC or IP address
 - Shows its status as a coffee cup icon in the menu bar, without interrupting you
-- Nothing extra to install: it runs on the zsh, curl, launchd, and JavaScript for Automation that ship with macOS
+- Nothing extra to install: it runs on the zsh, curl, launchd, and JavaScript for Automation that ship with macOS. The scripts are short enough to read in full
 
 ## Supported networks
 
@@ -101,11 +103,11 @@ The coffee cup in the menu bar (its steam is drawn as Wi‑Fi waves, with an arr
 
 | Icon | Meaning |
 |---|---|
-| Cup | Running |
-| Cup ✓ | Reconnected automatically within the last 10 minutes |
-| Cup ! | You need to act on this Wi‑Fi: accept the terms yourself once, or check the login page because reconnecting failed. The menu says which |
-| Cup … | macOS is waiting for you to accept on the login page (on any network with a login page, not only supported ones). If the login page does not appear, open `http://captive.apple.com` in a browser |
-| Faded cup | Stopped (the background job is not registered). Run `./install.sh` to restart |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-on-white.png"><img src="assets/icon/state-on.png" width="33" height="22" alt="Cup"></picture> | Running |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-check-white.png"><img src="assets/icon/state-check.png" width="33" height="22" alt="Cup ✓"></picture> | Reconnected automatically within the last 10 minutes |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-warn-white.png"><img src="assets/icon/state-warn.png" width="33" height="22" alt="Cup !"></picture> | You need to act on this Wi‑Fi: accept the terms yourself once, or check the login page because reconnecting failed. The menu says which |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="Cup …"></picture> | macOS is waiting for you to accept on the login page (on any network with a login page, not only supported ones). If the login page does not appear, open `http://captive.apple.com` in a browser |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="Faded cup"></picture> | Stopped (the background job is not registered). Run `./install.sh` to restart |
 
 Click it to see whether automatic reconnection is on for this Wi‑Fi, the estimated next time-out, and the last three events (reconnected, terms accepted, could not reconnect, stopped). The menu is in English only. It shows no MAC or IP addresses, so it is safe to show in screen sharing. The estimate is shown only when the last authentication was on the current network within 60 minutes, and not after you rejoined the Wi‑Fi. It assumes the shop's limit is 60 minutes.
 
