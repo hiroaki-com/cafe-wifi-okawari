@@ -97,7 +97,7 @@
 | 利用時間 | `GET /capi/welcome/info` の `sess_time` が `"60"`。店が機器で変えられる（[USEN のサポート FAQ](https://support.usen.com/faq/show/10300?category_id=95&site_domain=default)） |
 | 入力値 | 画面はメモリにだけ持つ。Cookie はなく、localStorage には `DAVOLINK_` を頭に付けた言語と管理画面のトークンだけ。手動で選んだ値は読み出せない |
 | 同意の痕跡 | システムログの `[com.apple.captive:Controller] Online (websheet: success)`。網やインターフェースを示さない |
-| システムログの SSID | 同じ `com.apple.captive` の接続時の行に、先頭2文字と末尾2文字だけを残して間を `*` にした SSID が出る（Wi2・USEN とも）。位置情報の許可がなくても読める。本ツールは読まず、ログにも残さない |
+| システムログの SSID | 同じ `com.apple.captive` の接続時の行に、先頭2文字と末尾2文字だけを残して間を `*` にした SSID が出る（Wi2・USEN とも）。位置情報の許可がなくても読める。`*` の数は元の文字数と同じ（タリーズ・ドトールの公式の SSID と一致）。つないだときに1行出て、時間切れからの再認証では出ない。伏せ字は macOS（`configd`）が書くときに行う。メニューバーが USEN のチェーンを見分けるのに使う（§3.2）。本体は読まず、どちらもログ・ファイルに伏せ字の SSID を残さない |
 | CaptiveNetwork の状態 | `scutil` の `State:/Network/Interface/en0/CaptiveNetwork` に `Stage` と `WaitingOnUI`。認証済みでは `Online`・`FALSE` だった（USEN の入店時の同意のあとも同じ）が、Wi2 の網で macOS を再起動したあとは、通信できていても `Evaluate`・`FALSE` のまま変わらず、その状態で迎えた時間切れの捕捉中も `Evaluate`・`FALSE` で、IPv4 は残った。同意の証拠にはならないので使わない（ログを読む回数を減らす候補。§7 の現地の項目 6） |
 
 **規約・公式の案内との関係**（弁護士による確認ではない）
@@ -215,10 +215,11 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | `~/Library/Caches/cafe-wifi-okawari.pending` | 同意待ち「MAC ブランド [notified]」（1行）。USEN は「MAC usen <基準時刻> [notified]」（§3.1）。更新時刻から、知らせる時刻と共通 MAC で転送先をたどり直す時刻を決める |
 | `~/Library/Caches/cafe-wifi-okawari.seen` | 認証済みでブランドを確かめた接続先「MAC 回数」（1行）。resolv.conf がこれより新しければ確かめ直す。同意待ちの間は、更新時刻から次に確かめる時刻を決める |
 | `~/Library/Caches/cafe-wifi-okawari.probe` | 状態を確かめられないことが続いている接続先「MAC 回数」（1行）。確かめられたら削除 |
+| `~/Library/Caches/cafe-wifi-okawari.chain` | メニューバーが見分けた USEN の接続先のチェーン「MAC キー リース開始」（1行1つ）。見分けられなかった接続は「MAC - リース開始」。メニューバーだけが書く（§3.2） |
 | `~/Library/Application Support/cafe-wifi-okawari/consented` | 利用者が自分で同意した接続先「MAC ブランド」（1行1つ）。USEN は「MAC usen [<規約のハッシュ>]」。ここにある接続先だけ自動で再認証する |
 | `~/Library/Application Support/cafe-wifi-okawari/watched` | （USEN で追加）接続画面での同意をシステムログで確かめた網「MAC 記録した時刻」（1行1つ、新しい50件まで）。24時間で無効（読むときに捨てる）。同意を記録したとき・対象外と確かめたとき・Wi2 の網と分かったときに外す。確かめられなかった（通信失敗など）だけでは外さない |
 
-`install.sh uninstall` は2つの plist・本体・メニューバーの4ファイル（2つのスクリプトとアイコンの 1x・2x）・`~/Library/Caches` の4ファイル・`Application Support/cafe-wifi-okawari`（`watched` を含む）を消し、ログは残す。
+`install.sh uninstall` は2つの plist・本体・メニューバーの4ファイル（2つのスクリプトとアイコンの 1x・2x）・`~/Library/Caches` の5ファイル・`Application Support/cafe-wifi-okawari`（`watched` を含む）を消し、ログは残す。
 
 ### 3.1 USEN の分岐
 
@@ -298,11 +299,11 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 
 **方式**: macOS 標準の `osascript -l JavaScript`（JXA）から Cocoa の `NSStatusItem` を使う。追加のソフトもビルドも要らない。通知センターは使えない（アプレット経由でも拒否される。§7）。
 
-**構成**: 見た目と中身を分ける。判定はすべて zsh 側で行い、既存の模擬コマンド（`launchctl`・`route`・`arp`・`ipconfig`）と、足した `networksetup`・`scutil` で試験する。JXA 側は表示するだけなので、自動試験の対象にしない（小さく保つ）。
+**構成**: 見た目と中身を分ける。判定はすべて zsh 側で行い、既存の模擬コマンド（`launchctl`・`route`・`arp`・`ipconfig`・`log`）と、足した `networksetup`・`scutil` で試験する。JXA 側は表示するだけなので、自動試験の対象にしない（小さく保つ）。
 
 | ファイル（リポジトリ → 導入先） | 役割 |
 |---|---|
-| `menubar.sh` → `~/.local/bin/cafe-wifi-okawari-menubar.sh` | 状態を判定し、1行目にアイコンの種類、2行目以降にメニューの行を出す（下の「出力」）。通信しない。ファイルは読むだけ |
+| `menubar.sh` → `~/.local/bin/cafe-wifi-okawari-menubar.sh` | 状態を判定し、1行目にアイコンの種類、2行目以降にメニューの行を出す（下の「出力」）。通信しない。本体のファイルは読むだけで、書くのは USEN のチェーンのキャッシュだけ |
 | `menubar.js` → `~/.local/bin/cafe-wifi-okawari-menubar.js` | 10秒ごとと、メニューを開く直前（`menuNeedsUpdate:`）に `menubar.sh` を実行して、アイコンとメニューを作り直す。`menubar.sh` は自分のパスの `.js` を `.sh` に替えて求める（導入先でもリポジトリでも同じ名前の組） |
 | `assets/icon/menuBarTemplate.png`・`menuBarTemplate@2x.png` → `~/.local/bin/cafe-wifi-okawari-menubar.png`・`cafe-wifi-okawari-menubar@2x.png` | アイコンの画像（18 × 18 pt の 1x・2x。素材の由来と作り方は `assets/icon/README.md`）。`menubar.js` は、自分のパスの `.js` を外した名前の `.png` があればそれを（導入先）、なければ同じ場所の `assets/icon/menuBarTemplate.png` を使う（リポジトリ） |
 | `~/Library/LaunchAgents/local.cafe-wifi-okawari.menubar.plist` | `ProgramArguments=/usr/bin/osascript -l JavaScript <js>`、`RunAtLoad`、`LimitLoadToSessionType=Aqua`。`KeepAlive` は付けない（下の「止まったとき」） |
@@ -357,6 +358,7 @@ Hide from Menu Bar
 | 未同意（自宅など） | `This Wi‑Fi: Auto Reconnect Off` |
 | 未接続 | `This Wi‑Fi: Offline` |
 | 見張り中（§3.1） | `This Wi‑Fi: Auto Reconnect from Next Time-out` |
+| USEN の網でチェーンが分かった（同意済み・見張り中） | `This Wi‑Fi: Tully's (USEN) · Auto Reconnect On`・`This Wi‑Fi: Tully's (USEN) · Auto Reconnect from Next Time-out`（下の「USEN のチェーン」） |
 | 接続画面待ち（…） | `This Wi‑Fi: Waiting for Login Page` と、続けて `If the login page doesn't appear, open http://captive.apple.com.` |
 | 注意: 再接続に失敗し、知らせたあと（!） | `Couldn't reconnect automatically. Check the login page.`（This Wi‑Fi の行の直後。下も同じ） |
 | 注意: 同意が要る（!。初めての網・自動の停止のあと） | `Accept the terms once on the login page. After that, it reconnects automatically.` |
@@ -371,11 +373,11 @@ Hide from Menu Bar
 
 - 直近の出来事は、上の4種類の行を新しい順に3件。1件もなければ区切り線ごと出さない
 - 日付は、今日なら `Today`、昨日なら `Yesterday`、それより前は `09-28`。時刻は24時間制の `HH:MM`。日時と中身は2列にそろえる
-- ブランド名は先頭だけ大文字（`skylark` → `Skylark`）。`usen` は `USEN`。同じ MAC で同意済みのブランドが複数あれば `Doutor, Starbucks` と並べる（`install.sh status` と同じ）。本体は英字・数字・`-`・`_` だけのブランド名しか記録しないが、そのほかの文字を含む語は出さない（MAC・IP を出さないため）
+- ブランド名は先頭だけ大文字（`skylark` → `Skylark`）。`usen` は `USEN`（チェーンが分かっている接続先なら `Tully's`。This Wi‑Fi の行では `Tully's (USEN)`）。同じ MAC で同意済みのブランドが複数あれば `Doutor, Starbucks` と並べる（`install.sh status` と同じ）。本体は英字・数字・`-`・`_` だけのブランド名しか記録しないが、そのほかの文字を含む語は出さない（MAC・IP を出さないため）
 - 停止中は、1行目と `Run ./install.sh to Restart` と直近の出来事だけ。This Wi‑Fi・次の時間切れ・案内は出さない（自動再接続が動いていないのに `Auto Reconnect On` と読めるため）
 - 末尾の `Open Log`（ログを既定のアプリで開く。ログがなければ押せない）と `Hide from Menu Bar` は操作なので、`menubar.js` が付ける
 - 案内の行（!・…）は押せない行として出す。接続画面を開くボタンは付けない（操作を増やさない）
-- 画面共有や録画に写るので、端末とゲートウェイの MAC・IP は出さない（直近の出来事は時刻・種類・ブランド・秒数だけ）。SSID・店舗名は画面共有を理由に除かない（SSID は macOS が位置情報の許可なしには返さないので、今は出していない）
+- 画面共有や録画に写るので、端末とゲートウェイの MAC・IP は出さない（直近の出来事は時刻・種類・ブランド・秒数だけ）。SSID・店舗名は画面共有を理由に除かない（SSID は macOS が位置情報の許可なしには返さないので出していない。USEN のチェーンは下の方法で出す。店舗名は出さない）
 - ログは末尾の 16KB だけ読む（ローテーションしないので、全体を読むと年単位で重くなる）
 - 次の時間切れの目安は、次をすべて満たすログの最後の行から60分とする。1つでも欠ければ行を出さない（間違った時刻を出すより、出さない側に倒す）
   - 種類が `re-authenticated` か `consent recorded`。ただし `consent recorded … usen (captive login)` は除く。この行は、最初の時間切れのときに過去の接続画面での同意を記録するもので、同意を送る**前**に書く（本体の USEN の分岐）。送信に失敗しても残るので、通信が戻った時刻にならない。成功すれば続けて `re-authenticated` が出るので、そちらを使う
@@ -383,6 +385,20 @@ Hide from Menu Bar
   - 行の時刻から30秒より後に `resolv.conf` が書き換わっていない。本体は、同意済みの網で利用者が自分で同意し直してもログを書かない（記録済みなら何もしない）ので、1時間以内に同じ店へ戻って同意し直すと、今の接続先の古い行しか残らない。`resolv.conf` はつなぎ直したときと接続画面で同意したときに書き換わる（§7）ので、行より後に書き換わっていれば、その行は今の接続の認証ではない。30秒は、再認証に続いて書き換わる場合の幅。リースの更新でも、時間切れからの再認証でも書き換わらない（Wi2 で実測。再認証は1回）。USEN の再認証で書き換わるかは未確認で、書き換わるなら目安が途中で消える（現地の項目 7）
   - 行の時刻から60分以内
 - `install.sh status` の「Next time-out」も同じ条件にした（満たさなければ行を出さない）。「Last auth」は今までどおり、接続先を問わずログの最後の認証の行
+
+**USEN のチェーン**（2026-10-02 に追加）: USEN の網はタリーズにもコメダにもあり、機器の応答では見分けられない（§7 の現地の項目 8）。システムログの伏せ字の SSID（§1.2）を公式の SSID（§1.1）の伏せ字の形と照らして見分ける。
+
+| 伏せ字の SSID | キー | 表記 | 実網 |
+|---|---|---|---|
+| `tu********Fi`（`tullys_Wi-Fi`） | `tullys` | `Tully's` | 3店舗で確認 |
+| `Ko********Fi`（`Komeda_Wi-Fi`） | `komeda` | `Komeda` | 未確認（公式の SSID から決めた） |
+
+- 読むのは、今の接続先が USEN で同意済みか見張り中のときだけ。Wi2 の網（ブランドは Wi2 の応答で分かる）・未同意の網では読まない
+- システムログを読むのは接続（`ipconfig getsummary` のリース開始）ごとに1回。リース開始の10秒前（2時間前より古ければ2時間前）から今までの `com.apple.captive` の SSID の行のうち、今のインターフェース（既定経路の `interface`）の最後の1行を使う。リース開始から15秒は読まない（実網ではリース開始の約3秒後に出た）。リース開始が読めない・ログが読めなければ `USEN` のまま
+- 分かったチェーンは接続先（ゲートウェイの MAC）ごとに `~/Library/Caches/cafe-wifi-okawari.chain` に覚え、以後は読まない。表にない SSID・行がないときは「MAC - リース開始」を書き、同じ接続では読み直さない（10秒ごとにログを読まない）。伏せ字の SSID は保存しない
+- 直近の出来事の `usen` も、`net=` の接続先のチェーンが分かっていれば `Tully's` と出す。本体のログは `usen` のまま（本体は SSID を読まない）
+- 表にない形（`.FREE_Wi-Fi_PASSPORT_J` の店など）・伏せ字の形が macOS の更新で変わったときは、今までどおり `USEN`
+- 読み取りの1回目は実網で約1.8秒、覚えたあとは約0.03秒（2026-10-02）
 
 **出力**（`menubar.sh` の標準出力。1行目がアイコンの種類、以降が行、空行が区切り線。行はタブで区切った「表示 [右の列] [ツールチップ]」）
 
@@ -406,7 +422,7 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 
 **止まったとき**: `KeepAlive` を付けないので、落ちても自動では立ち上げ直さない。将来の macOS で JXA の Cocoa の橋渡しが使えなくなった場合に、10秒ごとの起動と失敗を繰り返さないため。落ちたら、次のログインか `./install.sh` で戻る。「メニューバーから隠す」も同じ扱い（終了するだけ）。
 
-**負荷**: 10秒ごとに zsh を1回起動し、`launchctl print`・`route`・`arp` と小さなファイルの読み取りだけを行う（通信しない）。既定経路がないときだけ `networksetup`（手元で約0.03秒）・`ipconfig`・`scutil` も読む。実測は §5。
+**負荷**: 10秒ごとに zsh を1回起動し、`launchctl print`・`route`・`arp` と小さなファイルの読み取りだけを行う（通信しない）。既定経路がないときだけ `networksetup`（手元で約0.03秒）・`ipconfig`・`scutil` も読む。USEN の網では、接続ごとに1回だけ `ipconfig getsummary` とシステムログを読む（約1.8秒。下の「USEN のチェーン」）。実測は §5。
 
 **実装での補足**
 
@@ -498,14 +514,15 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 | 確認項目 | 結果 |
 |---|---|
 | 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`・`menubar.js` の `osacompile -l JavaScript`） | OK |
-| 模擬試験 `zsh test/run.sh`（307項目。うち USEN の分岐と `install.sh status` の見張り表示が108項目、メニューバーの表示が38項目、`install.sh` のメニューバーと次の時間切れの目安が13項目） | OK。GitHub Actions でも実行。既存の項目のうち、仕様を変えた3項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない）は書き換えた |
-| 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、すべて NG として検出（例: `-b "$jar"` を外す・同意の本文を変えると、どちらも23項目が失敗）。USEN の実装では33通りの変異（例: `--noproxy` を外す・性別を空でなく送る・GET のあとの same() を外す・同意の行の削除を行全体の一致にする・基準時刻の +1 を外す）をすべて検出。メニューバーの実装では37通り（例: 注意の接続先の照合を外す・Wi‑Fi でなく先頭のポートを使う・目安の captive login の除外や resolv.conf の30秒を変える・出来事を4件にする・`--no-menubar` で消さない・`KeepAlive` を付ける）をすべて検出（最初は2通りを見逃したので、試験の行の並びと `status` の30秒の境目を足した）。アイコンの組み込みでは4通り（1x・2x のどちらかを入れない・`--no-menubar` と uninstall で画像を残す）をすべて検出 |
+| 模擬試験 `zsh test/run.sh`（327項目。うち USEN の分岐と `install.sh status` の見張り表示が108項目、メニューバーの表示が58項目（USEN のチェーンが20項目）、`install.sh` のメニューバーと次の時間切れの目安が13項目） | OK。GitHub Actions でも実行。既存の項目のうち、仕様を変えた3項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない）は書き換えた |
+| 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、すべて NG として検出（例: `-b "$jar"` を外す・同意の本文を変えると、どちらも23項目が失敗）。USEN の実装では33通りの変異（例: `--noproxy` を外す・性別を空でなく送る・GET のあとの same() を外す・同意の行の削除を行全体の一致にする・基準時刻の +1 を外す）をすべて検出。メニューバーの実装では37通り（例: 注意の接続先の照合を外す・Wi‑Fi でなく先頭のポートを使う・目安の captive login の除外や resolv.conf の30秒を変える・出来事を4件にする・`--no-menubar` で消さない・`KeepAlive` を付ける）をすべて検出（最初は2通りを見逃したので、試験の行の並びと `status` の30秒の境目を足した）。アイコンの組み込みでは4通り（1x・2x のどちらかを入れない・`--no-menubar` と uninstall で画像を残す）をすべて検出。USEN のチェーンでは8通り（例: リース開始の10秒前を100秒前にする・インターフェースの照合を外す・最初の行で判定する・伏せ字の SSID を残す・Wi2 の網でも読む・見つからなかった行を出来事に使う）をすべて検出（最初はインターフェースの照合を外しても通ったので、別のインターフェースの行があとに出る形に試験を直した） |
 | 実際の curl の Cookie の保存と送信 | OK。空の jar で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る（ローカルの HTTPS サーバーと実網） |
 | LaunchAgent からの知らせ | `display notification` は **NG**（macOS 27。終了コード 0 だが表示されず、許可も求められない）。`display alert … giving up after 120` は表示された |
 | アプレット経由の通知（試作） | **NG**。`osacompile` のアプレットを LaunchAgent から `open -g` で起動しても、bundle ID を付けて署名し直しても、usernoted が `Denying message … LegacyConnection` で拒否した（2026-09-30） |
 | メニューバーの表示（試作） | OK。JXA の `NSStatusItem` と SF Symbols で、動作中・✓・停止中の3状態とメニューの中身を画面で確かめた（2026-09-30。✓ と停止中は偽のログ・登録名で確認） |
 | メニューバーの表示（実装） | OK。LaunchAgent（`LimitLoadToSessionType=Aqua`）から起動して `state = running`。動作中（実際の記録）・✓・!・…・停止中の5状態のアイコンとメニューをスクリーンショットで確かめた（2026-09-30。✓・! は偽の HOME、… は既定経路の問い合わせだけを外した判定の写し、停止中は登録名を変えた写しで。本体の登録と記録には触れていない）。直近の出来事は2列にそろい、状態の行は押せない行の色で出る |
 | メニューバーのアイコン（`assets/icon`） | OK。導入先と同じ名前の組（`.js` と同じ名前の `.png`・`@2x.png`）とリポジトリの `assets/icon` のどちらからも読めて、5状態を Retina のダークのメニューバーでスクリーンショットで確かめた（2026-09-30。停止中は薄く、印は右に付く）。画像がなければ `--check` が失敗する。ライトのメニューバーでは未確認（外観の設定を変えていない。テンプレート画像なので色は macOS が替える） |
+| メニューバーの USEN のチェーン | OK（タリーズ）。導入前の版をリポジトリから実網で実行し、`This Wi‑Fi: Tully's (USEN) · Auto Reconnect On` と、同じ接続先の過去の再認証が `Reconnected · Tully's` と出た。システムログの読み取りは1回目だけ（約1.8秒）で、2回目は約0.03秒。キャッシュには接続先とキーとリース開始だけが残った（2026-10-02）。コメダは未確認（現地の項目 8） |
 | メニューバーのツールチップ（`Next Time-out`） | 未確認。カーソルを行に載せる操作を自動で再現できなかった。状態の行は無効の項目なので、無効の項目でツールチップが出るかを実機で確かめる |
 | `menubar.js --check` | OK。手元（`ok:  9 items`）と GitHub Actions の macOS（`macos-26-arm64`。`ok:  5 items`。本体が未登録なので停止中の表示）で、画面のない CI でも `NSStatusBar` とメニューを作れた（2026-09-30） |
 | 入店時の同意の記録 | OK（ドトール・ガストで `consent recorded … (online)`） |
@@ -533,7 +550,7 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 5. USEN: macOS との競争を重ねて見る。接続画面が先に出たときに、ログが `network changed` だけで拒否に数えていないか
 6. USEN: 捕捉中の `scutil` の CaptiveNetwork の値（復帰後は `Online`・`WaitingOnUI` が `FALSE`）。同じ網につなぎ直したとき `LeaseStartTime` が更新されるか（§3.1 の a'・b' の前提）。リース時間はタリーズの1店舗で3600秒だったので、入店時の同意から読むまでの間に更新が入る心配は小さい。コメダでも `lease_time` を見る
 7. メニューバー（§3.2）: macOS が接続画面を開いている間の、Wi‑Fi の IPv4（`ipconfig getifaddr`）と `WaitingOnUI` の値（接続画面待ちの条件）。USEN の再認証の前後で `resolv.conf` が書き換わるか（Wi2 ではリースの更新でも再認証でも書き換わらなかった）（次の時間切れの目安の条件）
-8. （任意・将来の調査）USEN: 機器の応答からチェーン（タリーズ・コメダ）を見分けられるか。転送先・DHCP のドメイン名・ゲートウェイの MAC では見分けられないので、残る候補は3つ。①・② は捕捉中に取得だけする（同意は送らない）。① `/captive/` の HTML と `page.js` にチェーン名・ロゴの参照があるか ② `GET /capi/welcome/info` の JSON のうち、`sess_time`・`status_code` 以外の項目と、画面が読む `/capi/…` の一覧 ③ システムログの伏せ字の SSID（§1.2）。公式の SSID（§1.1）の先頭2文字はチェーンで違い、通信も要らない。タリーズでは公式の SSID の形で出た。コメダで同じく出るかは未確認。見分けられれば、ログとメニューで `usen` の代わりにチェーンを出せる（時間切れごとの通信は GET 1本増える）。店名は記録しない（ログにも文書にも書かない）
+8. （任意・将来の調査）USEN: 機器の応答からチェーンを見分けられるか。メニューバーは ③ のシステムログの伏せ字の SSID で見分けるようにした（§3.2）。コメダで伏せ字の SSID が `Ko********Fi` の形で出るか（一部の店の `.FREE_Wi-Fi_PASSPORT_J` も）を確かめる。本体のログで `usen` の代わりにチェーンを出すなら、機器の応答の ① `/captive/` の HTML と `page.js` にチェーン名・ロゴの参照があるか ② `GET /capi/welcome/info` の JSON のうち `sess_time`・`status_code` 以外の項目と、画面が読む `/capi/…` の一覧、も候補（捕捉中に取得だけする。同意は送らない。時間切れごとの通信は GET 1本増える）。転送先・DHCP のドメイン名・ゲートウェイの MAC では見分けられない。店名は記録しない（ログにも文書にも書かない）
 
 `test/run.sh` で確かめている USEN の分岐は次のとおり（`run` の `posts` は `xhr/login` と `/capi/welcome` の両方を数え、USEN の項目では `uposts` で宛先も確かめる。模擬の `log show`・`ipconfig getsummary`・`route -n get <IP>`・USEN の機器を使う）。
 
@@ -635,6 +652,11 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 | 直近の出来事 | 新しい順に3件。`login failed`・`redirect failed`（失敗の行）は `Couldn't Reconnect`、ブランドの確認の失敗・`consent pending`・`captive login seen`・`probe failed`・`network changed` は出さない。今日・昨日（23:59）・それより前（月-日）の境目。ブランド名に `:` などがあれば出さない。MAC・IP・URL・応答を含まない |
 | 優先言語が日本語 / 英語 | 同じ英語の表示 |
 | ログの末尾 16KB より前にだけ再認証の行がある | 読まない（`on`、出来事なし） |
+| USEN の同意済みの網で、リース開始の3秒後に `tu********Fi` / `Ko********Fi` / そのあと表にない SSID の行 | `Tully's (USEN) · Auto Reconnect On`、`MAC tullys リース開始` だけ残す / `Komeda (USEN)` / `USEN`、`MAC - リース開始` だけ残す |
+| 覚えたあと（別の SSID・リース開始でも）/ 見つからなかった同じ接続 / リース開始が変わる | ログを読まない / 読まない / 読み直す |
+| SSID の行がリース開始の11秒前 / 今のインターフェースの行のあとに別のインターフェースの行 / リース開始から10秒 / リース開始なし / ログが読めない | `USEN` / 今のインターフェースの行で判定 / 読まず、何も残さない / 読まない / `USEN`（異常終了しない） |
+| 同じ MAC で Skylark と USEN / Wi2 だけ / 未同意 / 見張り中 | `Skylark, Tully's (USEN)` / 読まない / 読まない / `Tully's (USEN) · Auto Reconnect from Next Time-out` |
+| 直近の出来事（チェーンが分かった接続先 / 分からない接続先 / 停止中） | `Reconnected · Tully's · 1 s` / `USEN` / 停止中もチェーン。MAC を含まない |
 
 ## 8. やらないこと（YAGNI）
 

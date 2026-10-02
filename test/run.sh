@@ -136,7 +136,8 @@ case $1 in
 esac
 EOS
 # log show: 呼び出しを $M/logcalls に残す。--start 以後の $WEBSHEET（エポック秒、空白区切り）に websheet: success の行を出す。
-# $LOGFAIL なら失敗、$LOGSWITCH なら読む間に接続先を切り替える。
+# $LOGFAIL なら失敗、$LOGSWITCH なら読む間に接続先を切り替える。SSID を探す呼び出しには、--start 以後の
+# $SSIDLOG（「エポック秒:インターフェース:伏せ字の SSID」、空白区切り）の行を出す。
 cat > $T/bin/log <<'EOS'
 #!/bin/zsh
 zmodload zsh/datetime
@@ -145,6 +146,12 @@ print -r -- "$*" >> $M/logcalls
 [[ -n ${LOGFAIL-} ]] && exit 1
 s=$(strftime -r '%Y-%m-%d %H:%M:%S' "${@[${@[(i)--start]}+1]}") || exit 64
 print 'Timestamp               Ty Process[PID:TID]'
+if [[ $* == *'"SSID"'* ]]; then
+  for w in ${=SSIDLOG-}; do
+    (( ${w%%:*} >= s )) && print -r -- "$(strftime '%F %T' ${w%%:*}).000 Df configd[357:10a2] [com.apple.captive:Controller] ${${w#*:}%%:*}: SSID '${w#*:*:}' setting interface rank Never (no cache entry)"
+  done
+  exit 0
+fi
 for w in ${=WEBSHEET-}; do
   (( w >= s )) && print -r -- "$(strftime '%F %T' $w).000 Df configd[370:12ee] [com.apple.captive:Controller] Online (websheet: success)"
 done
@@ -184,7 +191,7 @@ sed -e "s#/usr/bin/curl#$T/bin/curl#" -e "s#/sbin/route#$T/bin/route#" -e "s#/us
     -e "s#/var/run/resolv.conf#$M/resolv#" -e "s#/usr/bin/log #$T/bin/log #" \
     $root/cafe-wifi-okawari.sh > $T/s.sh
 # メニューバーの判定と install.sh status も、resolv.conf だけ模擬のファイルにする
-sed "s#/var/run/resolv.conf#$M/resolv#" $root/menubar.sh > $T/mb.sh
+sed -e "s#/var/run/resolv.conf#$M/resolv#" -e "s#/usr/bin/log #$T/bin/log #" $root/menubar.sh > $T/mb.sh
 sed "s#/var/run/resolv.conf#$M/resolv#" $root/install.sh > $T/is.sh
 
 ST=$HOME/Library/Caches/cafe-wifi-okawari
@@ -216,7 +223,7 @@ ok() {  # ok <名前> <条件式...>
   if eval "$*"; then (( pass++ )); else (( failed++ )); print -r -- "NG: $name  [$*]  rc=$rc posts=$posts uposts=$uposts redirs=$redirs notes=$notes reads=$reads out=$out"; fi
 }
 # 既定は「接続してから時間が経っている」状態。joined で「今つないだ」状態にする。
-reset() { rm -rf $ST $PD $SN $DG ${KN:h} $M/authed $M/late $M/switched $M/noroute; touch -t 202001010000 $M/resolv }
+reset() { rm -rf $ST $PD $SN $DG $ST.chain ${KN:h} $M/authed $M/late $M/switched $M/noroute; touch -t 202001010000 $M/resolv }
 joined() { touch $M/resolv }
 A=aa:aa:aa:aa:aa:01 B=bb:bb:bb:bb:bb:02
 consent() { print -r -- "$1 ${2-doutor}" >> $KN }   # 同意済みの接続先を用意する
@@ -858,6 +865,54 @@ ago 40 $M/resolv
 mb MAC=$A;                ok 'メニューバー: 行から30秒以内に resolv.conf が書き換わっても目安を出す' '[[ $rows == *Next\ Time-out* ]]'
 ago 20 $M/resolv
 mb MAC=$A;                ok 'メニューバー: 行の30秒より後に resolv.conf が書き換わっていれば（つなぎ直し）目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
+# USEN の網のチェーン（システムログの伏せ字の SSID）
+CH=$ST.chain TU='tu********Fi' KO='Ko********Fi'
+mbreset; mkknown $A "usen $HASH"; rm -f $M/logcalls
+mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
+                          ok 'メニューバー: USEN の網で、リース開始のあとの伏せ字の SSID がタリーズならチェーンと運営を出す' '[[ $rows == "$R${NL}This Wi‑Fi: Tully'"'"'s (USEN) · Auto Reconnect On" ]]'
+ok 'メニューバー: チェーンはキーと接続先だけ残す（伏せ字の SSID は残さない）' '[[ $(<$CH) == "$A tullys $(( T0 - 60 ))" ]]'
+n1=$(wc -l < $M/logcalls)
+mb MAC=$A LEASE=$(( T0 - 30 )) SSIDLOG="$(( T0 - 27 )):en0:$KO"
+                          ok 'メニューバー: 分かったチェーンは接続先ごとに覚え、システムログを読み直さない' '[[ $rows == *"Tully'"'"'s (USEN) · "* && $(wc -l < $M/logcalls) == $n1 ]]'
+rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$KO"
+                          ok 'メニューバー: コメダの形ならコメダ' '[[ $rows == "$R${NL}This Wi‑Fi: Komeda (USEN) · Auto Reconnect On" ]]'
+rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU $(( T0 - 55 )):en0:ho****me"
+                          ok 'メニューバー: 表にない SSID なら USEN のまま（最後の行で判定）' '[[ $rows == "$R${NL}This Wi‑Fi: USEN · Auto Reconnect On" ]]'
+ok 'メニューバー: 見つからなかった接続はリース開始だけ残す（伏せ字の SSID は残さない）' '[[ $(<$CH) == "$A - $(( T0 - 60 ))" ]]'
+n1=$(wc -l < $M/logcalls)
+mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
+                          ok 'メニューバー: 同じ接続では、見つからなくても読み直さない' '[[ $rows == *"USEN · "* && $(wc -l < $M/logcalls) == $n1 ]]'
+mb MAC=$A LEASE=$(( T0 - 20 )) SSIDLOG="$(( T0 - 17 )):en0:$TU"
+                          ok 'メニューバー: つなぎ直して（リース開始が変わって）いれば読み直す' '[[ $rows == *"Tully'"'"'s (USEN) · "* ]] && (( $(wc -l < $M/logcalls) == n1 + 1 ))'
+rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 71 )):en0:$TU"
+                          ok 'メニューバー: リース開始の10秒より前の SSID の行は使わない（前の接続）' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* ]]'
+rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU $(( T0 - 55 )):en1:$KO"
+                          ok 'メニューバー: 今のインターフェースでない SSID の行は使わない（あとに出ても）' '[[ $rows == *"${NL}This Wi‑Fi: Tully'"'"'s (USEN) · "* ]]'
+rm -f $CH $M/logcalls; mb MAC=$A LEASE=$(( T0 - 10 )) SSIDLOG="$(( T0 - 7 )):en0:$TU"
+                          ok 'メニューバー: リース開始から15秒はシステムログを読まず、何も残さない' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* && ! -e $M/logcalls && ! -e $CH ]]'
+mb MAC=$A LEASE=none SSIDLOG="$(( T0 - 7 )):en0:$TU"
+                          ok 'メニューバー: リース開始が読めなければシステムログを読まない' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* && ! -e $M/logcalls ]]'
+mb MAC=$A LEASE=$(( T0 - 60 )) LOGFAIL=1
+                          ok 'メニューバー: システムログが読めなければ USEN のまま' '(( rc == 0 )) && [[ $rows == *"${NL}This Wi‑Fi: USEN · "* ]]'
+mbreset; mkknown $A skylark; consent $A "usen $HASH"; rm -f $M/logcalls
+mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
+                          ok 'メニューバー: 同じ MAC の Wi2 のブランドと並べる' '[[ $rows == "$R${NL}This Wi‑Fi: Skylark, Tully'"'"'s (USEN) · Auto Reconnect On" ]]'
+mbreset; mkknown $A doutor; rm -f $M/logcalls
+mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
+                          ok 'メニューバー: Wi2 の網ではシステムログを読まない' '[[ $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On" && ! -e $M/logcalls && ! -e $CH ]]'
+mb MAC=$B LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
+                          ok 'メニューバー: 未同意の網ではシステムログを読まない' '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off" && ! -e $M/logcalls && ! -e $CH ]]'
+mbreset; mkdir -p ${WT:h}; print -r -- "$A $(now 3600)" > $WT
+mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
+                          ok 'メニューバー: 見張り中の網でもチェーンを出す' '[[ $rows == "$R${NL}This Wi‑Fi: Tully'"'"'s (USEN) · Auto Reconnect from Next Time-out" ]]'
+print -rl -- "$(lt 120) re-authenticated api=ok probe=ok net=$A usen t=1s" "$(lt 100) re-authenticated api=ok probe=ok net=$B usen t=2s" > $LG
+mb MAC=$B;                ok 'メニューバー: 直近の出来事の USEN は、チェーンが分かっている接続先ならチェーン' \
+  '[[ $rows == *"${NL}${NL}Today $(hm 100)${TB}Reconnected · USEN · 2 s${NL}Today $(hm 120)${TB}Reconnected · Tully'"'"'s · 1 s" ]]'
+touch $M/notloaded
+mb MAC=$B;                ok 'メニューバー: 停止中も直近の出来事はチェーン' '[[ $icon == off && $rows == *"Reconnected · Tully'"'"'s · 1 s" ]]'
+rm -f $M/notloaded
+print -r -- "$B - 1" >> $CH
+mb MAC=$B;                ok 'メニューバー: 見つからなかった接続先の出来事は USEN のまま' '[[ $rows == *"Reconnected · USEN · 2 s"* && $out != *aa:aa* && $out != *bb:bb* ]]'
 # 直近の出来事の読み替え
 mbreset; mkknown $A
 strftime -s d0 %F $EPOCHSECONDS; strftime -r -s md %F $d0; strftime -s d1 %F $(( md - 1 )); strftime -s d2 %F $(( md - 86401 ))
@@ -929,7 +984,7 @@ rm -f $M/bootstrap_fail
 mkdir -p "$H/Library/Logs" "$H/Library/Application Support/cafe-wifi-okawari" "$H/Library/Caches"
 touch "$H/Library/Logs/cafe-wifi-okawari.log" "$H/Library/Application Support/cafe-wifi-okawari/consented" \
       "$H/Library/Caches/cafe-wifi-okawari" "$H/Library/Caches/cafe-wifi-okawari.pending" \
-      "$H/Library/Caches/cafe-wifi-okawari.seen" "$H/Library/Caches/cafe-wifi-okawari.probe"
+      "$H/Library/Caches/cafe-wifi-okawari.seen" "$H/Library/Caches/cafe-wifi-okawari.probe" "$H/Library/Caches/cafe-wifi-okawari.chain"
 print -r -- "$A doutor"$'\n'"$B starbucks"$'\n'"$B doutor" > "$H/Library/Application Support/cafe-wifi-okawari/consented"
 print -rl -- L{1..6} > "$H/Library/Logs/cafe-wifi-okawari.log"
 MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)

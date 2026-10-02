@@ -14,11 +14,33 @@ PD=$ST.pending
 KN="$HOME/Library/Application Support/cafe-wifi-okawari/consented"
 WT="${KN:h}/watched"
 RC=/var/run/resolv.conf
+CH=$ST.chain   # USEN の接続先のチェーン「MAC キー」。見つからなかった接続は「MAC - リース開始」（伏せ字の SSID は残さない）
 now=$EPOCHSECONDS
+# USEN の網のチェーン（§3.2）。システムログに出る伏せ字の SSID（先頭2文字と末尾2文字、間は同じ文字数の *）とキー、キーと表記
+typeset -A chains=('tu********Fi' tullys 'Ko********Fi' komeda)
+typeset -A cname=(tullys "Tully's" komeda Komeda)
 # ログの行の時刻（先頭19文字）をエポック秒にして t に入れる
 at() { strftime -r -s t '%Y-%m-%d %H:%M:%S' "${1[1,19]}" 2>/dev/null }
 # ブランド名の表記を nm に入れる（先頭だけ大文字。usen は USEN）。英字・数字・-・_ 以外を含めば空（MAC・IP などを出さない）
 bn() { nm=; [[ $1 == [A-Za-z0-9_-]## ]] || return; [[ $1 == usen ]] && nm=USEN || nm=${(U)1[1]}${1[2,-1]} }
+# 今の接続先（USEN の網）のチェーンのキーを ck に入れる。分からなければ空。
+# システムログを読むのは、接続ごと（リース開始ごと）に1回だけ。リース開始の10秒前より後の、今のインターフェースの
+# 最後の SSID の行を表と照らす。リース開始から15秒は、ログへの書き込みを待って読まない。
+chain() {
+  local c s st m l
+  ck= c=$(awk -v n="$net" '$1 == n { print $2, $3; exit }' "$CH" 2>/dev/null)
+  [[ -n ${cname[${c%% *}]-} ]] && { ck=${c%% *}; return }
+  [[ -n $ifc ]] || return
+  l=(${(M)${(f)"$(ipconfig getsummary "$ifc" 2>/dev/null)"}:#*LeaseStartTime :*})
+  s=$(strftime -r '%m/%d/%Y %H:%M:%S' "${l[1]##* : }" 2>/dev/null) || return
+  [[ $c == "- $s" ]] && return
+  (( now - s >= 15 )) || return
+  (( st = s - 10 > now - 7200 ? s - 10 : now - 7200 ))
+  l=(${(M)${(f)"$(/usr/bin/log show --style compact --start "$(strftime '%F %T' $st)" \
+    --predicate 'subsystem == "com.apple.captive" AND eventMessage CONTAINS "SSID"' 2>/dev/null)"}:#* $ifc: SSID \'*})
+  (( $#l )) && { m=${${l[-1]#* $ifc: SSID \'}%%\'*}; ck=${chains[$m]-} }
+  { awk -v n="$net" '$1 != n' "$CH" 2>/dev/null; print -r -- "$net ${ck:--} $s" } > "$CH.tmp" && mv -f "$CH.tmp" "$CH"
+}
 
 # ログの末尾 16KB のうち、直近の出来事として出す種類の行（ローテーションしないので全体は読まない）。
 # 通信できている間のブランドの確認の失敗（redirect failed … net=…）は再接続の失敗ではないので除く。
@@ -32,7 +54,7 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
 
   # 今の接続先（install.sh status・本体の netid と同じく、既定ゲートウェイの MAC。取れなければ IP）
   r=$(route -n get default 2>/dev/null) || r=
-  gw=${${(M)${(f)r}:#*gateway:*}##* } net=
+  gw=${${(M)${(f)r}:#*gateway:*}##* } ifc=${${(M)${(f)r}:#*interface:*}##* } net=
   if [[ -n $gw ]]; then
     net=$(arp -n "$gw" 2>/dev/null | awk '{ print $4 }')
     [[ $net == *:*:* ]] || net=$gw
@@ -50,13 +72,17 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
     fi
   else
     if kb=$(awk -v n="$net" '$1 == n { f = 1; print $2 } END { exit !f }' "$KN" 2>/dev/null); then
-      # 同じ MAC で同意済みのブランドが複数あれば並べる（install.sh status と同じ）
+      # 同じ MAC で同意済みのブランドが複数あれば並べる（install.sh status と同じ）。USEN はチェーンが分かれば「Tully's (USEN)」
       kb=(${(f)kb}) b=()
-      for x in $kb; do bn "$x"; [[ -n $nm ]] && b+=$nm; done
+      for x in $kb; do
+        bn "$x"; [[ $x == usen ]] && { chain; [[ -n $ck ]] && nm="$cname[$ck] (USEN)" }
+        [[ -n $nm ]] && b+=$nm
+      done
       b=${(j:, :)b}
       rows+="This Wi‑Fi: ${b:+$b · }Auto Reconnect On"
     elif awk -v n="$net" -v t=$(( now - 86400 )) '$1 == n && $2 > t { f = 1 } END { exit !f }' "$WT" 2>/dev/null; then
-      rows+='This Wi‑Fi: Auto Reconnect from Next Time-out'   # 見張り中（§3.1）
+      chain   # 見張り中（§3.1）
+      rows+="This Wi‑Fi: ${ck:+$cname[$ck] (USEN) · }Auto Reconnect from Next Time-out"
     else
       rows+='This Wi‑Fi: Auto Reconnect Off'
     fi
@@ -81,12 +107,15 @@ else
   kind=off rows=('cafe-wifi-okawari — Stopped' 'Run ./install.sh to Restart')
 fi
 
-# 直近の出来事（新しい順に3件）。時刻・種類・ブランド・秒数だけ（MAC・IP は出さない）
+# 直近の出来事（新しい順に3件）。時刻・種類・ブランド・秒数だけ（MAC・IP は出さない）。USEN はチェーンが分かっている接続先ならチェーン
+typeset -A nc=(); [[ -r $CH ]] && while read -r x y z; do [[ -n ${cname[$y]-} ]] && nc[$x]=$y; done < "$CH"
 strftime -s today %F $now; strftime -r -s md %F $today; strftime -s yday %F $(( md - 1 ))
 (( $#hits )) && rows+=''
 for l in ${${(Oa)hits}[1,3]}; do
   w=(${=l[21,-1]}) d=${l[1,10]}
-  bn "${w[${w[(i)net=*]}+1]-}"; b=${nm:+ · $nm}
+  i=${w[(i)net=*]}; bn "${w[i+1]-}"
+  [[ ${w[i+1]-} == usen && -n ${nc[${w[i]#net=}]-} ]] && nm=$cname[${nc[${w[i]#net=}]}]
+  b=${nm:+ · $nm}
   case $w[1] in
     re-authenticated) s=${${${(M)w:#t=<->s}[1]-}#t=}; e="Reconnected$b${s:+ · ${s%s} s}" ;;
     consent) e="Terms Accepted$b" ;;

@@ -104,7 +104,7 @@ case ${1-} in
   uninstall)
     launchctl bootout gui/$UID/$label 2>/dev/null || true
     launchctl bootout gui/$UID/$mlabel 2>/dev/null || true
-    rm -f $plist $bin $mplist $mbin{.sh,.js,.png,@2x.png} $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen,.probe}
+    rm -f $plist $bin $mplist $mbin{.sh,.js,.png,@2x.png} $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen,.probe,.chain}
     rm -rf "${kn:h}"   # 同意した接続先の記録
     print -r -- "Uninstalled: removed the LaunchAgents ($label, $mlabel), the programs and the list of accepted networks"
     print -r -- "  Log kept: $log (delete it by hand if you no longer need it)"

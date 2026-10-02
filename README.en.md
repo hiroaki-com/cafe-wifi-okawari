@@ -99,7 +99,7 @@ A successful reconnection shows no dialog; the menu bar icon shows ✓ for 10 mi
 
 ### The menu bar icon
 
-The coffee cup in the menu bar (its steam is drawn as Wi‑Fi waves, with an arrow for "a refill") shows the tool's state. It only reads the tool's files; it sends nothing over the network.
+The coffee cup in the menu bar (its steam is drawn as Wi‑Fi waves, with an arrow for "a refill") shows the tool's state. It only reads the tool's files (it writes only a small file that remembers USEN chains, below); it sends nothing over the network.
 
 | Icon | Meaning |
 |---|---|
@@ -109,7 +109,7 @@ The coffee cup in the menu bar (its steam is drawn as Wi‑Fi waves, with an arr
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="Cup …"></picture> | macOS is waiting for you to accept on the login page (on any network with a login page, not only supported ones). If the login page does not appear, open `http://captive.apple.com` in a browser |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="Faded cup"></picture> | Stopped (the background job is not registered). Run `./install.sh` to restart |
 
-Click it to see whether automatic reconnection is on for this Wi‑Fi, the estimated next time-out, and the last three events (reconnected, terms accepted, could not reconnect, stopped). The menu is in English only. It shows no MAC or IP addresses, so it is safe to show in screen sharing. The estimate is shown only when the last authentication was on the current network within 60 minutes, and not after you rejoined the Wi‑Fi. It assumes the shop's limit is 60 minutes.
+Click it to see whether automatic reconnection is on for this Wi‑Fi, the estimated next time-out, and the last three events (reconnected, terms accepted, could not reconnect, stopped). The menu is in English only. It shows no MAC or IP addresses, so it is safe to show in screen sharing. On USEN Wi‑Fi it shows the chain when it can tell, such as `Tully's (USEN)`. It tells them apart by the partly hidden Wi‑Fi name that macOS writes to the system log (such as `tu********Fi`), reads it once when you join, and does not store it. Otherwise it shows `USEN`. It never shows the shop's branch. Only Tully's has been checked at a real shop (Komeda has not). The estimate is shown only when the last authentication was on the current network within 60 minutes, and not after you rejoined the Wi‑Fi. It assumes the shop's limit is 60 minutes.
 
 "Hide from Menu Bar" quits the icon; it comes back the next time you log in or run `./install.sh`. The tool itself keeps running either way.
 
