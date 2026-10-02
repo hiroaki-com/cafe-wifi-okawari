@@ -17,6 +17,13 @@ Please accept the terms yourself on the login page the first time. macOS keeps a
 
 The tool does not verify your act of accepting, and it does not detect changes to the terms. Because it skips the terms page, it cannot see a notice of changes shown there. On USEN, all it checks is that an acceptance happened on a login page (the system log does not say on which network) and that the terms text on the page has not changed. Network identification is also limited, so it cannot guarantee a manual first acceptance at every shop (at another shop of the same brand, it may send the acceptance without one). If you learn that the terms have changed or new conditions apply, stop the tool and do not resume automatic reconnection until you have reviewed them.
 
+### Acceptance and requests on USEN
+
+Only USEN's USPOT-02 portal is supported. On a new network, after installation, the tool checks the system log for your acceptance within 5 minutes of joining and watches that Wi‑Fi for 24 hours. At the first time-out, it checks the portal and network before recording and sending the acceptance. The checks are described in §3.1 of [DESIGN.md](DESIGN.md) (Japanese).
+
+- What it sends: the same request as the login page's "connect to the internet" button, in plain HTTP to the device in the shop, as the login page does. It includes this Mac's MAC address. Birth year and gender are sent empty (the official guide says they are optional, and the page leaves them empty by default). The tool never asks for them, does not store them, and does not use values you entered on the login page
+- Changes to the terms: when it first sends the acceptance, it records a hash of the terms text on the page. If the text has changed, it sends nothing, stops re-accepting automatically, and tells you in a dialog. Read the terms on the login page and accept yourself to resume
+
 ## When to stop it
 
 The tool cannot tell a refusal due to a usage cap or suspension from a temporary network problem. If the auth server refuses the acceptance (on USEN, if the device responds) three times in a row on the same network and the connection does not come back, the tool stops re-accepting on that network and tells you in a dialog (accept on the login page yourself to resume). On timeouts and server errors it does not stop; it keeps retrying with a growing interval (up to 30 minutes). If a cap or suspension is shown, or failures continue, stop automatic reconnection and check the normal login page.

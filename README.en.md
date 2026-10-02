@@ -15,45 +15,34 @@
 
 <p align="center"><a href="README.md">日本語</a> | English</p>
 
-Automatically re-accepts the captive portal terms when a free café Wi‑Fi in Japan sends you back to its login page after the time limit (e.g. 60 minutes). *Okawari* means "a refill" — like a coffee refill, but for Wi‑Fi.
+A macOS tool that automatically re-accepts the terms and reconnects when a café's free Wi‑Fi session times out. It saves you from repeating the login steps, helping you stay focused on your work.
 
-- On Wi2 Wi‑Fi where you have accepted the terms yourself (USEN is only partly tested at a shop; see [About USEN](#about-usen)), it checks every 10 seconds, notices a logout within about 10 seconds, and usually reconnects a few seconds later (your connection is down in between; see [Caveats](#caveats))
-- Works with any time limit — it reacts to the login page, not a timer
-- Uses no IDs, passwords, or email addresses, and stores nothing secret
-- It talks only to Apple's connectivity check page (the one macOS itself uses) and the shop Wi‑Fi's login page. Nothing is sent to the author or any other server
-- Its log and menu never show this Mac's MAC or IP address
-- Shows its status as a coffee cup icon in the menu bar, without interrupting you
-- Nothing extra to install: it runs on the zsh, curl, launchd, and JavaScript for Automation that ship with macOS. The scripts are short enough to read in full
+- **Automatic reconnection** — Accept the terms yourself the first time. The tool reconnects in the background at later time-outs.
+- **Status in the menu bar** — Check the connection status from the coffee cup icon.
+- **Built with macOS tools** — No extra software or administrator privileges required.
+
+Your connection is briefly interrupted until reconnection completes. Check the [supported networks](#supported-networks) and [conditions of use](#before-you-use-it) before using the tool.
 
 ## Supported networks
 
-Free Wi‑Fi from Wire and Wireless (Wi2) where you only need to accept the terms.
+Free Wi‑Fi from Wi2 and USEN (USPOT-02) where you only need to accept the terms.
 
 | Shop | SSID | Status |
 |---|---|---|
-| Doutor / Excelsior Caffé | `DOUTOR_FREE_Wi-Fi` | Tested (recording your acceptance and automatic re-acceptance after the time limit each confirmed at one shop) |
-| Skylark group (Gusto, etc.) | `.Wi2_Free_at_【SK.GROUP】` | Tested (recording your acceptance and automatic re-acceptance after the time limit each confirmed at one shop). Some brands, such as Bamiyan, ended their Wi‑Fi in June 2025 |
+| Doutor / Excelsior Caffé | `DOUTOR_FREE_Wi-Fi` | Tested at a real shop |
+| Skylark group (Gusto, etc.) | `.Wi2_Free_at_【SK.GROUP】` | Tested at a real shop. Some brands have ended their Wi‑Fi service |
+| Tully's Coffee | `tullys_Wi-Fi` | Tested at real shops (USEN) |
 | Starbucks | `at_STARBUCKS_Wi2` | Expected to work (same portal) |
 | Renoir / Miyama Coffee | `Renoir_Miyama_Wi-Fi` | Expected to work (same portal). The 3-hour daily cap cannot be extended |
+| Komeda's Coffee | `Komeda_Wi-Fi` | Same portal (USEN). Not yet tested at a real shop |
 
-Tully's Coffee (`tullys_Wi-Fi`) and Komeda's Coffee (`Komeda_Wi-Fi`) use a USEN portal (not Wi2) that also asks for your birth year and gender (optional). The tool has code that re-sends the acceptance to this portal. It has been tested only at two Tully's shops, a few times, so these networks are not listed as supported (see [About USEN](#about-usen)). Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported. The survey is in [DESIGN.md](DESIGN.md) (Japanese).
+Tested networks have been checked for both recording the initial acceptance and reconnecting automatically after a time-out. Shop counts, test counts, and test conditions are in §7 of [DESIGN.md](DESIGN.md) (Japanese). Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported.
 
 ### About USEN
 
-It has been tested only at two Tully's shops: detecting your acceptance when you join (see "When it applies" below) once, and automatic re-acceptance after a time-out four times. Komeda's Coffee has not been tested at a shop yet. To see whether it worked, check `./install.sh status` and the log ([Troubleshooting](#troubleshooting)).
+On a network you use for the first time, accept the terms on the login page within 5 minutes of joining the Wi‑Fi, after installing the tool. If you accepted before installing, it applies from the next time you accept on the login page. If macOS opens its login window, accept there yourself.
 
-- Which networks: only networks whose login page is USEN's "USPOT-02". According to their official guides, Tully's and Komeda's Coffee use it
-- When it applies: only when you accept the terms yourself on the login page within 5 minutes of joining the Wi‑Fi. The tool checks the Mac's system log (`/usr/bin/log show`) for that acceptance and then watches the network for 24 hours (it only reads the log; it sends nothing). It does nothing on a network you accepted before installing the tool, or more than 5 minutes after joining. It applies from the next time you join and accept on the login page yourself
-- At the first time-out: on a watched network, before sending anything, it checks all of the following and sends nothing if any of them fails
-  - The login page is on a device in the shop (a private IP address) that is reached through the current Wi‑Fi
-  - The device MAC address in the redirect is this Mac's (the macOS private Wi‑Fi address)
-  - The page and its JavaScript are USPOT-02's
-
-  If all pass, it records your acceptance at the start as your acceptance of USEN's terms and sends the acceptance. It does the same at later time-outs
-- What it sends: the same request as the login page's "connect to the internet" button, in plain HTTP to the device in the shop, as the login page does. It includes this Mac's MAC address. Birth year and gender are sent empty (the official guide says they are optional, and the page leaves them empty by default). The tool never asks for them, does not store them, and does not use values you entered on the login page
-- Changes to the terms: when it first sends the acceptance, it records a hash of the terms text on the page. If the text has changed, it sends nothing, stops re-accepting automatically, and tells you in a dialog. Read the terms on the login page and accept yourself to resume
-- When it stops: the USEN device does not say in its response whether it accepted. So if the device responds but the connection does not come back three times in a row, the tool stops re-accepting on that network. Accept on the login page yourself to resume
-- If it is too late: on USEN, macOS opens its login window about 12 seconds after the time-out, and the tool can no longer send anything after that. In both tests at a shop, the tool got there first: the connection came back in 1 to 2 seconds and the login window did not open. But the tool checks only every 10 seconds, so it can be too late. If so, accept in the login window yourself
+For what the tool sends and how it handles terms changes, see [Acceptance and requests on USEN](USAGE-NOTES.en.md#acceptance-and-requests-on-usen).
 
 ## Requirements
 
@@ -72,6 +61,8 @@ Before installing, please read the full [Usage notes and automatic acceptance](U
 
 ## Install and use
 
+It runs with your logged-in user's permissions. It talks to Apple's connectivity check page and the Wi‑Fi authentication service, and sends no information to the author's server. It does not handle IDs, passwords, or email addresses. You can inspect the [published scripts](cafe-wifi-okawari.sh) and use the [uninstall command](#uninstall) to remove the background job when you no longer need it.
+
 ### 1. Install
 
 Run this in Terminal:
@@ -82,7 +73,7 @@ cd cafe-wifi-okawari
 ./install.sh
 ```
 
-No `sudo` needed. The installer copies the script to `~/.local/bin/cafe-wifi-okawari` and registers a user LaunchAgent. From then on it runs in the background every 10 seconds, so you can close Terminal. After a restart, it starts again automatically when you log in.
+No `sudo` needed. The installer copies the script to `~/.local/bin/cafe-wifi-okawari` and registers a user LaunchAgent. From then on it runs in the background, so you can close Terminal. After a restart, it starts again automatically when you log in.
 
 It also adds a coffee cup icon to the menu bar ([The menu bar icon](#the-menu-bar-icon)). To install without it, run `./install.sh --no-menubar` instead (this also removes the icon if it is already installed).
 
@@ -90,7 +81,7 @@ It also adds a coffee cup icon to the menu bar ([The menu bar icon](#the-menu-ba
 
 When you join the shop's Wi‑Fi (e.g. `DOUTOR_FREE_Wi-Fi`), macOS opens its login window. Please read the terms and press "accept" as usual.
 
-Once the connection works, the tool records the shop as one where you accepted the terms yourself. You can check this with `./install.sh status` (see below). If you had already accepted at the shop before installing, it is recorded right after installation.
+Once the connection works, the tool records the shop as one where you accepted the terms yourself. You can check this with `./install.sh status` (see below). On Wi2, if you had already accepted before installing, it is recorded right after installation. On USEN, accept on the login page after installing (see [About USEN](#about-usen)).
 
 ### 3. Keep using the Wi‑Fi
 
@@ -167,6 +158,8 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 
 ### How it works
 
+- It uses the zsh, curl, jq, launchd, and JavaScript for Automation included with macOS. It checks the connection every 10 seconds and re-authenticates when it detects a time-out. You do not need to configure the session length.
+- Its log and menu never show this Mac's MAC or IP address.
 - Networks are identified by the router's MAC address together with the brand (e.g. `doutor`). Shops of the same brand may share the same value, so it cannot always tell shops apart.
 - It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`), without sending anything. On other networks (e.g. at home) it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does, and sends nothing to Wi2. During that time it also checks the Mac's system log once for an acceptance on the login page (to find USEN networks; it sends nothing).
 - Dialogs follow your macOS language (Japanese or English). Messages from `install.sh` and the menu bar are in English.
@@ -227,6 +220,13 @@ To check that it is running (what it shows is described in [Check that it is wor
 ./install.sh status
 ```
 
+- If the login window appears, read the terms and notices and accept yourself. If it does not appear, open `http://captive.apple.com` in a browser.
+- If automatic reconnection stops or failures continue, check the normal login page for usage caps, suspensions, or terms changes. Run `./install.sh uninstall` if you need to stop the tool (see [Usage notes](USAGE-NOTES.en.md#when-to-stop-it)).
+- For more detail, expand the log reference below.
+
+<details>
+<summary>How to read the log and message reference</summary>
+
 The log is written only when something happens:
 
 ```sh
@@ -256,6 +256,8 @@ tail ~/Library/Logs/cafe-wifi-okawari.log
 | `probe failed xN net=… curl=… http=…` | On a Wi2, recorded, or pending network, the connection state could not be checked (non-zero `curl` means a network error; `http` is an unexpected response). The tool sends nothing |
 
 On repeated failures, the retry interval backs off from 30 seconds up to 30 minutes. Every failure is logged (failed status checks only on the 1st, 2nd, 4th, 8th…), and you get a single dialog (plus one more if it stops after repeated refusals). Moving to another shop resets the backoff.
+
+</details>
 
 ## Development
 
