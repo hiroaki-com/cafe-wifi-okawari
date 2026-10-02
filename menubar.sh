@@ -14,7 +14,7 @@ PD=$ST.pending
 KN="$HOME/Library/Application Support/cafe-wifi-okawari/consented"
 WT="${KN:h}/watched"
 RC=/var/run/resolv.conf
-CH=$ST.chain   # USEN の接続先のチェーン「MAC キー」。見つからなかった接続は「MAC - リース開始」（伏せ字の SSID は残さない）
+CH=$ST.chain   # USEN の接続先のチェーン「MAC キー リース開始」。見つからなければキーを「-」にする（伏せ字の SSID は残さない）
 now=$EPOCHSECONDS
 # USEN の網のチェーン（§3.2）。システムログに出る伏せ字の SSID（先頭2文字と末尾2文字、間は同じ文字数の *）とキー、キーと表記
 typeset -A chains=('tu********Fi' tullys 'Ko********Fi' komeda)
