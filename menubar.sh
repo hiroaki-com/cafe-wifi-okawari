@@ -1,7 +1,8 @@
 #!/bin/zsh
 # メニューバーに出す状態を決める（DESIGN.md §3.2）。判定はすべてここで行い、menubar.js は表示するだけ。
 # 出力: 1行目はアイコンの種類（off・warn・wait・check・on）。2行目以降はメニューの行で、タブで区切った
-# 「表示 [右の列] [ツールチップ]」。空行は区切り線。通信しない。本体の記録ファイルとログは読むだけ。表示は英語のみ。
+# 「種類 表示 [右の列] [ツールチップ]」。種類は head（見出し）・green・yellow・red・gray（左の印の色）・-（印なし）。
+# 空行は区切り線。通信しない。本体の記録ファイルとログは読むだけ。表示は英語のみ。
 set -u
 setopt extended_glob   # [A-Za-z0-9_-]## と ~
 zmodload zsh/datetime   # EPOCHSECONDS・strftime
@@ -16,6 +17,7 @@ WT="${KN:h}/watched"
 RC=/var/run/resolv.conf
 CH=$ST.chain   # USEN の接続先のチェーン「MAC キー リース開始」。見つからなければキーを「-」にする（伏せ字の SSID は残さない）
 now=$EPOCHSECONDS
+TB=$'\t'
 # USEN の網のチェーン（§3.2）。システムログに出る伏せ字の SSID（先頭2文字と末尾2文字、間は同じ文字数の *）とキー、キーと表記
 typeset -A chains=('tu********Fi' tullys 'Ko********Fi' komeda)
 typeset -A cname=(tullys "Tully's" komeda Komeda)
@@ -66,7 +68,7 @@ chain() {
 hits=(${(M)${(f)"$(tail -c 16384 "$log" 2>/dev/null)"}:#[0-9](#c4)-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] (re-authenticated|consent recorded|captive login seen|login failed|redirect failed|auto stopped) *~*redirect failed * net=*})
 
 if launchctl print gui/$UID/$label >/dev/null 2>&1; then
-  kind=on rows=('cafe-wifi-okawari — Running')
+  kind=on rows=("head${TB}cafe-wifi-okawari")
   # 再認証から10分は ✓
   a=(${(M)hits:#??????????????????? re-authenticated *})
   (( $#a )) && at $a[-1] && (( now - t < 600 )) && kind=check
@@ -79,9 +81,9 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
     if [[ -n $wifi ]] && { [[ -n $(ipconfig getifaddr "$wifi" 2>/dev/null) ]] ||
          [[ $(scutil <<< "show State:/Network/Interface/$wifi/CaptiveNetwork" 2>/dev/null) == *'WaitingOnUI : TRUE'* ]] }; then
       kind=wait
-      rows+=('This Wi‑Fi: Waiting for Login Page' "If the login page doesn't appear, open http://captive.apple.com.")
+      rows+=("yellow${TB}Waiting for Login Page" "-${TB}If the login page doesn't appear, open http://captive.apple.com.")
     else
-      rows+='This Wi‑Fi: Offline'
+      rows+="gray${TB}Offline"
     fi
   else
     if kb=$(awk -v n="$net" '$1 == n { f = 1; print $2 } END { exit !f }' "$KN" 2>/dev/null); then
@@ -91,23 +93,27 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
         bn "$x"; [[ $x == usen ]] && { chain; [[ -n $ck ]] && nm="$cname[$ck] (USEN)" }
         [[ -n $nm ]] && b+=$nm
       done
-      b=${(j:, :)b}
-      rows+="This Wi‑Fi: ${b:+$b · }Auto Reconnect On"
+      dot=green name=${(j:, :)b} st='Auto Reconnect On'
     elif awk -v n="$net" -v t=$(( now - 86400 )) '$1 == n && $2 > t { f = 1 } END { exit !f }' "$WT" 2>/dev/null; then
       chain   # 見張り中（§3.1）
-      rows+="This Wi‑Fi: ${ck:+$cname[$ck] (USEN) · }Auto Reconnect from Next Time-out"
+      dot=yellow name=${ck:+$cname[$ck] (USEN)} st='Auto Reconnect from Next Time-out'
     else
-      rows+='This Wi‑Fi: Auto Reconnect Off'
+      dot=gray name= st='Auto Reconnect Off'
     fi
+    # 印の行は接続先の名前（分からなければ This Wi‑Fi）、その下に自動再接続の状態と案内。印は案内で赤・黄に変える
+    rows+=(x "-$TB$st") i=$(( $#rows - 1 ))
     # 注意（今の接続先のときだけ。店を出たあとも本体の記録ファイルは残ることがある）
     # 状態ファイル「連続失敗回数 次回試行時刻 接続先 拒否の回数 知らせたか 拒否したブランド」で、知らせたあと
     n= next= prev= rej= told= rb=
     [[ -r $ST ]] && read -r n next prev rej told rb < "$ST"
-    [[ $prev == "$net" && $told == 1 ]] && kind=warn rows+="Couldn't reconnect automatically. Check the login page."
+    [[ $prev == "$net" && $told == 1 ]] && kind=warn dot=red rows+="-${TB}Couldn't reconnect automatically. Check the login page."
     # 同意待ち「MAC ブランド notified」「MAC usen 基準時刻 notified」（初めての網で知らせたあと・自動の停止のあと）
     pd=(); [[ -r $PD ]] && pd=(${=$(<"$PD")})
-    (( $#pd >= 3 )) && [[ $pd[1] == "$net" && $pd[-1] == notified ]] &&
-      kind=warn rows+='Accept the terms once on the login page. After that, it reconnects automatically.'
+    if (( $#pd >= 3 )) && [[ $pd[1] == "$net" && $pd[-1] == notified ]]; then
+      kind=warn rows+="-${TB}Accept the terms once on the login page. After that, it reconnects automatically."
+      [[ $dot == red ]] || dot=yellow   # 利用者の操作待ちなので黄。失敗の赤は残す
+    fi
+    rows[i]="$dot$TB${name:-This Wi‑Fi}"
 
     # 次の時間切れの目安: 今の接続先での最後の認証から60分。接続画面での同意を確かめた行（ブランド付きの captive login seen。
     # 同意から60秒以内に書く）も起点にする。接続画面での同意の記録（(captive login)。送る前に書く）は除く。
@@ -115,16 +121,16 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
     a=(${(M)hits:#??????????????????? (re-authenticated|consent recorded|captive login seen)* net=$net *~*'(captive login)'})
     zstat -A m +mtime $RC 2>/dev/null || m=(0)
     (( $#a )) && at $a[-1] && (( now - t < 3600 && m[1] <= t + 30 )) &&
-      rows+="Next Time-out: ~$(strftime '%H:%M' $(( t + 3600 )))"$'\t\t'"Estimated from the last authentication, if the shop's limit is 60 minutes."
+      rows+="-${TB}Next Time-out$TB~$(strftime '%H:%M' $(( t + 3600 )))${TB}Estimated from the last authentication, if the shop's limit is 60 minutes."
   fi
 else
-  kind=off rows=('cafe-wifi-okawari — Stopped' 'Run ./install.sh to Restart')
+  kind=off rows=("head${TB}cafe-wifi-okawari" "gray${TB}Stopped" "-${TB}Run ./install.sh to Restart")
 fi
 
 # 直近の出来事（新しい順に3件）。時刻・種類・ブランド・秒数だけ（MAC・IP は出さない）。USEN はチェーンが分かっている接続先ならチェーン
 typeset -A nc=(); [[ -r $CH ]] && while read -r x y z; do [[ -n ${cname[$y]-} ]] && nc[$x]=$y; done < "$CH"
 strftime -s today %F $now; strftime -r -s md %F $today; strftime -s yday %F $(( md - 1 ))
-(( $#hits )) && rows+=''
+(( $#hits )) && rows+=('' "head${TB}Recent")
 for l in ${${(Oa)hits}[1,3]}; do
   w=(${=l[21,-1]}) d=${l[1,10]}
   i=${w[(i)net=*]}; bn "${w[i+1]-}"
@@ -138,7 +144,7 @@ for l in ${${(Oa)hits}[1,3]}; do
     *) e="Couldn't Reconnect" ;;   # login failed・redirect failed（本体はブランドを書かない）
   esac
   [[ $d == $today ]] && d=Today || { [[ $d == $yday ]] && d=Yesterday || d=${d[6,10]} }
-  rows+="$d ${l[12,16]}"$'\t'"$e"
+  rows+="-$TB$d ${l[12,16]}$TB$e"
 done
 
 print -r -- $kind

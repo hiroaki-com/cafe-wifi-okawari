@@ -30,7 +30,14 @@ item.button.image = img
 const menu = $.NSMenu.alloc.init
 item.menu = menu
 
-// 右の列（直近の出来事の中身）をそろえるタブ位置
+// 行の左の印（AppKit 標準の状態の画像）と、印のない行の文字を印のある行にそろえる透明な画像
+const D = 12
+function dot(name) { const i = $.NSImage.imageNamed(name).copy; i.size = $.NSMakeSize(D, D); return i }
+const DOT = { green: dot($.NSImageNameStatusAvailable), yellow: dot($.NSImageNameStatusPartiallyAvailable),
+  red: dot($.NSImageNameStatusUnavailable), gray: dot($.NSImageNameStatusNone) }
+const BLANK = $.NSImage.alloc.initWithSize($.NSMakeSize(D, D))
+
+// 右の列（直近の出来事の中身・次の時間切れの時刻）をそろえるタブ位置
 const ps = $.NSMutableParagraphStyle.alloc.init
 ps.tabStops = $([$.NSTextTab.alloc.initWithTextAlignmentLocationOptions($.NSTextAlignmentLeft, 110, $())])
 const cols = $.NSDictionary.dictionaryWithObjectsForKeys(
@@ -47,7 +54,8 @@ function refresh() {
   menu.removeAllItems
   for (const l of out.slice(1)) {
     if (!l) { menu.addItem($.NSMenuItem.separatorItem); continue }
-    const [text, right, tip] = l.split('\t')
+    const [kind, text, right, tip] = l.split('\t')
+    if (kind === 'head') { menu.addItem($.NSMenuItem.sectionHeaderWithTitle(text)); continue }   // macOS 14 以降
     const m = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent(right ? text + '\t' + right : text, null, '')
     if (right) {
       // alloc の直後では initWithString:attributes: が橋渡しされない（macOS 27）ので、new で作って中身と属性を入れる
@@ -56,6 +64,7 @@ function refresh() {
       s.setAttributesRange(cols, $.NSMakeRange(0, s.length))
       m.attributedTitle = s
     }
+    m.image = DOT.hasOwnProperty(kind) ? DOT[kind] : BLANK   // 色以外の種類（-）は印なし
     if (tip) m.toolTip = tip
     m.enabled = false   // 状態と案内の行は押せない
     menu.addItem(m)

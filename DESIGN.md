@@ -345,33 +345,45 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 
 **メニュー**（英語のみ。macOS の優先言語で切り替えない。`install.sh` のメッセージと同じ扱い。ダイアログは今までどおり日本語・英語）
 
-表記は2026-09-30 に決めた。状態の行は短い語句を「·」でつなぎ（一目で読め、メニューが細くなる）、利用者の対応が要る「!」の案内だけを文にする（何をすればよいかを誤解させない）。ログと `install.sh status` の語（`re-authenticated` など）は変えず、メニューだけ下の表で読み替える。
+表記は2026-09-30 に決め、2026-10-02 に macOS 標準のメニュー（Wi‑Fi・Bluetooth）の並べ方に改めた。見出しの下に、色の印を付けた接続先の行を置き、その下に自動再接続の状態・案内・次の時間切れを印なしで続ける（印の位置をあけて文字をそろえる）。状態の行は短い語句にし（一目で読め、メニューが細くなる）、利用者の対応が要る「!」の案内だけを文にする（何をすればよいかを誤解させない）。ログと `install.sh status` の語（`re-authenticated` など）は変えず、メニューだけ下の表で読み替える。
 
 ```
-cafe-wifi-okawari — Running
-This Wi‑Fi: Skylark · Auto Reconnect On
-Next Time-out: ~11:05
+cafe-wifi-okawari                    ← 見出し
+● Skylark                            ← 印（緑）
+  Auto Reconnect On
+  Next Time-out    ~11:05
 ────
-Today 10:05      Reconnected · USEN · 1 s
-Today 10:05      Terms Accepted · USEN
-Yesterday 16:40  Reconnected · Skylark · 2 s
+Recent                               ← 見出し
+  Today 10:05      Reconnected · USEN · 1 s
+  Today 10:05      Terms Accepted · USEN
+  Yesterday 16:40  Reconnected · Skylark · 2 s
 ────
 Open Log
 Hide from Menu Bar
 ```
 
+印は AppKit 標準の状態の画像（`NSImageNameStatusAvailable`・`StatusPartiallyAvailable`・`StatusUnavailable`・`StatusNone`）で、色の意味は次の4つ。色だけに頼らないよう、意味は印の下の行にも文字で出す。
+
+| 印 | 意味 |
+|---|---|
+| 緑 | 今の接続先で自動再接続が有効（同意済み） |
+| 黄 | 利用者の操作か次の時間切れを待っている（見張り中・接続画面待ち・最初の1回の同意待ち） |
+| 赤 | 再接続に失敗し、知らせたあと |
+| 灰 | 自動再接続が働いていない（未同意・未接続・停止中） |
+
 | 状態 | 行 |
 |---|---|
-| 1行目（動作中 / 停止中） | `cafe-wifi-okawari — Running` / `cafe-wifi-okawari — Stopped` と、続けて `Run ./install.sh to Restart` |
-| 同意済み | `This Wi‑Fi: Skylark · Auto Reconnect On` |
-| 未同意（自宅など） | `This Wi‑Fi: Auto Reconnect Off` |
-| 未接続 | `This Wi‑Fi: Offline` |
-| 見張り中（§3.1） | `This Wi‑Fi: Auto Reconnect from Next Time-out` |
-| USEN の網でチェーンが分かった（同意済み・見張り中） | `This Wi‑Fi: Tully's (USEN) · Auto Reconnect On`・`This Wi‑Fi: Tully's (USEN) · Auto Reconnect from Next Time-out`（下の「USEN のチェーン」） |
-| 接続画面待ち（…） | `This Wi‑Fi: Waiting for Login Page` と、続けて `If the login page doesn't appear, open http://captive.apple.com.` |
-| 注意: 再接続に失敗し、知らせたあと（!） | `Couldn't reconnect automatically. Check the login page.`（This Wi‑Fi の行の直後。下も同じ） |
-| 注意: 同意が要る（!。初めての網・自動の停止のあと） | `Accept the terms once on the login page. After that, it reconnects automatically.` |
-| 次の時間切れ | `Next Time-out: ~11:05`。項目にマウスを載せると `Estimated from the last authentication, if the shop's limit is 60 minutes.`（ツールチップ）。下の条件を満たさなければ行を出さない |
+| 見出し | 動作中・停止中とも `cafe-wifi-okawari`（動作中であることは印の行で分かるので書かない） |
+| 停止中 | 灰の `Stopped` と、続けて `Run ./install.sh to Restart` |
+| 同意済み | 緑の `Skylark`、続けて `Auto Reconnect On` |
+| 未同意（自宅など） | 灰の `This Wi‑Fi`（SSID は取れないので網の名前を出せない）、続けて `Auto Reconnect Off` |
+| 未接続 | 灰の `Offline` |
+| 見張り中（§3.1） | 黄の `This Wi‑Fi`、続けて `Auto Reconnect from Next Time-out` |
+| USEN の網でチェーンが分かった（同意済み・見張り中） | 緑・黄の `Tully's (USEN)`（下の「USEN のチェーン」） |
+| 接続画面待ち（…） | 黄の `Waiting for Login Page` と、続けて `If the login page doesn't appear, open http://captive.apple.com.` |
+| 注意: 再接続に失敗し、知らせたあと（!） | 印を赤にし、状態の行の下に `Couldn't reconnect automatically. Check the login page.` |
+| 注意: 同意が要る（!。初めての網・自動の停止のあと） | 印を黄にし（赤なら赤のまま）、状態の行の下に `Accept the terms once on the login page. After that, it reconnects automatically.`。失敗と重なれば両方の案内を出す |
+| 次の時間切れ | `Next Time-out`、右の列に `~11:05`。項目にマウスを載せると `Estimated from the last authentication, if the shop's limit is 60 minutes.`（ツールチップ）。下の条件を満たさなければ行を出さない |
 
 | ログの語 | 直近の出来事での表記 |
 |---|---|
@@ -381,10 +393,10 @@ Hide from Menu Bar
 | `login failed`・`redirect failed` | `Couldn't Reconnect`（本体の失敗の行はブランドを書かないので付けない）。通信できている間のブランドの確認の失敗（`redirect failed … net=…`）は再接続の失敗ではないので出さない |
 | `auto stopped` | `Auto Reconnect Stopped · <ブランド>` |
 
-- 直近の出来事は、上の5種類の行を新しい順に3件。1件もなければ区切り線ごと出さない
+- 直近の出来事は、見出し `Recent` の下に、上の5種類の行を新しい順に3件。1件もなければ区切り線と見出しごと出さない
 - 日付は、今日なら `Today`、昨日なら `Yesterday`、それより前は `09-28`。時刻は24時間制の `HH:MM`。日時と中身は2列にそろえる
-- ブランド名は先頭だけ大文字（`skylark` → `Skylark`）。`usen` は `USEN`（チェーンが分かっている接続先なら `Tully's`。This Wi‑Fi の行では `Tully's (USEN)`）。同じ MAC で同意済みのブランドが複数あれば `Doutor, Starbucks` と並べる（`install.sh status` と同じ）。本体は英字・数字・`-`・`_` だけのブランド名しか記録しないが、そのほかの文字を含む語は出さない（MAC・IP を出さないため）
-- 停止中は、1行目と `Run ./install.sh to Restart` と直近の出来事だけ。This Wi‑Fi・次の時間切れ・案内は出さない（自動再接続が動いていないのに `Auto Reconnect On` と読めるため）
+- ブランド名は先頭だけ大文字（`skylark` → `Skylark`）。`usen` は `USEN`（チェーンが分かっている接続先なら `Tully's`。接続先の行では `Tully's (USEN)`）。同じ MAC で同意済みのブランドが複数あれば `Doutor, Starbucks` と並べる（`install.sh status` と同じ）。本体は英字・数字・`-`・`_` だけのブランド名しか記録しないが、そのほかの文字を含む語は出さない（MAC・IP を出さないため）
+- 停止中は、見出しと `Stopped`・`Run ./install.sh to Restart` と直近の出来事だけ。接続先・次の時間切れ・案内は出さない（自動再接続が動いていないのに `Auto Reconnect On` と読めるため）
 - 末尾の `Open Log`（ログを既定のアプリで開く。ログがなければ押せない）と `Hide from Menu Bar` は操作なので、`menubar.js` が付ける
 - 案内の行（!・…）は押せない行として出す。接続画面を開くボタンは付けない（操作を増やさない）
 - 画面共有や録画に写るので、端末とゲートウェイの MAC・IP は出さない（直近の出来事は時刻・種類・ブランド・秒数だけ）。SSID・店舗名は画面共有を理由に除かない（SSID は macOS が位置情報の許可なしには返さないので出していない。USEN のチェーンは下の方法で出す。店舗名は出さない）
@@ -413,19 +425,21 @@ Hide from Menu Bar
 - 表にない形（`.FREE_Wi-Fi_PASSPORT_J` の店など）・伏せ字の形が macOS の更新で変わったときは、今までどおり `USEN`
 - 読み取りの1回目は実網で約1.7〜1.8秒、覚えたあとは約0.03秒（2026-10-02）
 
-**出力**（`menubar.sh` の標準出力。1行目がアイコンの種類、以降が行、空行が区切り線。行はタブで区切った「表示 [右の列] [ツールチップ]」）
+**出力**（`menubar.sh` の標準出力。1行目がアイコンの種類、以降が行、空行が区切り線。行はタブで区切った「種類 表示 [右の列] [ツールチップ]」）
 
 ```
 warn
-cafe-wifi-okawari — Running
-This Wi‑Fi: Skylark · Auto Reconnect On
-Couldn't reconnect automatically. Check the login page.
-Next Time-out: ~11:05<TAB><TAB>Estimated from the last authentication, if the shop's limit is 60 minutes.
+head<TAB>cafe-wifi-okawari
+red<TAB>Skylark
+-<TAB>Auto Reconnect On
+-<TAB>Couldn't reconnect automatically. Check the login page.
+-<TAB>Next Time-out<TAB>~11:05<TAB>Estimated from the last authentication, if the shop's limit is 60 minutes.
 
-Today 10:05<TAB>Reconnected · Skylark · 2 s
+head<TAB>Recent
+-<TAB>Today 10:05<TAB>Reconnected · Skylark · 2 s
 ```
 
-アイコンの種類は `off`・`warn`・`wait`・`check`・`on` のどれか。JXA 側はこれ以外の値や実行の失敗を `off` として扱う。右の列はタブ位置でそろえる。
+アイコンの種類は `off`・`warn`・`wait`・`check`・`on` のどれか。JXA 側はこれ以外の値や実行の失敗を `off` として扱う。行の種類は `head`（見出し）・`green`・`yellow`・`red`・`gray`（印の色）・`-`（印なし）。JXA 側は色以外の種類を印なしとして扱う。右の列はタブ位置でそろえる。
 
 **導入・削除**（`install.sh`）
 
@@ -443,9 +457,10 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 - macOS 27 の JXA では、`NSAttributedString.alloc` の直後に `initWithString:attributes:` が橋渡しされない。右の列をそろえる文字列は `NSMutableAttributedString.new` に中身と属性を入れて作る
 - `osascript -l JavaScript menubar.js --check` は、アイコンとメニューを1回作って終わる（GitHub Actions での読み込みの確認用）
 - アイコンは 1x・2x の PNG を同じ 18 × 18 pt の `NSImage` の表現にし、`template` を明示する（ファイル名の `Template` での判定には頼らない）。どちらかが読めなければ起動しない（`--check` も失敗する）ので、画像が欠けたまま別の見た目で動くことはない。状態で画像は替えず、停止中は `appearsDisabled` で薄くする
-- 状態の行は押せない行（無効の項目）にしている。無効の項目でツールチップが出るかは未確認（§7）
+- 状態の行は押せない行（無効の項目）にしている。無効の項目でツールチップが出るかは未確認（§7）。無効の項目の文字は、属性付きの文字列で色を指定しても macOS が薄い色で描く（2026-10-02 に試作で確認）ので、接続先の行も他の行と同じ色になる。印の画像は薄くならない
+- 見出しは `NSMenuItem.sectionHeaderWithTitle:`（macOS 14 以降。対象は macOS 15 以降）。印は AppKit 標準の状態の画像を 12 × 12 pt にして項目の `image` に入れ、印のない行には同じ大きさの透明な画像を入れて文字の位置をそろえる。操作の項目（`Open Log` など）には画像を入れない
 
-**試験**（`test/run.sh`。結果は §7）: アイコンの5状態と優先順位、注意の2条件（今の接続先と違えば出ない）、注意の最中に既定経路がなくなる（接続画面待ちになる。Wi‑Fi の IPv4 も `WaitingOnUI` もなければ未接続）、✓ の10分の境目、次の時間切れの有無（店 A で再認証したあと店 B へ移る → 出さない、`consent recorded … usen (captive login)` のあと送信に失敗 → 出さない、そのあと `re-authenticated` → その時刻から60分、行より後に `resolv.conf` が書き換わる → 出さない、30秒以内なら出す、ブランド付きの `captive login seen` → その時刻から60分、ブランドのない行 → 出さない）、優先言語が日本語でもメニューは英語、状態ごとの行の表記と直近の出来事の読み替え（Today・Yesterday の境目、ブランド名の大文字、MAC・IP を含まない）、ログがない・空・状態ファイルが旧形式、USEN のチェーン（§7 の表）、`install.sh` の既定・`--no-menubar`・再導入・uninstall・status。`menubar.js` は GitHub Actions で構文の確認と `--check` での読み込み、実機での目視。
+**試験**（`test/run.sh`。結果は §7）: アイコンの5状態と優先順位、印の色（緑・黄・赤・灰。失敗と同意待ちが重なれば赤）、注意の2条件（今の接続先と違えば出ない）、注意の最中に既定経路がなくなる（接続画面待ちになる。Wi‑Fi の IPv4 も `WaitingOnUI` もなければ未接続）、✓ の10分の境目、次の時間切れの有無（店 A で再認証したあと店 B へ移る → 出さない、`consent recorded … usen (captive login)` のあと送信に失敗 → 出さない、そのあと `re-authenticated` → その時刻から60分、行より後に `resolv.conf` が書き換わる → 出さない、30秒以内なら出す、ブランド付きの `captive login seen` → その時刻から60分、ブランドのない行 → 出さない）、優先言語が日本語でもメニューは英語、状態ごとの行の表記と直近の出来事の読み替え（Today・Yesterday の境目、ブランド名の大文字、MAC・IP を含まない）、ログがない・空・状態ファイルが旧形式、USEN のチェーン（§7 の表）、`install.sh` の既定・`--no-menubar`・再導入・uninstall・status。`menubar.js` は GitHub Actions で構文の確認と `--check` での読み込み、実機での目視。
 
 ## 4. 安全性
 
@@ -528,8 +543,8 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 | 確認項目 | 結果 |
 |---|---|
 | 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`・`menubar.js` の `osacompile -l JavaScript`） | OK |
-| 模擬試験 `zsh test/run.sh`（361項目。うち USEN の分岐と `install.sh status` の見張り表示が119項目、同意済みの Wi2 の網での接続画面の同意が11項目、メニューバーの表示が68項目（USEN のチェーンが24項目）、`install.sh` のメニューバーと次の時間切れの目安が15項目） | OK。GitHub Actions でも実行。既存の項目のうち、仕様を変えた5項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない・同意済みの網でも入店時にシステムログを読む・直近の出来事に `captive login seen` を出す）は書き換えた。Wi2 のつなぎ直しの項目は、同意済みの MAC で15秒待つようになったので、resolv.conf の更新から20秒の状態で確かめる |
-| 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、すべて NG として検出（例: `-b "$jar"` を外す・同意の本文を変えると、どちらも23項目が失敗）。USEN の実装では33通りの変異（例: `--noproxy` を外す・性別を空でなく送る・GET のあとの same() を外す・同意の行の削除を行全体の一致にする・基準時刻の +1 を外す）をすべて検出。メニューバーの実装では37通り（例: 注意の接続先の照合を外す・Wi‑Fi でなく先頭のポートを使う・目安の captive login の除外や resolv.conf の30秒を変える・出来事を4件にする・`--no-menubar` で消さない・`KeepAlive` を付ける）をすべて検出（最初は2通りを見逃したので、試験の行の並びと `status` の30秒の境目を足した）。アイコンの組み込みでは4通り（1x・2x のどちらかを入れない・`--no-menubar` と uninstall で画像を残す）をすべて検出。USEN のチェーンでは12通り（例: 探す範囲をリース開始の10秒前からに戻す・2時間の範囲を広げる・インターフェースの照合を外す・最初の行で判定する・伏せ字の SSID を残す・Wi2 の網でも読む・見つからなかった行を出来事に使う・読んだあとの接続先の確認を外す・共通の一時ファイルに戻す・uninstall で一時ファイルを残す）をすべて検出（最初はインターフェースの照合を外しても通ったので、別のインターフェースの行があとに出る形に試験を直した。一時ファイルの試験も、直前の試験のキャッシュが残っていて壊した版でも通ったので、直前で消すようにした）。同意済みの網での接続画面の同意では12通り（例: 60秒の窓を外す・広げる・Wi2 の再試行でも読む・15秒待ちを外す・同意済みのブランドでなくても書く・USEN の `usen` を付けない・確かめ済みの接続でも読む・メニューバーと `status` で起点の語や照合の形を戻す・出来事の読み替えを外す）をすべて検出 |
+| 模擬試験 `zsh test/run.sh`（362項目。うち USEN の分岐と `install.sh status` の見張り表示が119項目、同意済みの Wi2 の網での接続画面の同意が11項目、メニューバーの表示が69項目（USEN のチェーンが24項目）、`install.sh` のメニューバーと次の時間切れの目安が15項目） | OK。GitHub Actions でも実行。既存の項目のうち、仕様を変えた5項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない・同意済みの網でも入店時にシステムログを読む・直近の出来事に `captive login seen` を出す）は書き換えた。Wi2 のつなぎ直しの項目は、同意済みの MAC で15秒待つようになったので、resolv.conf の更新から20秒の状態で確かめる |
+| 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、すべて NG として検出（例: `-b "$jar"` を外す・同意の本文を変えると、どちらも23項目が失敗）。USEN の実装では33通りの変異（例: `--noproxy` を外す・性別を空でなく送る・GET のあとの same() を外す・同意の行の削除を行全体の一致にする・基準時刻の +1 を外す）をすべて検出。メニューバーの実装では37通り（例: 注意の接続先の照合を外す・Wi‑Fi でなく先頭のポートを使う・目安の captive login の除外や resolv.conf の30秒を変える・出来事を4件にする・`--no-menubar` で消さない・`KeepAlive` を付ける）をすべて検出（最初は2通りを見逃したので、試験の行の並びと `status` の30秒の境目を足した）。アイコンの組み込みでは4通り（1x・2x のどちらかを入れない・`--no-menubar` と uninstall で画像を残す）をすべて検出。USEN のチェーンでは12通り（例: 探す範囲をリース開始の10秒前からに戻す・2時間の範囲を広げる・インターフェースの照合を外す・最初の行で判定する・伏せ字の SSID を残す・Wi2 の網でも読む・見つからなかった行を出来事に使う・読んだあとの接続先の確認を外す・共通の一時ファイルに戻す・uninstall で一時ファイルを残す）をすべて検出（最初はインターフェースの照合を外しても通ったので、別のインターフェースの行があとに出る形に試験を直した。一時ファイルの試験も、直前の試験のキャッシュが残っていて壊した版でも通ったので、直前で消すようにした）。同意済みの網での接続画面の同意では12通り（例: 60秒の窓を外す・広げる・Wi2 の再試行でも読む・15秒待ちを外す・同意済みのブランドでなくても書く・USEN の `usen` を付けない・確かめ済みの接続でも読む・メニューバーと `status` で起点の語や照合の形を戻す・出来事の読み替えを外す）をすべて検出。メニューの印と見出し（2026-10-02）では10通り（例: 失敗で赤にしない・同意待ちで赤を黄に上書きする・同意待ちで黄にしない・見張り中を緑にする・名前がないときの `This Wi‑Fi` を外す・`Recent` の見出しを外す・未接続や停止中を灰にしない）をすべて検出 |
 | 実際の curl の Cookie の保存と送信 | OK。空の jar で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る（ローカルの HTTPS サーバーと実網） |
 | LaunchAgent からの知らせ | `display notification` は **NG**（macOS 27。終了コード 0 だが表示されず、許可も求められない）。`display alert … giving up after 120` は表示された |
 | アプレット経由の通知（試作） | **NG**。`osacompile` のアプレットを LaunchAgent から `open -g` で起動しても、bundle ID を付けて署名し直しても、usernoted が `Denying message … LegacyConnection` で拒否した（2026-09-30） |
@@ -537,6 +552,7 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 | メニューバーの表示（実装） | OK。LaunchAgent（`LimitLoadToSessionType=Aqua`）から起動して `state = running`。動作中（実際の記録）・✓・!・…・停止中の5状態のアイコンとメニューをスクリーンショットで確かめた（2026-09-30。✓・! は偽の HOME、… は既定経路の問い合わせだけを外した判定の写し、停止中は登録名を変えた写しで。本体の登録と記録には触れていない）。直近の出来事は2列にそろい、状態の行は押せない行の色で出る |
 | メニューバーのアイコン（`assets/icon`） | OK。導入先と同じ名前の組（`.js` と同じ名前の `.png`・`@2x.png`）とリポジトリの `assets/icon` のどちらからも読めて、5状態を Retina のダークのメニューバーでスクリーンショットで確かめた（2026-09-30。停止中は薄く、印は右に付く）。画像がなければ `--check` が失敗する。ライトのメニューバーでは未確認（外観の設定を変えていない。テンプレート画像なので色は macOS が替える） |
 | メニューバーの USEN のチェーン | OK（タリーズ）。導入前の版をリポジトリから実網で実行し、`This Wi‑Fi: Tully's (USEN) · Auto Reconnect On` と、同じ接続先の過去の再認証が `Reconnected · Tully's` と出た。接続から約1.5時間後（DHCP の更新でリース開始が3回進んだあと）に初めて読んだときも、`Tully's (USEN)` と出た（リース開始より後に限っていた版では `USEN` のままだった）。システムログの読み取りは1回目だけ（約1.8秒）で、2回目は約0.03秒。キャッシュには接続先とキーとリース開始だけが残った（2026-10-02）。コメダは未確認（現地の項目 8） |
+| メニューバーの印と見出し（2026-10-02） | OK。試作（scratchpad の別のアイコン）で、緑・黄・赤・灰の印と見出し、印のない行の文字がそろうことを9つの見本でスクリーンショットで確かめた。本実装の `menubar.js` でも、実際の記録（見張り中の USEN の網）で黄の印・`Recent` の見出し・2列の出来事が出た。押せない行の文字は色を指定しても薄い色のまま（印は薄くならない） |
 | メニューバーのツールチップ（`Next Time-out`） | 未確認。カーソルを行に載せる操作を自動で再現できなかった。状態の行は無効の項目なので、無効の項目でツールチップが出るかを実機で確かめる |
 | `menubar.js --check` | OK。手元（`ok:  9 items`）と GitHub Actions の macOS（`macos-26-arm64`。`ok:  5 items`。本体が未登録なので停止中の表示）で、画面のない CI でも `NSStatusBar` とメニューを作れた（2026-09-30） |
 | 入店時の同意の記録 | OK（ドトール・ガストで `consent recorded … (online)`） |
@@ -662,11 +678,11 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 
 | 状況 | 期待する結果 |
 |---|---|
-| 記録なし・ログが空 / 同意済み / 同じ MAC で2ブランド同意済み / 見張り中（24時間以内）/ 24時間を過ぎた見張り | `on`。`Auto Reconnect Off`（区切り線も出来事も出さない）/ `Skylark · Auto Reconnect On` / `Skylark, USEN · …` / `Auto Reconnect from Next Time-out` / `Auto Reconnect Off` |
-| 状態ファイルの接続先が今と同じで「知らせたか」が 1 / 接続先が違う / 0 / 旧形式 | `warn` と失敗の案内（This Wi‑Fi の直後）/ 注意にしない / 注意にしない / 注意にしない（異常終了しない） |
-| 同意待ち `MAC ブランド notified`・`MAC usen 基準時刻 notified` / 接続先が違う / notified なし | `warn` と同意の案内 / 注意にしない / 注意にしない |
-| 注意の最中に既定経路がなくなる: Wi‑Fi に IPv4 あり / IPv4 なしで `WaitingOnUI` が TRUE / どちらもない | `wait` と接続画面の案内 / `wait` / `on` で `Offline` |
-| 再認証から590秒 / 610秒、別の接続先でも / 接続画面待ち・注意と重なる / 停止中と重なる | `check` / `on`、`check` / `wait`・`warn` を優先 / `off`。1行目・`Run ./install.sh to Restart`・直近の出来事だけ |
+| 記録なし・ログが空 / 同意済み / 同じ MAC で2ブランド同意済み / 見張り中（24時間以内）/ 24時間を過ぎた見張り | `on`。見出しと灰の `This Wi‑Fi`・`Auto Reconnect Off`（区切り線も出来事の見出しも出さない）/ 緑の `Skylark`・`Auto Reconnect On` / 緑の `Skylark, USEN` / 黄の `This Wi‑Fi`・`Auto Reconnect from Next Time-out` / 灰で `Auto Reconnect Off` |
+| 状態ファイルの接続先が今と同じで「知らせたか」が 1 / 接続先が違う / 0 / 旧形式 | `warn`、印は赤、失敗の案内（状態の行の直後）/ 注意にしない / 注意にしない / 注意にしない（異常終了しない） |
+| 同意待ち `MAC ブランド notified`・`MAC usen 基準時刻 notified` / 接続先が違う / notified なし / 失敗の注意と重なる | `warn`、印は黄、同意の案内 / 注意にしない / 注意にしない / 印は赤のまま、失敗と同意の案内を両方 |
+| 注意の最中に既定経路がなくなる: Wi‑Fi に IPv4 あり / IPv4 なしで `WaitingOnUI` が TRUE / どちらもない | `wait`、黄の `Waiting for Login Page` と接続画面の案内 / `wait` / `on` で灰の `Offline` |
+| 再認証から590秒 / 610秒、別の接続先でも / 接続画面待ち・注意と重なる / 停止中と重なる | `check` / `on`、`check` / `wait`・`warn` を優先 / `off`。見出し・灰の `Stopped`・`Run ./install.sh to Restart`・直近の出来事だけ |
 | 今の接続先で600秒前に再認証 / 別の接続先へ移る / 3700秒前・3500秒前に入店時の同意の記録 | 60分後の目安とツールチップ / 出さない / 出さない・出す |
 | 3700秒前に再認証 → `consent recorded … usen (captive login)` → `login failed` / そのあと再認証 / 行の20秒後・50秒後に resolv.conf が書き換わる | 出さない / その時刻から60分 / 出す・出さない |
 | 600秒前に `captive login seen net=… doutor` / 別の接続先 / 行の100秒後に resolv.conf が書き換わる / `… usen`（チェーンが分かる）/ ブランドのない行（見張り中） | 60分後の目安（`on`。✓ にしない）と `Accepted on Login Page · Doutor` / 目安なし / 目安なし / 目安と `· USEN`（`· Tully's`）/ 目安なし、`Accepted on Login Page` |

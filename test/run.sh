@@ -856,8 +856,12 @@ ok 'USEN 送ったあとに既定経路がなくなったら、成功とも拒�
 # --- メニューバーの表示（menubar.sh） ------------------------------------------
 LG=$HOME/Library/Logs/cafe-wifi-okawari.log
 NL=$'\n' TB=$'\t'
-R='cafe-wifi-okawari — Running'
-TIP="${TB}${TB}Estimated from the last authentication, if the shop's limit is 60 minutes."
+R="head${TB}cafe-wifi-okawari"   # 見出し
+TIP="${TB}Estimated from the last authentication, if the shop's limit is 60 minutes."
+NT="${NL}-${TB}Next Time-out${TB}~"   # 次の時間切れの行（時刻の前まで）
+RE="${NL}${NL}head${TB}Recent${NL}-${TB}" EV="${NL}-${TB}"   # 直近の出来事の見出しと1件目の始まり / 2件目以降の始まり
+ON='Auto Reconnect On' NX='Auto Reconnect from Next Time-out'
+OFF="gray${TB}This Wi‑Fi${NL}-${TB}Auto Reconnect Off"   # 未同意（印は灰）
 # mb VAR=val...: menubar.sh を1回実行し、1行目を icon に、2行目以降を rows に残す
 mb() { env "$@" PATH=$T/bin:$PATH zsh $T/mb.sh > $M/out 2>&1; rc=$? out=$(<$M/out); icon=${out%%$'\n'*} rows=${out#*$'\n'} }
 mbreset() { reset; rm -f $LG $M/notloaded; mkdir -p ${LG:h}; T0=$EPOCHSECONDS }
@@ -865,42 +869,45 @@ mbreset() { reset; rm -f $LG $M/notloaded; mkdir -p ${LG:h}; T0=$EPOCHSECONDS }
 lt() { strftime '%F %T' $(( T0 - $1 )) }   # lt <秒>: その秒数前のログの時刻
 hm() { strftime '%H:%M' $(( T0 - $1 )) }   # hm <秒>: その秒数前の時:分
 mbreset
-mb MAC=$A;                ok 'メニューバー: 記録がなければ動作中・未同意だけ（区切り線も出来事も出さない）' '(( rc == 0 )) && [[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off" ]]'
-touch $LG; mb MAC=$A;     ok 'メニューバー: ログが空でも同じ' '[[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off" ]]'
+mb MAC=$A;                ok 'メニューバー: 記録がなければ動作中・未同意だけ（区切り線も出来事も出さない）' '(( rc == 0 )) && [[ $icon == on && $rows == "$R${NL}$OFF" ]]'
+touch $LG; mb MAC=$A;     ok 'メニューバー: ログが空でも同じ' '[[ $icon == on && $rows == "$R${NL}$OFF" ]]'
 mkknown $A skylark
-mb MAC=$A;                ok 'メニューバー: 同意済みならブランド（先頭だけ大文字）と自動再接続 On' '[[ $rows == "$R${NL}This Wi‑Fi: Skylark · Auto Reconnect On" ]]'
+mb MAC=$A;                ok 'メニューバー: 同意済みならブランド（先頭だけ大文字）と自動再接続 On' '[[ $rows == "$R${NL}green${TB}Skylark${NL}-${TB}$ON" ]]'
 consent $A "usen $HASH"; consent $B doutor
-mb MAC=$A;                ok 'メニューバー: 同じ MAC の同意済みのブランドを並べる（usen は USEN）' '[[ $rows == "$R${NL}This Wi‑Fi: Skylark, USEN · Auto Reconnect On" ]]'
+mb MAC=$A;                ok 'メニューバー: 同じ MAC の同意済みのブランドを並べる（usen は USEN）' '[[ $rows == "$R${NL}green${TB}Skylark, USEN${NL}-${TB}$ON" ]]'
 mbreset; mkdir -p ${WT:h}; print -r -- "$A $(now 3600)" > $WT
-mb MAC=$A;                ok 'メニューバー: 見張り中（24時間以内）なら次の時間切れから' '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect from Next Time-out" ]]'
+mb MAC=$A;                ok 'メニューバー: 見張り中（24時間以内）なら次の時間切れから' '[[ $rows == "$R${NL}yellow${TB}This Wi‑Fi${NL}-${TB}$NX" ]]'
 print -r -- "$A $(now 86401)" > $WT
-mb MAC=$A;                ok 'メニューバー: 見張りから24時間を過ぎていれば未同意' '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off" ]]'
+mb MAC=$A;                ok 'メニューバー: 見張りから24時間を過ぎていれば未同意' '[[ $rows == "$R${NL}$OFF" ]]'
 # 注意の2条件（今の接続先のときだけ）
-W1="Couldn't reconnect automatically. Check the login page."
-W2='Accept the terms once on the login page. After that, it reconnects automatically.'
+W1="-${TB}Couldn't reconnect automatically. Check the login page."
+W2="-${TB}Accept the terms once on the login page. After that, it reconnects automatically."
 mbreset; mkknown $A; print -r -- "2 $(now -60) $A 0 1 doutor" > $ST
-mb MAC=$A;                ok 'メニューバー: 再接続に失敗して知らせたあとは注意（案内は This Wi‑Fi の直後）' '[[ $icon == warn && $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On${NL}$W1" ]]'
+mb MAC=$A;                ok 'メニューバー: 再接続に失敗して知らせたあとは注意（案内は This Wi‑Fi の直後）' '[[ $icon == warn && $rows == "$R${NL}red${TB}Doutor${NL}-${TB}$ON${NL}$W1" ]]'
 mb MAC=$B;                ok 'メニューバー: 失敗の状態ファイルが別の接続先なら注意にしない' '[[ $icon == on && $rows != *reconnect\ automatically* ]]'
 print -r -- "2 $(now -60) $A 0 0 doutor" > $ST
 mb MAC=$A;                ok 'メニューバー: 失敗しても、まだ知らせていなければ注意にしない' '[[ $icon == on && $rows != *reconnect\ automatically* ]]'
 print -r -- "3 $(now -60)" > $ST
-mb MAC=$A;                ok 'メニューバー: 旧形式の状態ファイルでも動く（注意にしない）' '(( rc == 0 )) && [[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On" ]]'
+mb MAC=$A;                ok 'メニューバー: 旧形式の状態ファイルでも動く（注意にしない）' '(( rc == 0 )) && [[ $icon == on && $rows == "$R${NL}green${TB}Doutor${NL}-${TB}$ON" ]]'
 mbreset; print -r -- "$A doutor notified" > $PD
-mb MAC=$A;                ok 'メニューバー: 同意待ちで知らせたあとは注意（同意の案内）' '[[ $icon == warn && $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off${NL}$W2" ]]'
-mb MAC=$B;                ok 'メニューバー: 同意待ちが別の接続先なら注意にしない（店を出たあとの自宅など）' '[[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off" ]]'
+mb MAC=$A;                ok 'メニューバー: 同意待ちで知らせたあとは注意（同意の案内）' '[[ $icon == warn && $rows == "$R${NL}yellow${TB}This Wi‑Fi${NL}-${TB}Auto Reconnect Off${NL}$W2" ]]'
+mb MAC=$B;                ok 'メニューバー: 同意待ちが別の接続先なら注意にしない（店を出たあとの自宅など）' '[[ $icon == on && $rows == "$R${NL}$OFF" ]]'
 print -r -- "$A doutor" > $PD
 mb MAC=$A;                ok 'メニューバー: 同意待ちでも、まだ知らせていなければ注意にしない' '[[ $icon == on ]]'
 print -r -- "$A usen $(now 60) notified" > $PD
 mb MAC=$A;                ok 'メニューバー: USEN の同意待ち（自動の停止のあと）も注意' '[[ $icon == warn && $rows == *"${NL}$W2" ]]'
 print -r -- "$A usen $(now 60)" > $PD
 mb MAC=$A;                ok 'メニューバー: USEN の同意待ちで知らせる前は注意にしない' '[[ $icon == on ]]'
+mkknown $A; print -r -- "2 $(now -60) $A 0 1 doutor" > $ST; print -r -- "$A doutor notified" > $PD
+mb MAC=$A;                ok 'メニューバー: 失敗と同意待ちが重なれば、印は赤のまま案内を両方出す' '[[ $icon == warn && $rows == "$R${NL}red${TB}Doutor${NL}-${TB}$ON${NL}$W1${NL}$W2" ]]'
+rm -f $ST
 # 接続画面待ち・未接続（既定経路がない）
-WL="This Wi‑Fi: Waiting for Login Page${NL}If the login page doesn't appear, open http://captive.apple.com."
+WL="yellow${TB}Waiting for Login Page${NL}-${TB}If the login page doesn't appear, open http://captive.apple.com."
 print -r -- "$A doutor notified" > $PD
 mb MAC=$A NOROUTE=1;      ok 'メニューバー: 注意の最中に既定経路がなくなり、Wi‑Fi に IPv4 があれば接続画面待ち' '[[ $icon == wait && $rows == "$R${NL}$WL" ]]'
 mb MAC=$A NOROUTE=1 MYIP= WAITUI=TRUE
                           ok 'メニューバー: Wi‑Fi に IPv4 がなくても、macOS が接続画面を待っていれば接続画面待ち' '[[ $icon == wait && $rows == "$R${NL}$WL" ]]'
-mb MAC=$A NOROUTE=1 MYIP=; ok 'メニューバー: どちらもなければ未接続（アイコンは動作中）' '[[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Offline" ]]'
+mb MAC=$A NOROUTE=1 MYIP=; ok 'メニューバー: どちらもなければ未接続（アイコンは動作中）' '[[ $icon == on && $rows == "$R${NL}gray${TB}Offline" ]]'
 # 再認証直後（✓）と優先順位
 mbreset; mkknown $A
 print -r -- "$(lt 590) re-authenticated api=ok probe=ok net=$A doutor t=2s" > $LG
@@ -911,25 +918,25 @@ print -r -- "2 $(now -60) $A 0 1 doutor" > $ST
 mb MAC=$A;                ok 'メニューバー: 注意は ✓ より優先' '[[ $icon == warn ]]'
 touch $M/notloaded
 mb MAC=$A;                ok 'メニューバー: 停止中は注意より優先し、今の接続先・案内・目安を出さない' \
-  '(( rc == 0 )) && [[ $icon == off && $rows == "cafe-wifi-okawari — Stopped${NL}Run ./install.sh to Restart${NL}${NL}Today $(hm 590)${TB}Reconnected · Doutor · 2 s" ]]'
+  '(( rc == 0 )) && [[ $icon == off && $rows == "$R${NL}gray${TB}Stopped${NL}-${TB}Run ./install.sh to Restart${RE}Today $(hm 590)${TB}Reconnected · Doutor · 2 s" ]]'
 rm -f $M/notloaded $ST
 print -r -- "$(lt 610) re-authenticated api=ok probe=ok net=$A doutor t=2s" > $LG
 mb MAC=$A;                ok 'メニューバー: 再認証から10分を過ぎれば ✓ を外す' '[[ $icon == on ]]'
 # 次の時間切れの目安
 mbreset; mkknown $A
 print -r -- "$(lt 600) re-authenticated api=ok probe=ok net=$A doutor t=2s" > $LG
-mb MAC=$A;                ok 'メニューバー: 今の接続先で再認証していれば、その60分後を目安に（ツールチップ付き）' '[[ $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On${NL}Next Time-out: ~$(hm -3000)$TIP${NL}${NL}"* ]]'
+mb MAC=$A;                ok 'メニューバー: 今の接続先で再認証していれば、その60分後を目安に（ツールチップ付き）' '[[ $rows == "$R${NL}green${TB}Doutor${NL}-${TB}$ON${NT}$(hm -3000)$TIP${RE}"* ]]'
 mb MAC=$B;                ok 'メニューバー: 店 A で再認証したあと店 B へ移れば目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
 print -r -- "$(lt 3700) consent recorded net=$A doutor (online)" > $LG
 mb MAC=$A;                ok 'メニューバー: 最後の認証から60分を過ぎていれば目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
 print -r -- "$(lt 3500) consent recorded net=$A doutor (online)" > $LG
-mb MAC=$A;                ok 'メニューバー: 入店時の同意の記録からも目安を出す' '[[ $rows == *"${NL}Next Time-out: ~$(hm -100)$TIP${NL}"* ]]'
+mb MAC=$A;                ok 'メニューバー: 入店時の同意の記録からも目安を出す' '[[ $rows == *"${NT}$(hm -100)$TIP${NL}"* ]]'
 mbreset; mkknown $A "usen $HASH"
 print -rl -- "$(lt 3700) re-authenticated api=ok probe=ok net=$A usen t=1s" "$(lt 120) consent recorded net=$A usen (captive login)" \
   "$(lt 110) login failed x1 api=ng probe=ng http=200 curl=0 res=" > $LG
 mb MAC=$A;                ok 'メニューバー: 接続画面での同意の記録（captive login）のあと送信に失敗したら目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
 print -r -- "$(lt 60) re-authenticated api=ok probe=ok net=$A usen t=1s" >> $LG
-mb MAC=$A;                ok 'メニューバー: そのあと再認証すれば、その時刻から60分' '[[ $rows == *"${NL}Next Time-out: ~$(hm -3540)$TIP${NL}"* ]]'
+mb MAC=$A;                ok 'メニューバー: そのあと再認証すれば、その時刻から60分' '[[ $rows == *"${NT}$(hm -3540)$TIP${NL}"* ]]'
 ago 40 $M/resolv
 mb MAC=$A;                ok 'メニューバー: 行から30秒以内に resolv.conf が書き換わっても目安を出す' '[[ $rows == *Next\ Time-out* ]]'
 ago 20 $M/resolv
@@ -938,73 +945,73 @@ mb MAC=$A;                ok 'メニューバー: 行の30秒より後に resolv
 mbreset; mkknown $A
 print -r -- "$(lt 600) captive login seen net=$A doutor" > $LG
 mb MAC=$A;                ok 'メニューバー: 接続画面での同意を確かめた行から60分後を目安に（✓ は付けない）' \
-  '[[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On${NL}Next Time-out: ~$(hm -3000)$TIP${NL}${NL}Today $(hm 600)${TB}Accepted on Login Page · Doutor" ]]'
+  '[[ $icon == on && $rows == "$R${NL}green${TB}Doutor${NL}-${TB}$ON${NT}$(hm -3000)$TIP${RE}Today $(hm 600)${TB}Accepted on Login Page · Doutor" ]]'
 mb MAC=$B;                ok 'メニューバー: 接続画面での同意を確かめた行も、別の接続先では目安にしない' '[[ $rows != *Next\ Time-out* && $rows == *"Accepted on Login Page · Doutor" ]]'
 ago 500 $M/resolv
 mb MAC=$A;                ok 'メニューバー: 接続画面での同意を確かめた行の30秒より後に resolv.conf が書き換わっていれば目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
 mbreset; mkknown $A "usen $HASH"
 print -r -- "$(lt 600) captive login seen net=$A usen" > $LG
 mb MAC=$A;                ok 'メニューバー: USEN の網で接続画面での同意を確かめた行からも目安を出す' \
-  '[[ $icon == on && $rows == *"${NL}Next Time-out: ~$(hm -3000)$TIP${NL}${NL}Today $(hm 600)${TB}Accepted on Login Page · USEN" ]]'
+  '[[ $icon == on && $rows == *"${NT}$(hm -3000)$TIP${RE}Today $(hm 600)${TB}Accepted on Login Page · USEN" ]]'
 print -r -- "$A tullys 1" > $ST.chain
 mb MAC=$A;                ok 'メニューバー: 接続画面での同意を確かめた USEN の行も、チェーンが分かればチェーン' '[[ $rows == *"${TB}Accepted on Login Page · Tully'"'"'s" ]]'
 mbreset; watch $A
 print -r -- "$(lt 600) captive login seen net=$A" > $LG
 mb MAC=$A;                ok 'メニューバー: ブランドのない行（見張りを始めた網）は目安にせず、直近の出来事にだけ出す' \
-  '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect from Next Time-out${NL}${NL}Today $(hm 600)${TB}Accepted on Login Page" ]]'
+  '[[ $rows == "$R${NL}yellow${TB}This Wi‑Fi${NL}-${TB}$NX${RE}Today $(hm 600)${TB}Accepted on Login Page" ]]'
 # USEN の網のチェーン（システムログの伏せ字の SSID）
 CH=$ST.chain TU='tu********Fi' KO='Ko********Fi'
 mbreset; mkknown $A "usen $HASH"; rm -f $M/logcalls
 mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
-                          ok 'メニューバー: USEN の網で、リース開始のあとの伏せ字の SSID がタリーズならチェーンと運営を出す' '[[ $rows == "$R${NL}This Wi‑Fi: Tully'"'"'s (USEN) · Auto Reconnect On" ]]'
+                          ok 'メニューバー: USEN の網で、リース開始のあとの伏せ字の SSID がタリーズならチェーンと運営を出す' '[[ $rows == "$R${NL}green${TB}Tully'"'"'s (USEN)${NL}-${TB}$ON" ]]'
 ok 'メニューバー: チェーンはキーと接続先だけ残す（伏せ字の SSID は残さない）' '[[ $(<$CH) == "$A tullys $(( T0 - 60 ))" ]]'
 n1=$(wc -l < $M/logcalls)
 mb MAC=$A LEASE=$(( T0 - 30 )) SSIDLOG="$(( T0 - 27 )):en0:$KO"
-                          ok 'メニューバー: 分かったチェーンは接続先ごとに覚え、システムログを読み直さない' '[[ $rows == *"Tully'"'"'s (USEN) · "* && $(wc -l < $M/logcalls) == $n1 ]]'
+                          ok 'メニューバー: 分かったチェーンは接続先ごとに覚え、システムログを読み直さない' '[[ $rows == *"${TB}Tully'"'"'s (USEN)${NL}"* && $(wc -l < $M/logcalls) == $n1 ]]'
 rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$KO"
-                          ok 'メニューバー: コメダの形ならコメダ' '[[ $rows == "$R${NL}This Wi‑Fi: Komeda (USEN) · Auto Reconnect On" ]]'
+                          ok 'メニューバー: コメダの形ならコメダ' '[[ $rows == "$R${NL}green${TB}Komeda (USEN)${NL}-${TB}$ON" ]]'
 rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU $(( T0 - 55 )):en0:ho****me"
-                          ok 'メニューバー: 表にない SSID なら USEN のまま（最後の行で判定）' '[[ $rows == "$R${NL}This Wi‑Fi: USEN · Auto Reconnect On" ]]'
+                          ok 'メニューバー: 表にない SSID なら USEN のまま（最後の行で判定）' '[[ $rows == "$R${NL}green${TB}USEN${NL}-${TB}$ON" ]]'
 ok 'メニューバー: 見つからなかった接続はリース開始だけ残す（伏せ字の SSID は残さない）' '[[ $(<$CH) == "$A - $(( T0 - 60 ))" ]]'
 n1=$(wc -l < $M/logcalls)
 mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
-                          ok 'メニューバー: 同じ接続では、見つからなくても読み直さない' '[[ $rows == *"USEN · "* && $(wc -l < $M/logcalls) == $n1 ]]'
+                          ok 'メニューバー: 同じ接続では、見つからなくても読み直さない' '[[ $rows == *"${TB}USEN${NL}"* && $(wc -l < $M/logcalls) == $n1 ]]'
 mb MAC=$A LEASE=$(( T0 - 20 )) SSIDLOG="$(( T0 - 17 )):en0:$TU"
-                          ok 'メニューバー: リース開始が変われば（つなぎ直し・DHCP の更新）読み直す' '[[ $rows == *"Tully'"'"'s (USEN) · "* ]] && (( $(wc -l < $M/logcalls) == n1 + 1 ))'
+                          ok 'メニューバー: リース開始が変われば（つなぎ直し・DHCP の更新）読み直す' '[[ $rows == *"${TB}Tully'"'"'s (USEN)${NL}"* ]] && (( $(wc -l < $M/logcalls) == n1 + 1 ))'
 rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 3600 )):en0:$KO $(( T0 - 1800 )):en0:$TU"
-                          ok 'メニューバー: リース開始より前の SSID の行も使う（DHCP の更新でリース開始が進んだあと。最後の行で判定）' '[[ $rows == *"${NL}This Wi‑Fi: Tully'"'"'s (USEN) · "* ]]'
+                          ok 'メニューバー: リース開始より前の SSID の行も使う（DHCP の更新でリース開始が進んだあと。最後の行で判定）' '[[ $rows == *"${TB}Tully'"'"'s (USEN)${NL}"* ]]'
 rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 7300 )):en0:$TU"
-                          ok 'メニューバー: 2時間より前の SSID の行は使わない' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* && $(<$CH) == "$A - $(( T0 - 60 ))" ]]'
+                          ok 'メニューバー: 2時間より前の SSID の行は使わない' '[[ $rows == *"${TB}USEN${NL}"* && $(<$CH) == "$A - $(( T0 - 60 ))" ]]'
 rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU $(( T0 - 55 )):en1:$KO"
-                          ok 'メニューバー: 今のインターフェースでない SSID の行は使わない（あとに出ても）' '[[ $rows == *"${NL}This Wi‑Fi: Tully'"'"'s (USEN) · "* ]]'
+                          ok 'メニューバー: 今のインターフェースでない SSID の行は使わない（あとに出ても）' '[[ $rows == *"${TB}Tully'"'"'s (USEN)${NL}"* ]]'
 rm -f $CH $M/logcalls; mb MAC=$A LEASE=$(( T0 - 10 )) SSIDLOG="$(( T0 - 7 )):en0:$TU"
-                          ok 'メニューバー: リース開始から15秒はシステムログを読まず、何も残さない' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* && ! -e $M/logcalls && ! -e $CH ]]'
+                          ok 'メニューバー: リース開始から15秒はシステムログを読まず、何も残さない' '[[ $rows == *"${TB}USEN${NL}"* && ! -e $M/logcalls && ! -e $CH ]]'
 mb MAC=$A LEASE=none SSIDLOG="$(( T0 - 7 )):en0:$TU"
-                          ok 'メニューバー: リース開始が読めなければシステムログを読まない' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* && ! -e $M/logcalls ]]'
+                          ok 'メニューバー: リース開始が読めなければシステムログを読まない' '[[ $rows == *"${TB}USEN${NL}"* && ! -e $M/logcalls ]]'
 mb MAC=$A LEASE=$(( T0 - 60 )) LOGFAIL=1
-                          ok 'メニューバー: システムログが読めなければ USEN のまま' '(( rc == 0 )) && [[ $rows == *"${NL}This Wi‑Fi: USEN · "* ]]'
+                          ok 'メニューバー: システムログが読めなければ USEN のまま' '(( rc == 0 )) && [[ $rows == *"${TB}USEN${NL}"* ]]'
 rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU" LOGSWITCH=1; rm -f $M/switched
-                          ok 'メニューバー: 読む間に別の接続先へ切り替われば、チェーンを出さず何も残さない（別の網の SSID を結び付けない）' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* && ! -e $CH ]]'
+                          ok 'メニューバー: 読む間に別の接続先へ切り替われば、チェーンを出さず何も残さない（別の網の SSID を結び付けない）' '[[ $rows == *"${TB}USEN${NL}"* && ! -e $CH ]]'
 mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU" LOGLEASE=$(( T0 - 20 )); rm -f $M/lease
-                          ok 'メニューバー: 読む間につなぎ直せば（リース開始が変われば）、チェーンを出さず何も残さない' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* && ! -e $CH ]]'
+                          ok 'メニューバー: 読む間につなぎ直せば（リース開始が変われば）、チェーンを出さず何も残さない' '[[ $rows == *"${TB}USEN${NL}"* && ! -e $CH ]]'
 rm -f $CH; print -r -- other > $CH.tmp
 mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
                           ok 'メニューバー: キャッシュは自分だけの一時ファイルから置き換える（ほかのプロセスの一時ファイルに触らず、残さない）' '[[ $(<$CH) == "$A tullys $(( T0 - 60 ))" && $(<$CH.tmp) == other && -z $(print -l $CH.*(N:t) | grep -v "^${CH:t}.tmp$") ]]'
 rm -f $CH $CH.tmp
 mbreset; mkknown $A skylark; consent $A "usen $HASH"; rm -f $M/logcalls
 mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
-                          ok 'メニューバー: 同じ MAC の Wi2 のブランドと並べる' '[[ $rows == "$R${NL}This Wi‑Fi: Skylark, Tully'"'"'s (USEN) · Auto Reconnect On" ]]'
+                          ok 'メニューバー: 同じ MAC の Wi2 のブランドと並べる' '[[ $rows == "$R${NL}green${TB}Skylark, Tully'"'"'s (USEN)${NL}-${TB}$ON" ]]'
 mbreset; mkknown $A doutor; rm -f $M/logcalls
 mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
-                          ok 'メニューバー: Wi2 の網ではシステムログを読まない' '[[ $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On" && ! -e $M/logcalls && ! -e $CH ]]'
+                          ok 'メニューバー: Wi2 の網ではシステムログを読まない' '[[ $rows == "$R${NL}green${TB}Doutor${NL}-${TB}$ON" && ! -e $M/logcalls && ! -e $CH ]]'
 mb MAC=$B LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
-                          ok 'メニューバー: 未同意の網ではシステムログを読まない' '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off" && ! -e $M/logcalls && ! -e $CH ]]'
+                          ok 'メニューバー: 未同意の網ではシステムログを読まない' '[[ $rows == "$R${NL}$OFF" && ! -e $M/logcalls && ! -e $CH ]]'
 mbreset; mkdir -p ${WT:h}; print -r -- "$A $(now 3600)" > $WT
 mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
-                          ok 'メニューバー: 見張り中の網でもチェーンを出す' '[[ $rows == "$R${NL}This Wi‑Fi: Tully'"'"'s (USEN) · Auto Reconnect from Next Time-out" ]]'
+                          ok 'メニューバー: 見張り中の網でもチェーンを出す' '[[ $rows == "$R${NL}yellow${TB}Tully'"'"'s (USEN)${NL}-${TB}$NX" ]]'
 print -rl -- "$(lt 120) re-authenticated api=ok probe=ok net=$A usen t=1s" "$(lt 100) re-authenticated api=ok probe=ok net=$B usen t=2s" > $LG
 mb MAC=$B;                ok 'メニューバー: 直近の出来事の USEN は、チェーンが分かっている接続先ならチェーン' \
-  '[[ $rows == *"${NL}${NL}Today $(hm 100)${TB}Reconnected · USEN · 2 s${NL}Today $(hm 120)${TB}Reconnected · Tully'"'"'s · 1 s" ]]'
+  '[[ $rows == *"${RE}Today $(hm 100)${TB}Reconnected · USEN · 2 s${EV}Today $(hm 120)${TB}Reconnected · Tully'"'"'s · 1 s" ]]'
 touch $M/notloaded
 mb MAC=$B;                ok 'メニューバー: 停止中も直近の出来事はチェーン' '[[ $icon == off && $rows == *"Reconnected · Tully'"'"'s · 1 s" ]]'
 rm -f $M/notloaded
@@ -1023,19 +1030,19 @@ print -rl -- "$d2 10:00:00 re-authenticated api=ok probe=ok net=$A skylark t=9s"
   "$d0 00:00:34 redirect failed x1 net=$A curl=28 http=000" "$d0 00:00:35 network changed net=$A doutor api=ok probe=ng" \
   "$d0 00:00:40 login failed x3 api=ng probe=ng http=200 curl=0 res={\"result\":false}" > $LG
 mb MAC=$B;                ok 'メニューバー: 直近の出来事は新しい順に3件（失敗はブランドなし。接続画面での同意を確かめた行も出す。確認の失敗・同意待ちなどは出さない）' \
-  '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off${NL}${NL}Today 00:00${TB}Couldn'"'"'t Reconnect${NL}Today 00:00${TB}Accepted on Login Page${NL}Today 00:00${TB}Couldn'"'"'t Reconnect" ]]'
+  '[[ $rows == "$R${NL}$OFF${RE}Today 00:00${TB}Couldn'"'"'t Reconnect${EV}Today 00:00${TB}Accepted on Login Page${EV}Today 00:00${TB}Couldn'"'"'t Reconnect" ]]'
 sed -i '' '/ 00:00:[1-4]/d' $LG
 mb MAC=$B;                ok 'メニューバー: 今日・昨日の境目と、それより前は月-日' \
-  '[[ $rows == *"${NL}${NL}Today 00:00${TB}Terms Accepted · Doutor${NL}Yesterday 23:59${TB}Reconnected · Skylark · 2 s${NL}${d2[6,10]} 10:05${TB}Auto Reconnect Stopped · Doutor" ]]'
+  '[[ $rows == *"${RE}Today 00:00${TB}Terms Accepted · Doutor${EV}Yesterday 23:59${TB}Reconnected · Skylark · 2 s${EV}${d2[6,10]} 10:05${TB}Auto Reconnect Stopped · Doutor" ]]'
 print -r -- "$d0 00:00:50 consent recorded net=$A aa:bb:cc (online)" >> $LG
-mb MAC=$B;                ok 'メニューバー: ブランド名に英数字・-・_ 以外があれば出さない' '[[ $rows == *"${NL}${NL}Today 00:00${TB}Terms Accepted${NL}Today 00:00${TB}Terms Accepted · Doutor${NL}"* && $out != *aa:bb* ]]'
+mb MAC=$B;                ok 'メニューバー: ブランド名に英数字・-・_ 以外があれば出さない' '[[ $rows == *"${RE}Today 00:00${TB}Terms Accepted${EV}Today 00:00${TB}Terms Accepted · Doutor${NL}"* && $out != *aa:bb* ]]'
 sed -i '' '$d' $LG; mb MAC=$B
                           ok 'メニューバー: MAC・IP・URL・応答を出さない' '[[ $out != *aa:aa* && $out != *net=* && $out != *10.0.0* && $out != *http* && $out != *result* ]]'
 o1=$out; mb MAC=$B LANGS=en-US
                           ok 'メニューバー: 優先言語が日本語でも英語でも同じ英語の表示' '[[ $out == "$o1" ]]'
 # ログは末尾の 16KB だけ読む（途中で切れた行は使わない）
 { print -r -- "$(lt 60) re-authenticated api=ok probe=ok net=$A doutor t=2s"; for i in {1..300}; do print -r -- "$(lt 30) probe failed x1 net=$A if=en0 curl=7 http=000"; done } > $LG
-mb MAC=$A;                ok 'メニューバー: 16KB より前の行は読まない' '[[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On" ]]'
+mb MAC=$A;                ok 'メニューバー: 16KB より前の行は読まない' '[[ $icon == on && $rows == "$R${NL}green${TB}Doutor${NL}-${TB}$ON" ]]'
 
 # --- install.sh ----------------------------------------------------------------
 H="$T/ho&me<x>"; mkdir -p "$H"

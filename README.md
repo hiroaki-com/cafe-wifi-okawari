@@ -110,7 +110,7 @@ cd cafe-wifi-okawari
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="カップ …"></picture> | macOS が接続画面での同意を待っている（対応している Wi‑Fi に限らず、接続画面のある Wi‑Fi ならどこでも出ます）。接続画面が出なければ、ブラウザで `http://captive.apple.com` を開いてください |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="薄いカップ"></picture> | 停止中（常駐処理が登録されていない）。`./install.sh` で戻ります |
 
-クリックすると、この Wi‑Fi で自動再接続が有効か、次の時間切れの目安、直近の出来事3件（再接続・同意の記録・接続画面での同意・再接続の失敗・自動の停止）が出ます。メニューは英語だけです。MAC アドレス・IP アドレスは出さないので、画面共有に写っても差し支えありません。
+クリックすると、この Wi‑Fi の名前（分かるとき）と自動再接続が有効か、次の時間切れの目安、直近の出来事3件（再接続・同意の記録・接続画面での同意・再接続の失敗・自動の停止）が出ます。名前の左の印は、緑が自動再接続が有効、黄が次の時間切れかご自身の同意を待っている、赤が再接続に失敗した、灰が働いていない（未同意・未接続・停止中）ことを表します。メニューは英語だけです。MAC アドレス・IP アドレスは出さないので、画面共有に写っても差し支えありません。
 
 USEN の Wi‑Fi では、チェーンが分かれば `Tully's (USEN)` のように出します。macOS がシステムログに残す、一部を伏せた Wi‑Fi 名（`tu********Fi` など）から見分けます。読むのはつないだときに1回で（見分けられなければ、約30分ごとに読み直します）、伏せた Wi‑Fi 名は保存しません。見分けられなければ（つないでから2時間を過ぎて初めて見たときなど）`USEN` と出します。店舗名は出しません。実際のお店で確かめたのはタリーズだけです（コメダは未確認）。
 
