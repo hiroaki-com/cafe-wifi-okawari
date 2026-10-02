@@ -147,12 +147,12 @@ Last exit code   0 (412 runs since loaded)
 Menu bar         running
 Current network  gateway 0:0:5e:0:1:1 (doutor), accepted: auto re-authentication on
 Accepted         1 network (brand: doutor)
-Last auth        2026-10-01 10:05:12 (12 min ago), consent recorded on doutor
+Last auth        2026-05-12 10:05:12 (12 min ago), consent recorded on doutor
 Next time-out    around 11:05, in 47 min (if the shop's limit is 60 minutes)
 Log              /Users/you/Library/Logs/cafe-wifi-okawari.log (1 line)
 
 Recent log:
-  2026-10-01 10:05:12 consent recorded net=… doutor (online)
+  2026-05-12 10:05:12 consent recorded net=… doutor (online)
 ```
 
 おもな項目の意味は次のとおりです。
