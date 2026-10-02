@@ -885,9 +885,11 @@ n1=$(wc -l < $M/logcalls)
 mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
                           ok 'メニューバー: 同じ接続では、見つからなくても読み直さない' '[[ $rows == *"USEN · "* && $(wc -l < $M/logcalls) == $n1 ]]'
 mb MAC=$A LEASE=$(( T0 - 20 )) SSIDLOG="$(( T0 - 17 )):en0:$TU"
-                          ok 'メニューバー: つなぎ直して（リース開始が変わって）いれば読み直す' '[[ $rows == *"Tully'"'"'s (USEN) · "* ]] && (( $(wc -l < $M/logcalls) == n1 + 1 ))'
-rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 71 )):en0:$TU"
-                          ok 'メニューバー: リース開始の10秒より前の SSID の行は使わない（前の接続）' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* ]]'
+                          ok 'メニューバー: リース開始が変われば（つなぎ直し・DHCP の更新）読み直す' '[[ $rows == *"Tully'"'"'s (USEN) · "* ]] && (( $(wc -l < $M/logcalls) == n1 + 1 ))'
+rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 3600 )):en0:$KO $(( T0 - 1800 )):en0:$TU"
+                          ok 'メニューバー: リース開始より前の SSID の行も使う（DHCP の更新でリース開始が進んだあと。最後の行で判定）' '[[ $rows == *"${NL}This Wi‑Fi: Tully'"'"'s (USEN) · "* ]]'
+rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 7300 )):en0:$TU"
+                          ok 'メニューバー: 2時間より前の SSID の行は使わない' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* && $(<$CH) == "$A - $(( T0 - 60 ))" ]]'
 rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU $(( T0 - 55 )):en1:$KO"
                           ok 'メニューバー: 今のインターフェースでない SSID の行は使わない（あとに出ても）' '[[ $rows == *"${NL}This Wi‑Fi: Tully'"'"'s (USEN) · "* ]]'
 rm -f $CH $M/logcalls; mb MAC=$A LEASE=$(( T0 - 10 )) SSIDLOG="$(( T0 - 7 )):en0:$TU"

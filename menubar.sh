@@ -39,18 +39,18 @@ lease() {
   strftime -r '%m/%d/%Y %H:%M:%S' "${l[1]##* : }" 2>/dev/null
 }
 # 今の接続先（USEN の網）のチェーンのキーを ck に入れる。分からなければ空。
-# システムログを読むのは、接続ごと（リース開始ごと）に1回だけ。リース開始の10秒前より後の、今のインターフェースの
-# 最後の SSID の行を表と照らす。リース開始から15秒は、ログへの書き込みを待って読まない。
+# システムログを読むのは、リース開始ごとに1回だけ（リース開始は DHCP の更新でも進むので、見つからない網では更新ごとに
+# 読み直す）。直近2時間の、今のインターフェースの最後の SSID の行を表と照らす（行はつなぐたびに1行出るので、最後の行が
+# 今の接続。リース開始より前の行も使う）。リース開始から15秒は、つないだ直後の行の書き込みを待って読まない。
 chain() {
-  local c s st m l
+  local c s m l
   ck= c=$(awk -v n="$net" '$1 == n { print $2, $3; exit }' "$CH" 2>/dev/null)
   [[ -n ${cname[${c%% *}]-} ]] && { ck=${c%% *}; return }
   [[ -n $ifc ]] || return
   s=$(lease) || return
   [[ $c == "- $s" ]] && return
   (( now - s >= 15 )) || return
-  (( st = s - 10 > now - 7200 ? s - 10 : now - 7200 ))
-  l=(${(M)${(f)"$(/usr/bin/log show --style compact --start "$(strftime '%F %T' $st)" \
+  l=(${(M)${(f)"$(/usr/bin/log show --style compact --start "$(strftime '%F %T' $(( now - 7200 )))" \
     --predicate 'subsystem == "com.apple.captive" AND eventMessage CONTAINS "SSID"' 2>/dev/null)"}:#* $ifc: SSID \'*})
   (( $#l )) && { m=${${l[-1]#* $ifc: SSID \'}%%\'*}; ck=${chains[$m]-} }
   # 読む間に接続先・インターフェース・リース開始が変わっていれば、出さず残さない（別の網の SSID を今の接続先に結び付けない）

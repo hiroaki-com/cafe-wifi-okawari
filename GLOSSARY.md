@@ -166,7 +166,7 @@ DHCP / Dynamic Host Configuration Protocol — 接続した端末に IP アド�
 
 lease（リース） — DHCP で配られた設定の有効期限
  - 直訳　 : 賃貸借
- - 本レポ : Wi2 の網では300秒、USEN の網では3600秒（DESIGN.md §1・§1.2 の実測）。USEN の分岐で、リース開始（`ipconfig getsummary` の `LeaseStartTime`）を「今の接続の始まり」とし、それより後の接続画面での同意だけを数える（DESIGN.md §3.1）
+ - 本レポ : Wi2 の網では300秒、USEN の網では3600秒（DESIGN.md §1・§1.2 の実測）。リース開始（`ipconfig getsummary` の `LeaseStartTime`）は接続した時刻から、期限の半分ごとの更新（Wi2 は150秒、USEN は約30分）のたびに進む。USEN の分岐では、リース開始より後の接続画面での同意だけを数える（接続から5分以内に読むので、USEN では最初の更新の前に読める。DESIGN.md §3.1）。メニューバーは、リース開始が変わるたびに USEN のチェーンを探し直す（DESIGN.md §3.2）
  - 背景　 : IP アドレスは「貸し出し」で、期限前に更新しないと返却される。短いリースは端末の出入りが激しい公衆 Wi‑Fi の定石
 
 DNS / Domain Name System — ドメイン名を IP アドレスに変換する仕組み
