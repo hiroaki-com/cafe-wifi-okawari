@@ -23,6 +23,21 @@ typeset -A cname=(tullys "Tully's" komeda Komeda)
 at() { strftime -r -s t '%Y-%m-%d %H:%M:%S' "${1[1,19]}" 2>/dev/null }
 # ブランド名の表記を nm に入れる（先頭だけ大文字。usen は USEN）。英字・数字・-・_ 以外を含めば空（MAC・IP などを出さない）
 bn() { nm=; [[ $1 == [A-Za-z0-9_-]## ]] || return; [[ $1 == usen ]] && nm=USEN || nm=${(U)1[1]}${1[2,-1]} }
+# 今の接続先（install.sh status・本体の netid と同じく、既定ゲートウェイの MAC。取れなければ IP）を net、
+# 既定経路のインターフェースを ifc に入れる
+netid() {
+  local r; r=$(route -n get default 2>/dev/null) || r=
+  gw=${${(M)${(f)r}:#*gateway:*}##* } ifc=${${(M)${(f)r}:#*interface:*}##* } net=
+  if [[ -n $gw ]]; then
+    net=$(arp -n "$gw" 2>/dev/null | awk '{ print $4 }')
+    [[ $net == *:*:* ]] || net=$gw
+  fi
+}
+# ifc のリース開始（エポック秒）を出す。読めなければ失敗
+lease() {
+  local l=(${(M)${(f)"$(ipconfig getsummary "$ifc" 2>/dev/null)"}:#*LeaseStartTime :*})
+  strftime -r '%m/%d/%Y %H:%M:%S' "${l[1]##* : }" 2>/dev/null
+}
 # 今の接続先（USEN の網）のチェーンのキーを ck に入れる。分からなければ空。
 # システムログを読むのは、接続ごと（リース開始ごと）に1回だけ。リース開始の10秒前より後の、今のインターフェースの
 # 最後の SSID の行を表と照らす。リース開始から15秒は、ログへの書き込みを待って読まない。
@@ -31,15 +46,18 @@ chain() {
   ck= c=$(awk -v n="$net" '$1 == n { print $2, $3; exit }' "$CH" 2>/dev/null)
   [[ -n ${cname[${c%% *}]-} ]] && { ck=${c%% *}; return }
   [[ -n $ifc ]] || return
-  l=(${(M)${(f)"$(ipconfig getsummary "$ifc" 2>/dev/null)"}:#*LeaseStartTime :*})
-  s=$(strftime -r '%m/%d/%Y %H:%M:%S' "${l[1]##* : }" 2>/dev/null) || return
+  s=$(lease) || return
   [[ $c == "- $s" ]] && return
   (( now - s >= 15 )) || return
   (( st = s - 10 > now - 7200 ? s - 10 : now - 7200 ))
   l=(${(M)${(f)"$(/usr/bin/log show --style compact --start "$(strftime '%F %T' $st)" \
     --predicate 'subsystem == "com.apple.captive" AND eventMessage CONTAINS "SSID"' 2>/dev/null)"}:#* $ifc: SSID \'*})
   (( $#l )) && { m=${${l[-1]#* $ifc: SSID \'}%%\'*}; ck=${chains[$m]-} }
-  { awk -v n="$net" '$1 != n' "$CH" 2>/dev/null; print -r -- "$net ${ck:--} $s" } > "$CH.tmp" && mv -f "$CH.tmp" "$CH"
+  # 読む間に接続先・インターフェース・リース開始が変わっていれば、出さず残さない（別の網の SSID を今の接続先に結び付けない）
+  [[ $(netid; print -r -- "$net $ifc $(lease)") == "$net $ifc $s" ]] || { ck=; return }
+  # プロセスごとの一時ファイルから置き換える（同時に動いても互いの書きかけを公開しない）
+  { awk -v n="$net" '$1 != n' "$CH" 2>/dev/null; print -r -- "$net ${ck:--} $s" } > "$CH.$$" && mv -f "$CH.$$" "$CH" ||
+    rm -f "$CH.$$"
 }
 
 # ログの末尾 16KB のうち、直近の出来事として出す種類の行（ローテーションしないので全体は読まない）。
@@ -52,13 +70,7 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
   a=(${(M)hits:#??????????????????? re-authenticated *})
   (( $#a )) && at $a[-1] && (( now - t < 600 )) && kind=check
 
-  # 今の接続先（install.sh status・本体の netid と同じく、既定ゲートウェイの MAC。取れなければ IP）
-  r=$(route -n get default 2>/dev/null) || r=
-  gw=${${(M)${(f)r}:#*gateway:*}##* } ifc=${${(M)${(f)r}:#*interface:*}##* } net=
-  if [[ -n $gw ]]; then
-    net=$(arp -n "$gw" 2>/dev/null | awk '{ print $4 }')
-    [[ $net == *:*:* ]] || net=$gw
-  fi
+  netid
 
   if [[ -z $net ]]; then
     # 既定経路がない。Wi‑Fi に IPv4 があるか、macOS が接続画面を待っていれば接続画面待ち（どの網かは分からない）

@@ -125,24 +125,26 @@ EOS
 # arp: 既定ゲートウェイの MAC は $MAC（ゲートウェイがなければ失敗。$M/switched があれば別の回線 cc:cc:cc:cc:cc:03）
 print '#!/bin/sh\n[ -z "$2" ] && exit 1\n[ -e $M/switched ] && MAC=cc:cc:cc:cc:cc:03\necho "? ($2) at $MAC on en0 ifscope [ethernet]"' > $T/bin/arp
 # ipconfig: DHCP のドメイン名は $DOM（既定は空）、自分の IP は $MYIP（既定 10.0.0.5。en0 だけ）。
-# getsummary のリース開始は $LEASE（エポック秒。既定は resolv.conf の更新時刻、none なら行なし）
+# getsummary のリース開始は $M/lease か $LEASE（エポック秒。既定は resolv.conf の更新時刻、none なら行なし）
 cat > $T/bin/ipconfig <<'EOS'
 #!/bin/sh
 case $1 in
   getoption) printf "%s\n" "$DOM" ;;
   getifaddr) [ "$2" = en0 ] && echo "${MYIP-10.0.0.5}" ;;
-  getsummary) [ "$LEASE" = none ] ||
+  getsummary) [ -e $M/lease ] && LEASE=$(cat $M/lease)
+    [ "$LEASE" = none ] ||
     printf '        LeaseStartTime : %s\n' "$(date -r "${LEASE:-$(stat -f %m $M/resolv)}" '+%m/%d/%Y %H:%M:%S')" ;;
 esac
 EOS
 # log show: 呼び出しを $M/logcalls に残す。--start 以後の $WEBSHEET（エポック秒、空白区切り）に websheet: success の行を出す。
-# $LOGFAIL なら失敗、$LOGSWITCH なら読む間に接続先を切り替える。SSID を探す呼び出しには、--start 以後の
+# $LOGFAIL なら失敗、$LOGSWITCH なら読む間に接続先を切り替える、$LOGLEASE なら読む間にリース開始をその値に変える。SSID を探す呼び出しには、--start 以後の
 # $SSIDLOG（「エポック秒:インターフェース:伏せ字の SSID」、空白区切り）の行を出す。
 cat > $T/bin/log <<'EOS'
 #!/bin/zsh
 zmodload zsh/datetime
 print -r -- "$*" >> $M/logcalls
 [[ -n ${LOGSWITCH-} ]] && touch $M/switched
+[[ -n ${LOGLEASE-} ]] && print -r -- $LOGLEASE > $M/lease
 [[ -n ${LOGFAIL-} ]] && exit 1
 s=$(strftime -r '%Y-%m-%d %H:%M:%S' "${@[${@[(i)--start]}+1]}") || exit 64
 print 'Timestamp               Ty Process[PID:TID]'
@@ -223,7 +225,7 @@ ok() {  # ok <名前> <条件式...>
   if eval "$*"; then (( pass++ )); else (( failed++ )); print -r -- "NG: $name  [$*]  rc=$rc posts=$posts uposts=$uposts redirs=$redirs notes=$notes reads=$reads out=$out"; fi
 }
 # 既定は「接続してから時間が経っている」状態。joined で「今つないだ」状態にする。
-reset() { rm -rf $ST $PD $SN $DG $ST.chain ${KN:h} $M/authed $M/late $M/switched $M/noroute; touch -t 202001010000 $M/resolv }
+reset() { rm -rf $ST $PD $SN $DG $ST.chain $ST.chain.*(N) ${KN:h} $M/lease $M/authed $M/late $M/switched $M/noroute; touch -t 202001010000 $M/resolv }
 joined() { touch $M/resolv }
 A=aa:aa:aa:aa:aa:01 B=bb:bb:bb:bb:bb:02
 consent() { print -r -- "$1 ${2-doutor}" >> $KN }   # 同意済みの接続先を用意する
@@ -894,6 +896,14 @@ mb MAC=$A LEASE=none SSIDLOG="$(( T0 - 7 )):en0:$TU"
                           ok 'メニューバー: リース開始が読めなければシステムログを読まない' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* && ! -e $M/logcalls ]]'
 mb MAC=$A LEASE=$(( T0 - 60 )) LOGFAIL=1
                           ok 'メニューバー: システムログが読めなければ USEN のまま' '(( rc == 0 )) && [[ $rows == *"${NL}This Wi‑Fi: USEN · "* ]]'
+rm -f $CH; mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU" LOGSWITCH=1; rm -f $M/switched
+                          ok 'メニューバー: 読む間に別の接続先へ切り替われば、チェーンを出さず何も残さない（別の網の SSID を結び付けない）' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* && ! -e $CH ]]'
+mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU" LOGLEASE=$(( T0 - 20 )); rm -f $M/lease
+                          ok 'メニューバー: 読む間につなぎ直せば（リース開始が変われば）、チェーンを出さず何も残さない' '[[ $rows == *"${NL}This Wi‑Fi: USEN · "* && ! -e $CH ]]'
+rm -f $CH; print -r -- other > $CH.tmp
+mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
+                          ok 'メニューバー: キャッシュは自分だけの一時ファイルから置き換える（ほかのプロセスの一時ファイルに触らず、残さない）' '[[ $(<$CH) == "$A tullys $(( T0 - 60 ))" && $(<$CH.tmp) == other && -z $(print -l $CH.*(N:t) | grep -v "^${CH:t}.tmp$") ]]'
+rm -f $CH $CH.tmp
 mbreset; mkknown $A skylark; consent $A "usen $HASH"; rm -f $M/logcalls
 mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
                           ok 'メニューバー: 同じ MAC の Wi2 のブランドと並べる' '[[ $rows == "$R${NL}This Wi‑Fi: Skylark, Tully'"'"'s (USEN) · Auto Reconnect On" ]]'
@@ -984,7 +994,8 @@ rm -f $M/bootstrap_fail
 mkdir -p "$H/Library/Logs" "$H/Library/Application Support/cafe-wifi-okawari" "$H/Library/Caches"
 touch "$H/Library/Logs/cafe-wifi-okawari.log" "$H/Library/Application Support/cafe-wifi-okawari/consented" \
       "$H/Library/Caches/cafe-wifi-okawari" "$H/Library/Caches/cafe-wifi-okawari.pending" \
-      "$H/Library/Caches/cafe-wifi-okawari.seen" "$H/Library/Caches/cafe-wifi-okawari.probe" "$H/Library/Caches/cafe-wifi-okawari.chain"
+      "$H/Library/Caches/cafe-wifi-okawari.seen" "$H/Library/Caches/cafe-wifi-okawari.probe" "$H/Library/Caches/cafe-wifi-okawari.chain" \
+      "$H/Library/Caches/cafe-wifi-okawari.chain.4242"
 print -r -- "$A doutor"$'\n'"$B starbucks"$'\n'"$B doutor" > "$H/Library/Application Support/cafe-wifi-okawari/consented"
 print -rl -- L{1..6} > "$H/Library/Logs/cafe-wifi-okawari.log"
 MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
