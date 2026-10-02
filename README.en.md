@@ -59,9 +59,18 @@ It has been tested only at two Tully's shops: detecting your acceptance when you
 
 macOS 15 or later (uses the built-in `/usr/bin/jq`). Apple silicon and Intel. Tested on macOS 27.
 
-## Install and use
+## Before you use it
 
-> Before installing, please read [Before you use it](#before-you-use-it). It explains the conditions of use and how the tool re-sends your acceptance automatically.
+This is an unofficial tool. It is not endorsed or recommended by Wi2, USEN, or any shop, and the author has not obtained the providers' permission for automatic re-acceptance. The supported networks table shows technical test status.
+
+- Read and accept the terms yourself the first time. After that, the tool re-sends your acceptance automatically without showing the terms page or its notices. Use it only if you understand this and want automatic re-acceptance.
+- Use it only within what the provider's terms and the shop's rules allow. If it is unclear whether automated use is allowed, use the normal login page until you have confirmed it with the provider. Do not use it to get around usage limits or required steps.
+- There are limits to how it determines acceptance, identifies networks, and detects terms changes. It cannot guarantee a manual first acceptance at every shop.
+- Stop using it if you learn of terms changes, see a usage cap or suspension, are asked to stop, or encounter continued failures. To stop and remove it, run `./install.sh uninstall` in the repository directory.
+
+Before installing, please read the full [Usage notes and automatic acceptance](USAGE-NOTES.en.md).
+
+## Install and use
 
 ### 1. Install
 
@@ -162,31 +171,6 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 - It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`), without sending anything. On other networks (e.g. at home) it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does, and sends nothing to Wi2. During that time it also checks the Mac's system log once for an acceptance on the login page (to find USEN networks; it sends nothing).
 - Dialogs follow your macOS language (Japanese or English). Messages from `install.sh` and the menu bar are in English.
 
-## Before you use it
-
-This is an unofficial tool that automates reconnecting to free Wi‑Fi that you yourself are allowed to use. It is not endorsed or recommended by Wi2, USEN, or any shop, and the author has not obtained Wi2's or USEN's permission for automatic re-acceptance. The table above shows technical test results and expectations; it does not mean automated use is permitted.
-
-### When you may use it
-
-- Check the current terms of the Wi‑Fi you use (for Wi2, the [Free Wi‑Fi Service Terms](https://wi2.co.jp/rules/free-wifi.html), in Japanese; for USEN, the terms shown on the login page), its connection conditions, and the shop's rules, and use the tool only within what you are allowed to do.
-- Being allowed to reconnect as often as you like is not the same as being allowed to automate it. If it is unclear whether automated use, or connecting without going through the login page, is allowed, please use the normal login page until you have confirmed it with the provider.
-- Do not use it to get around required steps such as time or usage limits, suspensions, identity checks, sign-ups, or surveys. The tool does not count usage time or reconnections. Please check the notices in the shop too (for example, Doutor's [flyer](https://www.doutor.co.jp/dcs/service/images/doutor_free_wi-fi.pdf) says "60min three times per day" in English, while the Japanese text only says you can re-authenticate after 60 minutes).
-- Stop using it if the shop or the provider asks you to. Even when Wi‑Fi can be reconnected, the shop's own rules, such as how long you may stay, still apply.
-
-### About automatic acceptance
-
-Please accept the terms yourself on the login page the first time. macOS keeps a Wi‑Fi with a login page unusable until you accept, and the tool never sends an acceptance on a network it has not recorded. So when a Wi2 network works (or the connection comes back after the tool saw the login page), the tool infers that you accepted and records that network. On USEN, it records the network only after confirming in the system log that you accepted on the login page (see [About USEN](#about-usen)). At later time-outs it does not show the terms page; it sends the acceptance directly to the authentication API (the same request as the login page's "accept" button). Notices shown on the login page are not displayed either. Please use the tool only if you understand this and want automatic re-acceptance.
-
-The tool does not verify your act of accepting, and it does not detect changes to the terms. Because it skips the terms page, it cannot see a notice of changes shown there. On USEN, all it checks is that an acceptance happened on a login page (the system log does not say on which network) and that the terms text on the page has not changed. Network identification is also limited, so it cannot guarantee a manual first acceptance at every shop (at another shop of the same brand, it may send the acceptance without one). If you learn that the terms have changed or new conditions apply, stop the tool and do not resume automatic reconnection until you have reviewed them.
-
-### When to stop it
-
-The tool cannot tell a refusal due to a usage cap or suspension from a temporary network problem. If the auth server refuses the acceptance (on USEN, if the device responds) three times in a row on the same network and the connection does not come back, the tool stops re-accepting on that network and tells you in a dialog (accept on the login page yourself to resume). On timeouts and server errors it does not stop; it keeps retrying with a growing interval (up to 30 minutes). If a cap or suspension is shown, or failures continue, stop automatic reconnection and check the normal login page.
-
-Run `./install.sh uninstall` in the repository directory to remove the background job and the list of recorded networks.
-
-The license of this tool does not grant any right to use a Wi‑Fi service, nor permission for any action that violates the provider's terms.
-
 ## Caveats
 
 ### Each time-out briefly interrupts your connection
@@ -224,7 +208,7 @@ Dialogs appear in the middle of the screen and close by themselves after 2 minut
 ### Other notes
 
 - Free Wi‑Fi is unencrypted: this tool only reconnects; please protect your traffic with HTTPS or a VPN.
-- Terms of use: the tool has no way to lift server-side time or usage limits, and it does not spoof MAC addresses or open multiple sessions. For how it re-sends the acceptance without showing the terms page, please read [Before you use it](#before-you-use-it).
+- Terms of use: the tool has no way to lift server-side time or usage limits, and it does not spoof MAC addresses or open multiple sessions. For how it re-sends the acceptance without showing the terms page, please read [Usage notes and automatic acceptance](USAGE-NOTES.en.md).
 - Unofficial and not affiliated with any of the companies above. It may break if a portal changes. How it relates to the terms and the law is reviewed in [DESIGN.md](DESIGN.md) §4 (Japanese).
 
 ## Uninstall
