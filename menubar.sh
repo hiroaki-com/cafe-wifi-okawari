@@ -86,6 +86,7 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
       rows+="gray${TB}Offline"
     fi
   else
+    wl=0   # チェーンの分かった見張り中の網
     if kb=$(awk -v n="$net" '$1 == n { f = 1; print $2 } END { exit !f }' "$KN" 2>/dev/null); then
       # 同じ MAC で同意済みのブランドが複数あれば並べる（install.sh status と同じ）。USEN はチェーンが分かれば「Tully's (USEN)」
       kb=(${(f)kb}) b=()
@@ -95,8 +96,11 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
       done
       dot=green name=${(j:, :)b} st='Auto Reconnect On'
     elif awk -v n="$net" -v t=$(( now - 86400 )) '$1 == n && $2 > t { f = 1 } END { exit !f }' "$WT" 2>/dev/null; then
-      chain   # 見張り中（§3.1）
-      dot=yellow name=${ck:+$cname[$ck] (USEN)} st='Auto Reconnect from Next Time-out'
+      # 見張り中（§3.1）。チェーンが分かれば USEN の網で、利用者は接続画面で同意している。次の時間切れで USPOT-02 と
+      # 確かめてから自動で送るので On と同じに出す（送る条件は変えない）。分からなければ黄の「次の時間切れから」
+      chain
+      if [[ -n $ck ]]; then dot=green name="$cname[$ck] (USEN)" st='Auto Reconnect On' wl=1
+      else dot=yellow name= st='Auto Reconnect from Next Time-out'; fi
     else
       dot=gray name= st='Auto Reconnect Off'
     fi
@@ -118,10 +122,20 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
     # 次の時間切れの目安: 今の接続先での最後の認証から60分。接続画面での同意を確かめた行（ブランド付きの captive login seen。
     # 同意から60秒以内に書く）も起点にする。接続画面での同意の記録（(captive login)。送る前に書く）は除く。
     # その行の30秒より後に resolv.conf が書き換わっていれば（接続画面を通らずにつなぎ直した）、今の接続の認証ではないので出さない。
-    a=(${(M)hits:#??????????????????? (re-authenticated|consent recorded|captive login seen)* net=$net *~*'(captive login)'})
+    # チェーンの分かった見張り中の網では、見張りを始めた行（ブランドのない captive login seen。接続から5分以内に書く）を使い、
+    # その前5分以内に resolv.conf が書き換わっていれば（接続・接続画面での同意）その時刻を起点にする（早いほう）。
+    if (( wl )); then
+      a=(${(M)hits:#??????????????????? captive login seen net=$net})
+      tip="Estimated from when you accepted on the login page, if the shop's limit is 60 minutes. It may be a few minutes off."
+    else
+      a=(${(M)hits:#??????????????????? (re-authenticated|consent recorded|captive login seen)* net=$net *~*'(captive login)'})
+      tip="Estimated from the last authentication, if the shop's limit is 60 minutes."
+    fi
     zstat -A m +mtime $RC 2>/dev/null || m=(0)
-    (( $#a )) && at $a[-1] && (( now - t < 3600 && m[1] <= t + 30 )) &&
-      rows+="-${TB}Next Time-out$TB~$(strftime '%H:%M' $(( t + 3600 )))${TB}Estimated from the last authentication, if the shop's limit is 60 minutes."
+    if (( $#a )) && at $a[-1] && (( m[1] <= t + 30 )); then
+      (( wl && m[1] < t && m[1] > t - 300 )) && t=$m[1]
+      (( now - t < 3600 )) && rows+="-${TB}Next Time-out$TB~$(strftime '%H:%M' $(( t + 3600 )))$TB$tip"
+    fi
   fi
 else
   kind=off rows=("head${TB}cafe-wifi-okawari" "gray${TB}Stopped" "-${TB}Run ./install.sh to Restart")

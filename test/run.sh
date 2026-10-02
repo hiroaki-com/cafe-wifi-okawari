@@ -957,8 +957,32 @@ print -r -- "$A tullys 1" > $ST.chain
 mb MAC=$A;                ok 'メニューバー: 接続画面での同意を確かめた USEN の行も、チェーンが分かればチェーン' '[[ $rows == *"${TB}Accepted on Login Page · Tully'"'"'s" ]]'
 mbreset; watch $A
 print -r -- "$(lt 600) captive login seen net=$A" > $LG
-mb MAC=$A;                ok 'メニューバー: ブランドのない行（見張りを始めた網）は目安にせず、直近の出来事にだけ出す' \
+mb MAC=$A;                ok 'メニューバー: ブランドのない行（見張りを始めた網）は、チェーンが分からなければ目安にせず、直近の出来事にだけ出す' \
   '[[ $rows == "$R${NL}yellow${TB}This Wi‑Fi${NL}-${TB}$NX${RE}Today $(hm 600)${TB}Accepted on Login Page" ]]'
+# チェーンの分かった見張り中の網（来店時に接続画面で同意した USEN の網）: 緑の On と、見張りを始めた行からの目安
+WTIP="${TB}Estimated from when you accepted on the login page, if the shop's limit is 60 minutes. It may be a few minutes off."
+print -r -- "$A tullys 1" > $ST.chain
+mb MAC=$A;                ok 'メニューバー: 見張り中でチェーンが分かれば、緑の On と、見張りを始めた行から60分後の目安（専用のツールチップ）' \
+  '[[ $icon == on && $rows == "$R${NL}green${TB}Tully'"'"'s (USEN)${NL}-${TB}$ON${NT}$(hm -3000)$WTIP${RE}Today $(hm 600)${TB}Accepted on Login Page" ]]'
+ago 650 $M/resolv
+mb MAC=$A;                ok 'メニューバー: 見張りを始めた行の前5分以内に resolv.conf が書き換わっていれば、その時刻（早いほう）を起点に' '[[ $rows == *"${NT}$(hm -2950)$WTIP${NL}"* ]]'
+ago 905 $M/resolv
+mb MAC=$A;                ok 'メニューバー: resolv.conf の書き換えが行の5分より前なら（この接続のものではない）、行の時刻を起点に' '[[ $rows == *"${NT}$(hm -3000)$WTIP${NL}"* ]]'
+ago 580 $M/resolv
+mb MAC=$A;                ok 'メニューバー: 行から30秒以内の resolv.conf の書き換えなら、行の時刻を起点に' '[[ $rows == *"${NT}$(hm -3000)$WTIP${NL}"* ]]'
+ago 560 $M/resolv
+mb MAC=$A;                ok 'メニューバー: 見張りを始めた行の30秒より後に resolv.conf が書き換わっていれば目安を出さない（緑の On は出す）' '[[ $rows == "$R${NL}green${TB}Tully'"'"'s (USEN)${NL}-${TB}$ON${RE}"* ]]'
+mb MAC=$B;                ok 'メニューバー: 見張りを始めた行も、別の接続先では目安にしない' '[[ $rows != *Next\ Time-out* ]]'
+print -r -- "$(lt 3500) captive login seen net=$A" > $LG; ago 3620 $M/resolv
+mb MAC=$A;                ok 'メニューバー: 起点（resolv.conf の書き換え）から60分を過ぎていれば目安を出さない' '[[ $rows == "$R${NL}green${TB}Tully'"'"'s (USEN)${NL}-${TB}$ON${RE}"* ]]'
+print -r -- "$(lt 3610) captive login seen net=$A" > $LG; ago 3590 $M/resolv
+mb MAC=$A;                ok 'メニューバー: 行のあと30秒以内の resolv.conf の書き換えは起点にしない（遅いほうにしない）' '[[ $rows != *Next\ Time-out* ]]'
+print -rl -- "$(lt 600) captive login seen net=$A usen" "$(lt 500) re-authenticated api=ok probe=ok net=$A usen t=1s" > $LG; touch -t 202001010000 $M/resolv
+mb MAC=$A;                ok 'メニューバー: 見張り中の網では、ブランド付きの行は目安にしない（見張りを始めた行だけ）' '[[ $rows != *Next\ Time-out* ]]'
+print -r -- "$(lt 600) captive login seen net=$A" > $LG; print -r -- "2 $(now -60) $A 0 1 usen" > $ST
+mb MAC=$A;                ok 'メニューバー: 見張り中でチェーンが分かっても、再接続に失敗して知らせたあとは赤（目安は出す）' \
+  '[[ $icon == warn && $rows == "$R${NL}red${TB}Tully'"'"'s (USEN)${NL}-${TB}$ON${NL}$W1${NT}$(hm -3000)$WTIP${RE}"* ]]'
+rm -f $ST
 # USEN の網のチェーン（システムログの伏せ字の SSID）
 CH=$ST.chain TU='tu********Fi' KO='Ko********Fi'
 mbreset; mkknown $A "usen $HASH"; rm -f $M/logcalls
@@ -1008,7 +1032,7 @@ mb MAC=$B LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
                           ok 'メニューバー: 未同意の網ではシステムログを読まない' '[[ $rows == "$R${NL}$OFF" && ! -e $M/logcalls && ! -e $CH ]]'
 mbreset; mkdir -p ${WT:h}; print -r -- "$A $(now 3600)" > $WT
 mb MAC=$A LEASE=$(( T0 - 60 )) SSIDLOG="$(( T0 - 57 )):en0:$TU"
-                          ok 'メニューバー: 見張り中の網でもチェーンを出す' '[[ $rows == "$R${NL}yellow${TB}Tully'"'"'s (USEN)${NL}-${TB}$NX" ]]'
+                          ok 'メニューバー: 見張り中の網でチェーンが分かれば、緑の On' '[[ $rows == "$R${NL}green${TB}Tully'"'"'s (USEN)${NL}-${TB}$ON" ]]'
 print -rl -- "$(lt 120) re-authenticated api=ok probe=ok net=$A usen t=1s" "$(lt 100) re-authenticated api=ok probe=ok net=$B usen t=2s" > $LG
 mb MAC=$B;                ok 'メニューバー: 直近の出来事の USEN は、チェーンが分かっている接続先ならチェーン' \
   '[[ $rows == *"${RE}Today $(hm 100)${TB}Reconnected · USEN · 2 s${EV}Today $(hm 120)${TB}Reconnected · Tully'"'"'s · 1 s" ]]'
@@ -1141,6 +1165,29 @@ print -r -- "$t5 captive login seen net=$A" >> "$H/Library/Logs/cafe-wifi-okawar
 MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
 ok '状態: ブランドのない行（見張りを始めた網）は最後の認証にだけ出し、目安の起点にしない' \
   '[[ $out == *"Last auth        $t5 (1 min ago), captive login seen"$'"'"'\n'"'"'* && $out == *"Next time-out    around $(date -j -v+60M -f "%F %T" "$t4" +%H:%M), "* ]]'
+# チェーンの分かった見張り中の網: 見張りを始めた行（または、その前5分以内の resolv.conf の書き換え）から60分後
+HW="$H/Library/Application Support/cafe-wifi-okawari/watched" HC="$H/Library/Caches/cafe-wifi-okawari.chain"
+t6=$(date -v-10M '+%F %T')
+print -r -- "$D $(( EPOCHSECONDS - 600 ))" > "$HW"; print -r -- "$t6 captive login seen net=$D" >> "$H/Library/Logs/cafe-wifi-okawari.log"
+MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 見張り中でもチェーンが分からなければ（メニューバーの控えがなければ）目安を出さない' '[[ $out == *"Last auth        $t6 (10 min ago), captive login seen"* && $out != *Next\ time-out* ]]'
+print -r -- "$D tullys 1" > "$HC"
+MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '状態: 見張り中でチェーンが分かれば、見張りを始めた行から60分後を目安にする（ずれうることも添える）' \
+  '(( rc == 0 )) && [[ $out == *"Next time-out    around $(date -j -v+60M -f "%F %T" "$t6" +%H:%M), in "*" min (from when you accepted on the login page, if the shop'"'"'s limit is 60 minutes and it may be a few minutes off)"* ]]'
+touch -t $(date -j -v-2M -f '%F %T' "$t6" +%Y%m%d%H%M.%S) $M/resolv
+MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 見張りを始めた行の前5分以内に resolv.conf が書き換わっていれば、その時刻（早いほう）を起点にする' '[[ $out == *"Next time-out    around $(date -j -v+58M -f "%F %T" "$t6" +%H:%M), "* ]]'
+touch -t $(date -j -v+50S -f '%F %T' "$t6" +%Y%m%d%H%M.%S) $M/resolv
+MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 見張りを始めた行の30秒より後に resolv.conf が書き換わっていれば目安を出さない' '[[ $out == *"Last auth        $t6 "* && $out != *Next\ time-out* ]]'
+t7=$(date -v-3610S '+%F %T'); print -r -- "$t7 captive login seen net=$D" >> "$H/Library/Logs/cafe-wifi-okawari.log"
+touch -t $(date -j -v+20S -f '%F %T' "$t7" +%Y%m%d%H%M.%S) $M/resolv
+MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 行のあと30秒以内の resolv.conf の書き換えは起点にしない（遅いほうにしない）' '[[ $out == *"Last auth        $t7 "* && $out != *Next\ time-out* ]]'
+touch -t 202001010000 $M/resolv; print -r -- "$D - 1" > "$HC"
+MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: チェーンが見つからなかった接続先（控えのキーが -）なら目安を出さない' '[[ $out != *Next\ time-out* ]]'
 print -rl -- "$t1 consent recorded net=$A doutor (online)" > "$H/Library/Logs/cafe-wifi-okawari.log"
 MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '状態: 60分を過ぎていれば目安を出さない' \

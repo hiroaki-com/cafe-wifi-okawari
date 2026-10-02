@@ -57,6 +57,7 @@ case ${1-} in
       net=$(arp -n "$gw" 2>/dev/null | awk '{ print $4 }')
       [[ $net == *:*:* ]] || net=$gw
     fi
+    wl=0   # チェーンの分かった見張り中の網（メニューバーのチェーンの控えで判断する。DESIGN.md §3.2）
     if [[ -z $net ]]; then
       row 'Current network' 'none (offline, or macOS is waiting for you to accept on the login page)'
     elif kb=$(awk -v n="$net" '$1 == n { f = 1; if (NF > 1) b = b (b == "" ? "" : ", ") $2 } END { print b; exit !f }' "$kn" 2>/dev/null); then
@@ -64,6 +65,7 @@ case ${1-} in
     elif awk -v n="$net" -v t=$(( now - 86400 )) '$1 == n && $2 > t { f = 1 } END { exit !f }' "${kn:h}/watched" 2>/dev/null; then
       # 接続画面での同意をシステムログで確かめた網（24時間以内）。USEN なら、次の時間切れで同意を記録して自動で送る。
       row 'Current network' "gateway $net, you accepted on its login page: if it is USEN Wi-Fi, auto re-authentication starts at the next time-out"
+      awk -v n="$net" '$1 == n && $2 != "-" { f = 1 } END { exit !f }' "$HOME/Library/Caches/cafe-wifi-okawari.chain" 2>/dev/null && wl=1
     else
       row 'Current network' "gateway $net, not accepted: auto re-authentication off"
     fi
@@ -86,11 +88,22 @@ case ${1-} in
     # 次の時間切れの目安（メニューバーと同じ条件。DESIGN.md §3.2）: 今の接続先での最後の認証から60分。制限時間は店で違うので
     # 60分の店の場合として示す。接続画面での同意を確かめた行（ブランド付きの captive login seen。同意から60秒以内に書く）も
     # 起点にする。接続画面での同意の記録（(captive login)。送る前に書く）は除く。その行の30秒より後に resolv.conf が
-    # 書き換わっていれば（接続画面を通らずにつなぎ直した）今の接続の認証ではないので、出さない。
-    a=$(grep -E '^[0-9-]{10} [0-9:]{8} (re-authenticated|consent recorded|captive login seen) ' "$log" 2>/dev/null | grep -F " net=$net " | grep -vF '(captive login)' | tail -n 1) || a=
-    if [[ -n $net && -n $a ]] && t=$(date -j -f '%F %T' "${a[1,19]}" +%s 2>/dev/null) &&
-       (( t + 3600 > now && $(stat -f %m /var/run/resolv.conf 2>/dev/null || print 0) <= t + 30 )); then
-      row 'Next time-out' "around $(date -r $(( t + 3600 )) +%H:%M), in $(dur $(( t + 3600 - now ))) (if the shop's limit is 60 minutes)"
+    # 書き換わっていれば（接続画面を通らずにつなぎ直した）今の接続の認証ではないので、出さない。チェーンの分かった
+    # 見張り中の網では、見張りを始めた行（ブランドのない captive login seen）を使い、その前5分以内に resolv.conf が
+    # 書き換わっていればその時刻を起点にする（早いほう）。
+    if (( wl )); then
+      a=$(awk -v n="net=$net" 'NF == 6 && $3 $4 $5 == "captiveloginseen" && $6 == n' "$log" 2>/dev/null | tail -n 1) || a=
+      how='from when you accepted on the login page, '; off=' and it may be a few minutes off'
+    else
+      a=$(grep -E '^[0-9-]{10} [0-9:]{8} (re-authenticated|consent recorded|captive login seen) ' "$log" 2>/dev/null | grep -F " net=$net " | grep -vF '(captive login)' | tail -n 1) || a=
+      how= off=
+    fi
+    m=$(stat -f %m /var/run/resolv.conf 2>/dev/null) || m=0
+    if [[ -n $net && -n $a ]] && t=$(date -j -f '%F %T' "${a[1,19]}" +%s 2>/dev/null) && (( m <= t + 30 )); then
+      (( wl && m < t && m > t - 300 )) && t=$m
+      if (( t + 3600 > now )); then
+        row 'Next time-out' "around $(date -r $(( t + 3600 )) +%H:%M), in $(dur $(( t + 3600 - now ))) (${how}if the shop's limit is 60 minutes$off)"
+      fi
     fi
 
     if [[ -s $log ]]; then
