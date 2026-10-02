@@ -87,6 +87,7 @@
 | 項目 | 内容 |
 |---|---|
 | 網の目印 | ない。DHCP のドメイン名は `lan`（家庭のルーターにもある）で、ゲートウェイの MAC は VRRP の共通 MAC ではない |
+| DHCP のリース | `lease_time` は3600秒（1店舗）。リース開始は接続した時刻で、入店時の接続画面での同意（`websheet: success`）はその後になり、`resolv.conf` は同意と同じ秒に書き換わった |
 | 捕捉中の captive.apple.com | 本ツールと同じ curl の要求には `302` を返す。Location は `http://<機器のプライベート IP>:<ポート>/captive/?url=captive.apple.com/hotspot-detect.html&stamac=<端末の MAC>`。macOS の問い合わせには 200（HTML）を返す（User-Agent で変えていると見られる） |
 | 機器の位置 | 端末とは別のサブネットで、既定のゲートウェイ経由で届いた（`route -n get <機器>` のインターフェースは既定経路と同じ） |
 | `stamac` | macOS のプライベート Wi‑Fi アドレス。あとで読んだ `ifconfig en0` の ether、DHCP の `chaddr`（`ipconfig getpacket en0`・`getsummary`）と一致した。捕捉中も、本ツールの照合（`ifconfig` の ether と比べる）を通った。`networksetup -getmacaddress` のハードウェア MAC とは違う。`getsummary` の行は `chaddr = <MAC>` の形 |
@@ -96,7 +97,8 @@
 | 利用時間 | `GET /capi/welcome/info` の `sess_time` が `"60"`。店が機器で変えられる（[USEN のサポート FAQ](https://support.usen.com/faq/show/10300?category_id=95&site_domain=default)） |
 | 入力値 | 画面はメモリにだけ持つ。Cookie はなく、localStorage には `DAVOLINK_` を頭に付けた言語と管理画面のトークンだけ。手動で選んだ値は読み出せない |
 | 同意の痕跡 | システムログの `[com.apple.captive:Controller] Online (websheet: success)`。網やインターフェースを示さない |
-| CaptiveNetwork の状態 | `scutil` の `State:/Network/Interface/en0/CaptiveNetwork` に `Stage` と `WaitingOnUI`。認証済みでは `Online`・`FALSE` だったが、Wi2 の網で macOS を再起動したあとは、通信できていても `Evaluate`・`FALSE` のまま変わらなかった。同意の証拠にはならないので使わない（ログを読む回数を減らす候補。§7 の現地の項目 6） |
+| システムログの SSID | 同じ `com.apple.captive` の接続時の行に、先頭2文字と末尾2文字だけを残して間を `*` にした SSID が出る（Wi2・USEN とも）。位置情報の許可がなくても読める。本ツールは読まず、ログにも残さない |
+| CaptiveNetwork の状態 | `scutil` の `State:/Network/Interface/en0/CaptiveNetwork` に `Stage` と `WaitingOnUI`。認証済みでは `Online`・`FALSE` だった（USEN の入店時の同意のあとも同じ）が、Wi2 の網で macOS を再起動したあとは、通信できていても `Evaluate`・`FALSE` のまま変わらず、その状態で迎えた時間切れの捕捉中も `Evaluate`・`FALSE` で、IPv4 は残った。同意の証拠にはならないので使わない（ログを読む回数を減らす候補。§7 の現地の項目 6） |
 
 **規約・公式の案内との関係**（弁護士による確認ではない）
 
@@ -281,7 +283,7 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 
 **実装での補足**（上の流れで決まっていなかった点。現地の結果で見直す）
 
-- **a' ではリース開始の「5分」の条件を使わない**: 時間切れのあとに接続画面で同意すると `resolv.conf` が書き換わるが、リース開始は古いままのことがある（Wi2 はリース300秒で、150秒ごとの更新でリース開始が進む。USEN のリース時間は未測定）ので、b' の条件を当てはめると記録できない。a' の下限は基準時刻（+1秒）とリース開始の遅いほう。b' は5分の条件を使う
+- **a' ではリース開始の「5分」の条件を使わない**: 時間切れのあとに接続画面で同意すると `resolv.conf` が書き換わるが、リース開始は古いままのことがある（Wi2 はリース300秒で、150秒ごとの更新でリース開始が進む。USEN はタリーズの網で3600秒）ので、b' の条件を当てはめると記録できない。a' の下限は基準時刻（+1秒）とリース開始の遅いほう。b' は5分の条件を使う
 - **基準時刻は「+1秒」から数える**: `log show --start` は秒単位で、指定した秒を含む（実測）。別の網での同意と同じ秒に基準時刻を進めた場合に数えないようにする
 - **基準時刻を進める条件は MAC だけで比べる**: 同意待ちの行（「MAC usen 基準時刻」）にインターフェースを持たないため。別のインターフェースで同じゲートウェイ MAC の網につないだときは進まない（§4 の「残る限界」と同じ範囲）
 - **USEN の同意待ちは、その網にいるときだけ通信の条件に数える**（0'）: 同意待ちは記録するまで消えないので、どの網でも数えると自宅でも10秒ごとにプローブすることになる（§1.2 の「網の見つけ方」の理由と同じ）。Wi2 の同意待ちの扱いは変えない
@@ -329,7 +331,7 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 - 条件: 既定経路がなく、Wi‑Fi のインターフェース（`networksetup -listallhardwareports` の Wi‑Fi の行のデバイス）に IPv4 がある（`ipconfig getifaddr`）か、`scutil` の `State:/Network/Interface/<Wi‑Fi>/CaptiveNetwork` の `WaitingOnUI` が `TRUE`
 - どちらも満たさなければ「未接続」（アイコンは動作中）。Wi‑Fi を切った・どこにもつないでいないとき
 - この間はどの網か分からないので、本ツールの対象の網かどうかは言わない（ホテルなど対象外の網でも出る）。メニューは「macOS が接続画面での同意を待っている」ことと、画面が出ていなければ `http://captive.apple.com` を開くという案内だけ
-- 捕捉中に上の2つの値がどうなるかは未確認（`scutil` は認証済みの `Online`・`FALSE` しか見ていない。§1.2）。現地で確かめて、片方で足りれば条件を絞る（§7 の現地の項目 7）
+- 捕捉中に上の2つの値がどうなるかは未確認（`scutil` で見たのは、認証済みの `Online`・`FALSE` と、既定経路が残る Wi2 の捕捉中の `Evaluate`・`FALSE` だけ。§1.2）。現地で確かめて、片方で足りれば条件を絞る（§7 の現地の項目 7）
 
 **メニュー**（英語のみ。macOS の優先言語で切り替えない。`install.sh` のメッセージと同じ扱い。ダイアログは今までどおり日本語・英語）
 
@@ -378,7 +380,7 @@ Hide from Menu Bar
 - 次の時間切れの目安は、次をすべて満たすログの最後の行から60分とする。1つでも欠ければ行を出さない（間違った時刻を出すより、出さない側に倒す）
   - 種類が `re-authenticated` か `consent recorded`。ただし `consent recorded … usen (captive login)` は除く。この行は、最初の時間切れのときに過去の接続画面での同意を記録するもので、同意を送る**前**に書く（本体の USEN の分岐）。送信に失敗しても残るので、通信が戻った時刻にならない。成功すれば続けて `re-authenticated` が出るので、そちらを使う
   - `net=` が今の接続先。店 A で再認証したあと店 B へ移ったときに、A の時刻から B の時間切れを出さないため
-  - 行の時刻から30秒より後に `resolv.conf` が書き換わっていない。本体は、同意済みの網で利用者が自分で同意し直してもログを書かない（記録済みなら何もしない）ので、1時間以内に同じ店へ戻って同意し直すと、今の接続先の古い行しか残らない。`resolv.conf` はつなぎ直したときと接続画面で同意したときに書き換わる（§7）ので、行より後に書き換わっていれば、その行は今の接続の認証ではない。30秒は、再認証に続いて書き換わる場合の幅。リースの更新では書き換わらない（Wi2 で実測）。再認証で書き換わるかは未確認で、書き換わるなら目安が途中で消える（現地の項目 7）
+  - 行の時刻から30秒より後に `resolv.conf` が書き換わっていない。本体は、同意済みの網で利用者が自分で同意し直してもログを書かない（記録済みなら何もしない）ので、1時間以内に同じ店へ戻って同意し直すと、今の接続先の古い行しか残らない。`resolv.conf` はつなぎ直したときと接続画面で同意したときに書き換わる（§7）ので、行より後に書き換わっていれば、その行は今の接続の認証ではない。30秒は、再認証に続いて書き換わる場合の幅。リースの更新でも、時間切れからの再認証でも書き換わらない（Wi2 で実測。再認証は1回）。USEN の再認証で書き換わるかは未確認で、書き換わるなら目安が途中で消える（現地の項目 7）
   - 行の時刻から60分以内
 - `install.sh status` の「Next time-out」も同じ条件にした（満たさなければ行を出さない）。「Last auth」は今までどおり、接続先を問わずログの最後の認証の行
 
@@ -514,7 +516,8 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 | 時間切れまでの時間 | 同意から約61〜63分（4回） |
 | 実際の店のゲートウェイの MAC | 取れる。VRRP の仮想 MAC だった |
 | 実際の `launchctl` での再導入・起動の間隔 | 再導入は3回続けて成功。10秒の間隔で起動（`run interval = 10 seconds`） |
-| `/var/run/resolv.conf` が書き換わる時刻 | 接続画面で同意して通信できるようになった時刻（`Online (websheet: success)`）と一致 |
+| `/var/run/resolv.conf` が書き換わる時刻 | 接続画面で同意して通信できるようになった時刻（`Online (websheet: success)`）と一致（Wi2・USEN とも）。Wi2 ではリースの更新と時間切れからの再認証（1回）では書き換わらなかった。USEN の再認証では未確認 |
+| DHCP のリース時間 | Wi2 は300秒で、150秒ごとの更新でリース開始が進む。USEN（タリーズの1店舗）は3600秒 |
 | 現行版（USEN 未対応）が USEN の網で何もしないか | OK（入店時・時間切れ時とも、ログは増えず何も送らなかった） |
 | USEN の `stamac` | あとで読んだ ether・`chaddr` と一致。捕捉中も本ツールの照合（ether）を通った |
 | USEN の入店時の同意の検知（b'） | OK（タリーズ1回。接続画面で同意したあと、本ツールが `captive login seen` を書いた） |
@@ -528,9 +531,9 @@ Today 10:05<TAB>Reconnected · Skylark · 2 s
 3. 失敗したら、ログの `redirect failed`・`portal …`・`login failed … curl=… res=…`・`probe failed`・`network changed` で原因を切り分ける（黙って終わるのは、記録も Wi2 のドメイン名もない網と、既定経路がないときだけ）
 4. USEN: コメダでも、入店時に `captive login seen` を書き、時間切れで `consent recorded … usen (captive login)` と `re-authenticated … usen` が続くか（タリーズでは確かめた）
 5. USEN: macOS との競争を重ねて見る。接続画面が先に出たときに、ログが `network changed` だけで拒否に数えていないか
-6. USEN: 捕捉中の `scutil` の CaptiveNetwork の値（復帰後は `Online`・`WaitingOnUI` が `FALSE`）。同じ網につなぎ直したとき `LeaseStartTime` が更新されるか。リース時間（`ipconfig getpacket` の `lease_time`）も見る。Wi2 と同じく数分なら、更新のたびにリース開始が進むので、同意から読むまでの間に更新が入ると `websheet: success` を数え漏らす（§3.1 の a'・b' の前提）
-7. メニューバー（§3.2）: macOS が接続画面を開いている間の、Wi‑Fi の IPv4（`ipconfig getifaddr`）と `WaitingOnUI` の値（接続画面待ちの条件）。再認証の前後で `resolv.conf` が書き換わるか（リースの更新では書き換わらないことを Wi2 で確かめた）（次の時間切れの目安の条件）
-8. （任意・将来の調査）USEN: 機器の応答からチェーン（タリーズ・コメダ）を見分けられるか。転送先・DHCP のドメイン名・ゲートウェイの MAC では見分けられないので、残る候補は2つ。捕捉中に取得だけする（同意は送らない）。① `/captive/` の HTML と `page.js` にチェーン名・ロゴの参照があるか ② `GET /capi/welcome/info` の JSON のうち、`sess_time`・`status_code` 以外の項目と、画面が読む `/capi/…` の一覧。見分けられれば、ログとメニューで `usen` の代わりにチェーンを出せる（時間切れごとの通信は GET 1本増える）。店名は記録しない（ログにも文書にも書かない）
+6. USEN: 捕捉中の `scutil` の CaptiveNetwork の値（復帰後は `Online`・`WaitingOnUI` が `FALSE`）。同じ網につなぎ直したとき `LeaseStartTime` が更新されるか（§3.1 の a'・b' の前提）。リース時間はタリーズの1店舗で3600秒だったので、入店時の同意から読むまでの間に更新が入る心配は小さい。コメダでも `lease_time` を見る
+7. メニューバー（§3.2）: macOS が接続画面を開いている間の、Wi‑Fi の IPv4（`ipconfig getifaddr`）と `WaitingOnUI` の値（接続画面待ちの条件）。USEN の再認証の前後で `resolv.conf` が書き換わるか（Wi2 ではリースの更新でも再認証でも書き換わらなかった）（次の時間切れの目安の条件）
+8. （任意・将来の調査）USEN: 機器の応答からチェーン（タリーズ・コメダ）を見分けられるか。転送先・DHCP のドメイン名・ゲートウェイの MAC では見分けられないので、残る候補は3つ。①・② は捕捉中に取得だけする（同意は送らない）。① `/captive/` の HTML と `page.js` にチェーン名・ロゴの参照があるか ② `GET /capi/welcome/info` の JSON のうち、`sess_time`・`status_code` 以外の項目と、画面が読む `/capi/…` の一覧 ③ システムログの伏せ字の SSID（§1.2）。公式の SSID（§1.1）の先頭2文字はチェーンで違い、通信も要らない。タリーズでは公式の SSID の形で出た。コメダで同じく出るかは未確認。見分けられれば、ログとメニューで `usen` の代わりにチェーンを出せる（時間切れごとの通信は GET 1本増える）。店名は記録しない（ログにも文書にも書かない）
 
 `test/run.sh` で確かめている USEN の分岐は次のとおり（`run` の `posts` は `xhr/login` と `/capi/welcome` の両方を数え、USEN の項目では `uposts` で宛先も確かめる。模擬の `log show`・`ipconfig getsummary`・`route -n get <IP>`・USEN の機器を使う）。
 
