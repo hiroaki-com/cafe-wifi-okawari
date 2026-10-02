@@ -30,13 +30,18 @@ Wi2 と USEN（USPOT-02）の「規約に同意するだけ」の無料 Wi‑Fi 
 | お店 | SSID | 状況 |
 |---|---|---|
 | ドトール・エクセルシオール | `DOUTOR_FREE_Wi-Fi` | 動作確認済み |
-| ガストなど すかいらーくグループ | `.Wi2_Free_at_【SK.GROUP】` | 動作確認済み。一部のブランドは Wi‑Fi の提供を終了しています |
-| タリーズ | `tullys_Wi-Fi` | 動作確認済み（USEN） |
-| スターバックス | `at_STARBUCKS_Wi2` | 同じ仕組みのため動く見込み |
-| ルノアール・ミヤマ珈琲 | `Renoir_Miyama_Wi-Fi` | 同じ仕組みのため動く見込み（1日3時間の上限は延長できません） |
-| コメダ珈琲 | `Komeda_Wi-Fi` | 同じ方式（USEN）。実店舗では未確認 |
+| すかいらーくグループ（ガストなど） | `.Wi2_Free_at_【SK.GROUP】` | 動作確認済み |
+| タリーズ | `tullys_Wi-Fi` | 動作確認済み |
+| スターバックス | `at_STARBUCKS_Wi2` | 動く見込み |
+| ルノアール・ミヤマ珈琲 | `Renoir_Miyama_Wi-Fi` | 動く見込み |
+| コメダ珈琲 | `Komeda_Wi-Fi` | 未確認 |
 
-「動作確認済み」は、初回の同意の記録と時間切れ後の自動再接続を実店舗で確認したものです。店舗数・回数・試験条件は [DESIGN.md](DESIGN.md) の §7 にあります。会員登録・メール登録・アンケートが必要な Wi‑Fi（マクドナルドなど）には対応していません。
+「動作確認済み」は、初回の同意の記録と時間切れ後の自動再接続を実店舗で確認したものです。店舗数・回数・試験条件は [DESIGN.md](DESIGN.md) の §7 にあります。「動く見込み」は確認済みのお店と同じ仕組みのもの、「未確認」はタリーズと同じ方式でまだ実店舗で試していないものです。
+
+- すかいらーくグループの一部のブランドは、Wi‑Fi の提供を終了しています
+- ルノアール・ミヤマ珈琲の1日3時間の上限は延長できません
+
+会員登録・メール登録・アンケートが必要な Wi‑Fi（マクドナルドなど）には対応していません。
 
 タリーズ・コメダ（USEN）は、導入したあとに同意したお店から対象になります（[USEN について](#usen-について)）。
 
@@ -108,12 +113,14 @@ cd cafe-wifi-okawari
 |---|---|
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-on-white.png"><img src="assets/icon/state-on.png" width="33" height="22" alt="カップ"></picture> | 動作中 |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-check-white.png"><img src="assets/icon/state-check.png" width="33" height="22" alt="カップ ✓"></picture> | 10分以内に自動で再接続した |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-warn-white.png"><img src="assets/icon/state-warn.png" width="33" height="22" alt="カップ !"></picture> | この Wi‑Fi で対応が要る（最初の1回だけ自分で同意する、または再接続に失敗したので認証画面を確かめる）。どちらかはメニューに出ます |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="カップ …"></picture> | macOS が認証画面での同意を待っている（対応している Wi‑Fi に限らず、認証画面のある Wi‑Fi ならどこでも出ます）。認証画面が出なければ、ブラウザで `http://captive.apple.com` を開いてください |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="薄いカップ"></picture> | 停止中（常駐処理が登録されていない）。`./install.sh` で戻ります |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-warn-white.png"><img src="assets/icon/state-warn.png" width="33" height="22" alt="カップ !"></picture> | この Wi‑Fi で対応が要る |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="カップ …"></picture> | macOS が認証画面での同意を待っている |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="薄いカップ"></picture> | 停止中。`./install.sh` で戻ります |
 
 クリックすると、今の Wi‑Fi の名前・自動再接続が有効か・次の時間切れの目安・直近の出来事3件が出ます（メニューは英語のみ）。名前の左の印は、緑が自動再接続が有効、黄が次の時間切れかご自身の同意を待っている、赤が再接続に失敗、灰が働いていない（未同意・未接続・停止中）ことを表します。MAC アドレス・IP アドレスは出さないので、画面共有に写っても差し支えありません。
 
+- ! は、最初の1回だけ自分で同意するときと、再接続に失敗して認証画面を確かめるときに出ます。どちらかはメニューに出ます
+- … は対応している Wi‑Fi に限らず、認証画面のある Wi‑Fi ならどこでも出ます。認証画面が出なければ、ブラウザで `http://captive.apple.com` を開いてください
 - USEN の Wi‑Fi では、チェーンが分かれば `Tully's (USEN)`、分からなければ `USEN` と出ます。macOS のシステムログにある一部を伏せた Wi‑Fi 名から見分け、その名前は保存しません。店舗名は出しません（実店舗で確認したのはタリーズのみ）
 - 時間切れの目安は、お店の制限時間を60分として、今の接続先での最後の認証から求めます。認証画面を通らずにつなぎ直したとき（スリープからの復帰など）は出ません。詳しい条件は [DESIGN.md](DESIGN.md) の §3.2 にあります
 

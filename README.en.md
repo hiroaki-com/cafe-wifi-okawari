@@ -29,14 +29,19 @@ Free Wi‑Fi from Wi2 and USEN (USPOT-02) where you only need to accept the term
 
 | Shop | SSID | Status |
 |---|---|---|
-| Doutor / Excelsior Caffé | `DOUTOR_FREE_Wi-Fi` | Tested at a real shop |
-| Skylark group (Gusto, etc.) | `.Wi2_Free_at_【SK.GROUP】` | Tested at a real shop. Some brands have ended their Wi‑Fi service |
-| Tully's Coffee | `tullys_Wi-Fi` | Tested at real shops (USEN) |
-| Starbucks | `at_STARBUCKS_Wi2` | Expected to work (same portal) |
-| Renoir / Miyama Coffee | `Renoir_Miyama_Wi-Fi` | Expected to work (same portal). The 3-hour daily cap cannot be extended |
-| Komeda's Coffee | `Komeda_Wi-Fi` | Same portal (USEN). Not yet tested at a real shop |
+| Doutor / Excelsior Caffé | `DOUTOR_FREE_Wi-Fi` | Tested |
+| Skylark group (Gusto, etc.) | `.Wi2_Free_at_【SK.GROUP】` | Tested |
+| Tully's Coffee | `tullys_Wi-Fi` | Tested |
+| Starbucks | `at_STARBUCKS_Wi2` | Expected to work |
+| Renoir / Miyama Coffee | `Renoir_Miyama_Wi-Fi` | Expected to work |
+| Komeda's Coffee | `Komeda_Wi-Fi` | Not yet tested |
 
-Tested networks have been checked for both recording the initial acceptance and reconnecting automatically after a time-out. Shop counts, test counts, and test conditions are in §7 of [DESIGN.md](DESIGN.md) (Japanese). Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported.
+Tested networks have been checked at real shops for both recording the initial acceptance and reconnecting automatically after a time-out. Shop counts, test counts, and test conditions are in §7 of [DESIGN.md](DESIGN.md) (Japanese). "Expected to work" means the same portal as a tested shop; "Not yet tested" means the same system as Tully's but not yet tried at a real shop.
+
+- Some Skylark brands have ended their Wi‑Fi service
+- The 3-hour daily cap at Renoir / Miyama Coffee cannot be extended
+
+Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported.
 
 On Tully's and Komeda (USEN), the tool covers only shops where you accept after installing it (see [About USEN](#about-usen)).
 
@@ -108,12 +113,14 @@ The coffee cup in the menu bar (its steam is drawn as Wi‑Fi waves, with an arr
 |---|---|
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-on-white.png"><img src="assets/icon/state-on.png" width="33" height="22" alt="Cup"></picture> | Running |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-check-white.png"><img src="assets/icon/state-check.png" width="33" height="22" alt="Cup ✓"></picture> | Reconnected automatically within the last 10 minutes |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-warn-white.png"><img src="assets/icon/state-warn.png" width="33" height="22" alt="Cup !"></picture> | You need to act on this Wi‑Fi: accept the terms yourself once, or check the login page because reconnecting failed. The menu says which |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="Cup …"></picture> | macOS is waiting for you to accept on the login page (on any network with a login page, not only supported ones). If the login page does not appear, open `http://captive.apple.com` in a browser |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="Faded cup"></picture> | Stopped (the background job is not registered). Run `./install.sh` to restart |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-warn-white.png"><img src="assets/icon/state-warn.png" width="33" height="22" alt="Cup !"></picture> | You need to act on this Wi‑Fi |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="Cup …"></picture> | macOS is waiting for you to accept on the login page |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="Faded cup"></picture> | Stopped. Run `./install.sh` to restart |
 
 Click it to see the current Wi‑Fi's name, whether automatic reconnection is on, the estimated next time-out, and the last three events (the menu is in English only). The dot next to the name is green when automatic reconnection is on, yellow when it is waiting for the next time-out or for you to accept, red when reconnecting failed, and gray when it is not working (not accepted, offline, or stopped). It shows no MAC or IP addresses, so it is safe to show in screen sharing.
 
+- ! appears when you need to accept the terms yourself once, or to check the login page because reconnecting failed. The menu says which
+- … appears on any network with a login page, not only supported ones. If the login page does not appear, open `http://captive.apple.com` in a browser
 - On USEN Wi‑Fi it shows the chain when it can tell, such as `Tully's (USEN)`, and `USEN` otherwise. It tells them apart by the partly hidden Wi‑Fi name in the macOS system log and does not store that name. It never shows the shop's branch (only Tully's has been checked at a real shop).
 - The time-out estimate assumes the shop's limit is 60 minutes and counts from the last authentication on the current network. It is not shown after you rejoined without the login page (waking from sleep, for example). See §3.2 of [DESIGN.md](DESIGN.md) for the exact conditions.
 
