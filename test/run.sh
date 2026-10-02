@@ -292,8 +292,9 @@ run MAC=$A DOM=wi2.ne.jp; ok '2回目の失敗のあとは60秒空ける' '(( re
 reset; touch $M/authed
 run MAC=$A DOM=wi2.ne.jp BRAND='x y'
                           ok 'ブランド名が不正なら記録しない' '[[ ! -e "$KN" ]]'
-# 確かめるのは接続ごと（resolv.conf が確認の記録より新しければ、つなぎ直した）
-reconnect() { touch -t 202001010001 $SN; joined }
+# 確かめるのは接続ごと（resolv.conf が確認の記録より新しければ、つなぎ直した）。同意済みの MAC では resolv.conf の更新から
+# 15秒待ってから確かめるので、つなぎ直して20秒たった状態にする
+reconnect() { touch -t 202001010001 $SN; ago 20 $M/resolv }
 reset; touch $M/authed
 for i in {1..3}; do ago 1800 $SN 2>/dev/null; run MAC=$A DOM=wi2.ne.jp BARE=timeout; done
 ago 1800 $SN
@@ -597,13 +598,79 @@ reset; ago 20 $M/resolv; touch $M/authed
 run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 10)
 ok 'USEN 入店時: Wi2 の網ではシステムログを読まない' '(( reads == 0 )) && [[ ! -e $WT && $out == *"consent recorded net=$A doutor (online)" ]]'
 reset; ago 20 $M/resolv; touch $M/authed; mkknown $A
-run MAC=$A WEBSHEET=$(now 10);   ok 'USEN 入店時: 同意済みの網ではシステムログを読まない' '(( reads == 0 )) && [[ ! -e $WT ]]'
+run MAC=$A WEBSHEET=$(now 10);   ok 'USEN 入店時: 同意済みの網では、60秒以内の同意をログに書くだけで見張らない（USEN でなければブランドなし）' \
+  '[[ $out == *" captive login seen net=$A" && ! -e $WT && $(<$KN) == "$A doutor" ]] && (( reads == 1 && posts == 0 ))'
 reset; ago 20 $M/resolv; touch $M/authed; watch $A
 run MAC=$A WEBSHEET=$(now 10);   ok 'USEN 入店時: 見張り中の網ではシステムログを読まない' '(( reads == 0 )) && [[ -z $out ]]'
 reset; ago 20 $M/resolv; touch $M/authed; print -r -- "$A doutor" > $PD
 run MAC=$A WEBSHEET=$(now 10);   ok 'USEN 入店時: 同意待ちの網ではシステムログを読まない' '(( reads == 0 )) && [[ ! -e $WT ]]'
 reset; ago 400 $M/resolv; touch $M/authed
 run MAC=$A WEBSHEET=$(now 10);   ok 'USEN 入店時: 接続から5分以上たっていれば読まない（通信もしない）' '(( reads == 0 )) && [[ ! -s $M/calls ]]'
+
+# 同意済みの網に新しくつないだ: 60秒以内の接続画面での同意だけを、ログに書く（次の時間切れの目安の起点）。記録ファイルは変えない
+lstart() { local x=$(<$M/logcalls); x=${x#*--start }; strftime -r '%Y-%m-%d %H:%M:%S' "${x[1,19]}" }   # 読んだ範囲の始まり
+CS=" captive login seen net=$A"
+reset; ago 20 $M/resolv; touch $M/authed; mkknown $A "usen $HASH"; k0=$(snap)
+run MAC=$A WEBSHEET=$(now 10)
+ok '同意済みの USEN 入店時: 60秒以内の同意を usen 付きでログに書く（見張らない・送らない）' '[[ $out == *"$CS usen" && $(snap) == "$k0" ]] && (( reads == 1 && posts == 0 ))'
+run MAC=$A WEBSHEET=$(now 10)
+ok '同意済みの USEN 入店時: 同じ接続では読み直さない' '(( reads == 0 )) && [[ -z $out ]]'
+reset; ago 240 $M/resolv; touch $M/authed; mkknown $A "usen $HASH"
+run MAC=$A WEBSHEET=$(now 230)
+ok '同意済みの USEN 入店時: 60秒より前の同意は書かない（接続から240秒後に初めて動いた）' '[[ -z $out && $(<$SN) == "$A 3" ]] && (( reads == 1 ))'
+ok '同意済みの USEN 入店時: 読むのは今の60秒前から（リース開始より遅いとき）' '(( $(lstart) >= EPOCHSECONDS - 62 && $(lstart) <= EPOCHSECONDS - 59 ))'
+run MAC=$A WEBSHEET=$(now 10)
+ok '同意済みの USEN 入店時: 書かなかった接続でも読み直さない' '(( reads == 0 )) && [[ -z $out ]]'
+for v verdict in WEBSHEET= 'システムログに同意がなければ' LOGFAIL=1 'システムログが読めなければ'; do
+  reset; ago 20 $M/resolv; touch $M/authed; mkknown $A "usen $HASH"
+  run MAC=$A $v
+  ok "同意済みの USEN 入店時: ${verdict}書かず、この接続では読み直さない" '[[ -z $out && $(<$SN) == "$A 3" ]] && (( reads == 1 ))'
+done
+reset; ago 5 $M/resolv; touch $M/authed; mkknown $A "usen $HASH"
+run MAC=$A WEBSHEET=$(now 1)
+ok '同意済みの USEN 入店時: resolv.conf の更新から15秒たっていなければまだ読まない' '(( reads == 0 )) && [[ -z $out && ! -e $SN ]]'
+ago 15 $M/resolv
+run MAC=$A WEBSHEET=$(now 1)
+ok '同意済みの USEN 入店時: 15秒たてば読んで書く' '(( reads == 1 )) && [[ $out == *"$CS usen" ]]'
+reset; ago 20 $M/resolv; touch $M/authed; mkknown $A "usen $HASH"
+run MAC=$A WEBSHEET=$(now 10) LOGSWITCH=1
+ok '同意済みの USEN 入店時: 読む間に接続先が変わったら書かない' '[[ $out == *"network changed net=$A before watching" && $out != *captive* ]]'
+reset; ago 400 $M/resolv; touch $M/authed; mkknown $A "usen $HASH"
+run MAC=$A WEBSHEET=$(now 10)
+ok '同意済みの USEN: 接続から5分以上たっていれば読まない' '(( reads == 0 )) && [[ -z $out ]]'
+# Wi2: この接続の最初のブランドの確認のときだけ読み、同意済みのブランドと分かったときだけ書く
+reset; ago 20 $M/resolv; touch $M/authed; mkknown $A
+run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 10)
+ok '同意済みの Wi2 入店時: 60秒以内の同意をブランド付きでログに書く' '[[ $out == *"$CS doutor" && $(<$KN) == "$A doutor" ]] && (( redirs == 1 && reads == 1 && posts == 0 ))'
+run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 10)
+ok '同意済みの Wi2 入店時: 同じ接続では読まず、確かめ直さない' '(( reads == 0 && redirs == 0 )) && [[ -z $out ]]'
+for v verdict in WEBSHEET= 'システムログに同意がなければ（再起動・スリープ復帰のつなぎ直し）' LOGFAIL=1 'システムログが読めなければ'; do
+  reset; ago 20 $M/resolv; touch $M/authed; mkknown $A
+  run MAC=$A DOM=wi2.ne.jp $v
+  ok "同意済みの Wi2 入店時: ${verdict}ブランドを確かめるだけで書かない" '[[ -z $out ]] && (( redirs == 1 && reads == 1 ))'
+done
+reset; ago 240 $M/resolv; touch $M/authed; mkknown $A
+run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 230)
+ok '同意済みの Wi2 入店時: 60秒より前の同意は書かない' '[[ -z $out ]] && (( redirs == 1 && reads == 1 ))'
+reset; ago 5 $M/resolv; touch $M/authed; mkknown $A
+run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 1)
+ok '同意済みの Wi2 入店時: resolv.conf の更新から15秒たっていなければ、読まずにブランドの確認も待つ' '(( reads == 0 && redirs == 0 )) && [[ -z $out && ! -e $SN ]]'
+ago 15 $M/resolv
+run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 1)
+ok '同意済みの Wi2 入店時: 15秒たてば確かめて書く' '(( reads == 1 && redirs == 1 )) && [[ $out == *"$CS doutor" ]]'
+# 再試行では読まない（.seen を resolv.conf より新しいまま古くする）
+reset; ago 20 $M/resolv; touch $M/authed; mkknown $A
+run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 10) BARE=timeout
+ok '同意済みの Wi2 入店時: ブランドの確認に失敗したら書かない' '[[ $out == *"redirect failed x1 net=$A"* && $out != *captive* ]] && (( reads == 1 ))'
+ago 60 $M/resolv; ago 30 $SN
+run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 10) BARE=timeout
+ok '同意済みの Wi2: 再試行ではシステムログを読まない' '[[ $out == *"redirect failed x2 net=$A"* ]] && (( reads == 0 && redirs == 1 ))'
+ago 200 $M/resolv; ago 90 $SN
+run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 10)
+ok '同意済みの Wi2: 再試行で確かめられても書かない' '[[ -z $out && $(<$SN) == "$A 3" ]] && (( reads == 0 && redirs == 1 ))'
+reset; ago 20 $M/resolv; touch $M/authed; mkknown $A starbucks
+run MAC=$A DOM=wi2.ne.jp WEBSHEET=$(now 10)
+ok '同じ MAC で別ブランドが同意済みの Wi2: 同意の記録だけを書く（1回の同意で2行にしない）' '[[ $out == *" consent recorded net=$A doutor (online)" && $out != *captive* ]] && (( reads == 1 ))'
 
 # 見張り中の網で時間切れ
 reset; watch $A
@@ -867,6 +934,24 @@ ago 40 $M/resolv
 mb MAC=$A;                ok 'メニューバー: 行から30秒以内に resolv.conf が書き換わっても目安を出す' '[[ $rows == *Next\ Time-out* ]]'
 ago 20 $M/resolv
 mb MAC=$A;                ok 'メニューバー: 行の30秒より後に resolv.conf が書き換わっていれば（つなぎ直し）目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
+# 接続画面での同意を確かめた行（captive login seen）。ブランド付きの行だけを目安の起点にする
+mbreset; mkknown $A
+print -r -- "$(lt 600) captive login seen net=$A doutor" > $LG
+mb MAC=$A;                ok 'メニューバー: 接続画面での同意を確かめた行から60分後を目安に（✓ は付けない）' \
+  '[[ $icon == on && $rows == "$R${NL}This Wi‑Fi: Doutor · Auto Reconnect On${NL}Next Time-out: ~$(hm -3000)$TIP${NL}${NL}Today $(hm 600)${TB}Accepted on Login Page · Doutor" ]]'
+mb MAC=$B;                ok 'メニューバー: 接続画面での同意を確かめた行も、別の接続先では目安にしない' '[[ $rows != *Next\ Time-out* && $rows == *"Accepted on Login Page · Doutor" ]]'
+ago 500 $M/resolv
+mb MAC=$A;                ok 'メニューバー: 接続画面での同意を確かめた行の30秒より後に resolv.conf が書き換わっていれば目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
+mbreset; mkknown $A "usen $HASH"
+print -r -- "$(lt 600) captive login seen net=$A usen" > $LG
+mb MAC=$A;                ok 'メニューバー: USEN の網で接続画面での同意を確かめた行からも目安を出す' \
+  '[[ $icon == on && $rows == *"${NL}Next Time-out: ~$(hm -3000)$TIP${NL}${NL}Today $(hm 600)${TB}Accepted on Login Page · USEN" ]]'
+print -r -- "$A tullys 1" > $ST.chain
+mb MAC=$A;                ok 'メニューバー: 接続画面での同意を確かめた USEN の行も、チェーンが分かればチェーン' '[[ $rows == *"${TB}Accepted on Login Page · Tully'"'"'s" ]]'
+mbreset; watch $A
+print -r -- "$(lt 600) captive login seen net=$A" > $LG
+mb MAC=$A;                ok 'メニューバー: ブランドのない行（見張りを始めた網）は目安にせず、直近の出来事にだけ出す' \
+  '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect from Next Time-out${NL}${NL}Today $(hm 600)${TB}Accepted on Login Page" ]]'
 # USEN の網のチェーン（システムログの伏せ字の SSID）
 CH=$ST.chain TU='tu********Fi' KO='Ko********Fi'
 mbreset; mkknown $A "usen $HASH"; rm -f $M/logcalls
@@ -937,8 +1022,8 @@ print -rl -- "$d2 10:00:00 re-authenticated api=ok probe=ok net=$A skylark t=9s"
   "$d0 00:00:31 consent pending net=$B doutor" "$d0 00:00:32 captive login seen net=$B" "$d0 00:00:33 probe failed x1 net=$A if=en0 curl=7 http=000" \
   "$d0 00:00:34 redirect failed x1 net=$A curl=28 http=000" "$d0 00:00:35 network changed net=$A doutor api=ok probe=ng" \
   "$d0 00:00:40 login failed x3 api=ng probe=ng http=200 curl=0 res={\"result\":false}" > $LG
-mb MAC=$B;                ok 'メニューバー: 直近の出来事は新しい順に3件（失敗はブランドなし。確認の失敗・同意待ちなどは出さない）' \
-  '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off${NL}${NL}Today 00:00${TB}Couldn'"'"'t Reconnect${NL}Today 00:00${TB}Couldn'"'"'t Reconnect${NL}Today 00:00${TB}Terms Accepted · USEN" ]]'
+mb MAC=$B;                ok 'メニューバー: 直近の出来事は新しい順に3件（失敗はブランドなし。接続画面での同意を確かめた行も出す。確認の失敗・同意待ちなどは出さない）' \
+  '[[ $rows == "$R${NL}This Wi‑Fi: Auto Reconnect Off${NL}${NL}Today 00:00${TB}Couldn'"'"'t Reconnect${NL}Today 00:00${TB}Accepted on Login Page${NL}Today 00:00${TB}Couldn'"'"'t Reconnect" ]]'
 sed -i '' '/ 00:00:[1-4]/d' $LG
 mb MAC=$B;                ok 'メニューバー: 今日・昨日の境目と、それより前は月-日' \
   '[[ $rows == *"${NL}${NL}Today 00:00${TB}Terms Accepted · Doutor${NL}Yesterday 23:59${TB}Reconnected · Skylark · 2 s${NL}${d2[6,10]} 10:05${TB}Auto Reconnect Stopped · Doutor" ]]'
@@ -1039,6 +1124,16 @@ print -r -- "$(date -v-1M '+%F %T') consent recorded net=$A usen (captive login)
 MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
 ok '状態: 接続画面での同意の記録（captive login）は目安に使わない（最後の認証としては出す）' \
   '[[ $out == *"Last auth        "*"(1 min ago), consent recorded on usen"* && $out == *"Next time-out    around $(date -j -v+60M -f "%F %T" "$t2" +%H:%M), "* ]]'
+t4=$(date -v-2M '+%F %T')
+print -r -- "$t4 captive login seen net=$A doutor" >> "$H/Library/Logs/cafe-wifi-okawari.log"
+MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 接続画面での同意を確かめた行を最後の認証として出し、その60分後を目安にする' \
+  '[[ $out == *"Last auth        $t4 (2 min ago), captive login seen on doutor"$'"'"'\n'"'"'"Next time-out    around $(date -j -v+60M -f "%F %T" "$t4" +%H:%M), "* ]]'
+t5=$(date -v-1M '+%F %T')
+print -r -- "$t5 captive login seen net=$A" >> "$H/Library/Logs/cafe-wifi-okawari.log"
+MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: ブランドのない行（見張りを始めた網）は最後の認証にだけ出し、目安の起点にしない' \
+  '[[ $out == *"Last auth        $t5 (1 min ago), captive login seen"$'"'"'\n'"'"'* && $out == *"Next time-out    around $(date -j -v+60M -f "%F %T" "$t4" +%H:%M), "* ]]'
 print -rl -- "$t1 consent recorded net=$A doutor (online)" > "$H/Library/Logs/cafe-wifi-okawari.log"
 MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '状態: 60分を過ぎていれば目安を出さない' \

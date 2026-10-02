@@ -61,8 +61,9 @@ chain() {
 }
 
 # ログの末尾 16KB のうち、直近の出来事として出す種類の行（ローテーションしないので全体は読まない）。
+# 接続画面での同意をシステムログで確かめた行（captive login seen）も出す。
 # 通信できている間のブランドの確認の失敗（redirect failed … net=…）は再接続の失敗ではないので除く。
-hits=(${(M)${(f)"$(tail -c 16384 "$log" 2>/dev/null)"}:#[0-9](#c4)-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] (re-authenticated|consent recorded|login failed|redirect failed|auto stopped) *~*redirect failed * net=*})
+hits=(${(M)${(f)"$(tail -c 16384 "$log" 2>/dev/null)"}:#[0-9](#c4)-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] (re-authenticated|consent recorded|captive login seen|login failed|redirect failed|auto stopped) *~*redirect failed * net=*})
 
 if launchctl print gui/$UID/$label >/dev/null 2>&1; then
   kind=on rows=('cafe-wifi-okawari — Running')
@@ -108,9 +109,10 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
     (( $#pd >= 3 )) && [[ $pd[1] == "$net" && $pd[-1] == notified ]] &&
       kind=warn rows+='Accept the terms once on the login page. After that, it reconnects automatically.'
 
-    # 次の時間切れの目安: 今の接続先での最後の認証から60分。接続画面での同意の記録（captive login。送る前に書く）は除く。
-    # その行の30秒より後に resolv.conf が書き換わっていれば（つなぎ直した・自分で同意し直した）、今の接続の認証ではないので出さない。
-    a=(${(M)hits:#??????????????????? (re-authenticated|consent recorded)* net=$net *~*'(captive login)'})
+    # 次の時間切れの目安: 今の接続先での最後の認証から60分。接続画面での同意を確かめた行（ブランド付きの captive login seen。
+    # 同意から60秒以内に書く）も起点にする。接続画面での同意の記録（(captive login)。送る前に書く）は除く。
+    # その行の30秒より後に resolv.conf が書き換わっていれば（接続画面を通らずにつなぎ直した）、今の接続の認証ではないので出さない。
+    a=(${(M)hits:#??????????????????? (re-authenticated|consent recorded|captive login seen)* net=$net *~*'(captive login)'})
     zstat -A m +mtime $RC 2>/dev/null || m=(0)
     (( $#a )) && at $a[-1] && (( now - t < 3600 && m[1] <= t + 30 )) &&
       rows+="Next Time-out: ~$(strftime '%H:%M' $(( t + 3600 )))"$'\t\t'"Estimated from the last authentication, if the shop's limit is 60 minutes."
@@ -131,6 +133,7 @@ for l in ${${(Oa)hits}[1,3]}; do
   case $w[1] in
     re-authenticated) s=${${${(M)w:#t=<->s}[1]-}#t=}; e="Reconnected$b${s:+ · ${s%s} s}" ;;
     consent) e="Terms Accepted$b" ;;
+    captive) e="Accepted on Login Page$b" ;;
     auto) e="Auto Reconnect Stopped$b" ;;
     *) e="Couldn't Reconnect" ;;   # login failed・redirect failed（本体はブランドを書かない）
   esac

@@ -181,16 +181,19 @@ if (( s == 0 )); then
   # （保留を書くとき・自動を止めるときに確認の記録を消すので、入店時の確認済みの記録には妨げられない）。
   sn=(); [[ -r $SN ]] && sn=(${=$(<"$SN")})
   t=0; [[ ${sn[1]-} == "$net" && ! $RC -nt $SN ]] && t=${sn[2]-3}
-  # Wi2 の網でも同意済み・見張り中・同意待ちでもない網（入店時の USEN など）: 接続から5分以内に1回だけ、接続画面で
-  # 同意したかをシステムログで確かめ、同意していれば見張る。USEN への同意として記録するのは、最初の捕捉で USPOT-02 と確かめてから。
+  # Wi2 の網でも見張り中・同意待ちでもない網（入店時の USEN など）: 接続から5分以内に1回だけ、接続画面で
+  # 同意したかをシステムログで確かめる。同意済みの網なら、60秒以内の同意だけをログに書く（次の時間切れの目安の起点。
+  # 遅れた時刻を起点にしないため。DESIGN.md §3.2）。そうでなければ見張る。USEN への同意として記録するのは、
+  # 最初の捕捉で USPOT-02 と確かめてから。
   if (( ! pdn && ! wi2net )); then
-    (( kmac || watched || t || EPOCHSECONDS - joined[1] >= JOIN )) && exit 0
-    websheet 0; w=$?
+    (( watched || t || EPOCHSECONDS - joined[1] >= JOIN )) && exit 0
+    websheet $(( kmac ? EPOCHSECONDS - 60 : 0 )); w=$?
     (( w == 3 )) && exit 0
     if (( w == 0 )); then
       samenet "before watching"
-      rec "$WT" "$net" "$net $EPOCHSECONDS" && /usr/bin/tail -n 50 "$WT" > "$WT.tmp" && mv -f "$WT.tmp" "$WT"
-      log "captive login seen net=$net"
+      if (( kmac )); then rec "$KN" "$net usen" && ub=' usen' || ub=
+      else rec "$WT" "$net" "$net $EPOCHSECONDS" && /usr/bin/tail -n 50 "$WT" > "$WT.tmp" && mv -f "$WT.tmp" "$WT"; ub=; fi
+      log "captive login seen net=$net$ub"
     fi
     print -r -- "$net 3" > "$SN"   # この接続では読み直さない
     exit 0
@@ -213,6 +216,10 @@ if (( s == 0 )); then
     log "consent recorded net=$net usen"
     exit 0
   fi
+  # 同意済みの MAC では、この接続の最初の確認のときだけ、60秒以内の接続画面での同意もシステムログで確かめる
+  # （同意済みのブランドなら下の 0 でログに書く。DESIGN.md §3.2）。ログへの書き込みの遅れを待つ間（websheet の 3）は、
+  # ブランドの確認も待つ。
+  ws=1; (( kmac && ! t )) && { websheet $(( EPOCHSECONDS - 60 )); ws=$?; (( ws == 3 )) && exit 0 }
   wi2 "$WI2/wi2auth/redirect"; w=$?
   # 疎通できていても同意ページへ転送されたら、Wi2 ではまだ認証されていない（時間切れの境目など）。同意の証拠にしない。
   (( w == 0 )) && [[ $page != landing.html ]] && w=1
@@ -220,7 +227,7 @@ if (( s == 0 )); then
   same || { log "network changed net=$net before recording"; exit 0 }
   case $w in
     0) print -r -- "$net 3" > "$SN"; (( pdn )) && rm -f "$PD"   # 別の網の USEN の同意待ちは残す
-       rec "$KN" "$net $brand" && exit 0
+       rec "$KN" "$net $brand" && { (( ws )) || log "captive login seen net=$net $brand"; exit 0 }
        [[ ${pd[1,2]} == "$net $brand" ]] && how= || how=' (online)'
        mkdir -p "${KN:h}" && print -r -- "$net $brand" >> "$KN" && log "consent recorded net=$net $brand$how" ;;
     1) print -r -- "$net $k" > "$SN"; (( k <= 3 || !(k & (k - 1)) )) && log "not free wi-fi x$k net=$net http=${r%% *} to=$(path $to)" ;;

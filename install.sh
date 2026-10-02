@@ -73,20 +73,21 @@ case ${1-} in
     if (( n == 0 )); then row Accepted 'none yet'
     else row Accepted "$n network$( (( n > 1 )) && print s)${b:+ (brand$( (( $#b > 1 )) && print s): ${(j:, :)b})}"; fi
 
-    # 最後の認証（自動の再認証・同意の記録。どの接続先でも）
-    a=$(grep -E '^[0-9-]{10} [0-9:]{8} (re-authenticated|consent recorded) ' "$log" 2>/dev/null | tail -n 1) || a=
+    # 最後の認証（自動の再認証・同意の記録・接続画面での同意を確かめた行。どの接続先でも）
+    a=$(grep -E '^[0-9-]{10} [0-9:]{8} (re-authenticated|consent recorded|captive login seen) ' "$log" 2>/dev/null | tail -n 1) || a=
     if [[ -n $a ]] && t=$(date -j -f '%F %T' "${a[1,19]}" +%s 2>/dev/null); then
       w=(${=a[21,-1]}) i=${w[(i)net=*]}
-      ev=${${w[1]}/consent/consent recorded} br=${w[i+1]-}
+      ev=${${${w[1]}/consent/consent recorded}/captive/captive login seen} br=${w[i+1]-}
       [[ $br == *[=\(]* ]] && br=
       row 'Last auth' "${a[1,19]} ($(dur $(( now - t ))) ago), $ev${br:+ on $br}"
     else
       row 'Last auth' 'none logged yet'
     fi
     # 次の時間切れの目安（メニューバーと同じ条件。DESIGN.md §3.2）: 今の接続先での最後の認証から60分。制限時間は店で違うので
-    # 60分の店の場合として示す。接続画面での同意の記録（captive login。送る前に書く）は除く。その行の30秒より後に
-    # resolv.conf が書き換わっていれば（つなぎ直した・自分で同意し直した。ログに残らない）今の接続の認証ではないので、出さない。
-    a=$(grep -E '^[0-9-]{10} [0-9:]{8} (re-authenticated|consent recorded) ' "$log" 2>/dev/null | grep -F " net=$net " | grep -vF '(captive login)' | tail -n 1) || a=
+    # 60分の店の場合として示す。接続画面での同意を確かめた行（ブランド付きの captive login seen。同意から60秒以内に書く）も
+    # 起点にする。接続画面での同意の記録（(captive login)。送る前に書く）は除く。その行の30秒より後に resolv.conf が
+    # 書き換わっていれば（接続画面を通らずにつなぎ直した）今の接続の認証ではないので、出さない。
+    a=$(grep -E '^[0-9-]{10} [0-9:]{8} (re-authenticated|consent recorded|captive login seen) ' "$log" 2>/dev/null | grep -F " net=$net " | grep -vF '(captive login)' | tail -n 1) || a=
     if [[ -n $net && -n $a ]] && t=$(date -j -f '%F %T' "${a[1,19]}" +%s 2>/dev/null) &&
        (( t + 3600 > now && $(stat -f %m /var/run/resolv.conf 2>/dev/null || print 0) <= t + 30 )); then
       row 'Next time-out' "around $(date -r $(( t + 3600 )) +%H:%M), in $(dur $(( t + 3600 - now ))) (if the shop's limit is 60 minutes)"
