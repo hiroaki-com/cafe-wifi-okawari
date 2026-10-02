@@ -17,9 +17,9 @@
 
 A macOS tool that automatically re-accepts the terms and reconnects when a café's free Wi‑Fi session times out. It saves you from repeating the login steps, helping you stay focused on your work.
 
-- **Automatic reconnection** — Accept the terms yourself the first time. The tool reconnects in the background at later time-outs.
-- **Status in the menu bar** — Check the connection status from the coffee cup icon.
-- **Built with macOS tools** — No extra software or administrator privileges required.
+- Automatic reconnection — Accept the terms yourself the first time. The tool reconnects in the background at later time-outs.
+- Status in the menu bar — Check the connection status from the coffee cup icon.
+- Built with macOS tools — No extra software or administrator privileges required.
 
 Your connection is briefly interrupted until reconnection completes. Check the [supported networks](#supported-networks) and [conditions of use](#before-you-use-it) before using the tool.
 
@@ -38,11 +38,7 @@ Free Wi‑Fi from Wi2 and USEN (USPOT-02) where you only need to accept the term
 
 Tested networks have been checked for both recording the initial acceptance and reconnecting automatically after a time-out. Shop counts, test counts, and test conditions are in §7 of [DESIGN.md](DESIGN.md) (Japanese). Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported.
 
-### About USEN
-
-On a network you use for the first time, accept the terms on the login page within 5 minutes of joining the Wi‑Fi, after installing the tool. If you accepted before installing, it applies from the next time you accept on the login page. If macOS opens its login window, accept there yourself.
-
-For what the tool sends and how it handles terms changes, see [Acceptance and requests on USEN](USAGE-NOTES.en.md#acceptance-and-requests-on-usen).
+On Tully's and Komeda (USEN), the tool covers only shops where you accept after installing it (see [About USEN](#about-usen)).
 
 ## Requirements
 
@@ -65,7 +61,7 @@ It runs with your logged-in user's permissions. It talks to Apple's connectivity
 
 ### 1. Install
 
-Run this in Terminal:
+Open Terminal (press ⌘+Space and type "Terminal"), paste these three lines at once, and press Enter. It takes about a minute.
 
 ```sh
 git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git
@@ -73,15 +69,22 @@ cd cafe-wifi-okawari
 ./install.sh
 ```
 
-No `sudo` needed. The installer copies the script to `~/.local/bin/cafe-wifi-okawari` and registers a user LaunchAgent. From then on it runs in the background, so you can close Terminal. After a restart, it starts again automatically when you log in.
-
-It also adds a coffee cup icon to the menu bar ([The menu bar icon](#the-menu-bar-icon)). To install without it, run `./install.sh --no-menubar` instead (this also removes the icon if it is already installed).
+When you see `Installed:`, you are done. No password is needed, and you can close Terminal. A coffee cup appears in the menu bar, and the tool starts again automatically after you restart your Mac.
 
 ### 2. Accept the terms yourself once at the shop
 
 When you join the shop's Wi‑Fi (e.g. `DOUTOR_FREE_Wi-Fi`), macOS opens its login window. Please read the terms and press "accept" as usual.
 
-Once the connection works, the tool records the shop as one where you accepted the terms yourself. You can check this with `./install.sh status` (see below). On Wi2, if you had already accepted before installing, it is recorded right after installation. On USEN, accept on the login page after installing (see [About USEN](#about-usen)).
+Once the connection works, the tool records the shop as one where you accepted the terms yourself. When it is recorded, the dot shown when you click the menu bar icon turns green.
+
+- Doutor, Gusto, Starbucks, Renoir, and others (Wi2): even if you accepted before installing, it is recorded right after installation
+- Tully's and Komeda (USEN): only shops where you accept after installing are covered (see "About USEN" below)
+
+#### About USEN
+
+At a shop you use for the first time, accept the terms on the login page within 5 minutes of joining the Wi‑Fi, after installing the tool. If you accepted before installing, it applies from the next time you accept on the login page.
+
+For what the tool sends and how it handles terms changes, see [Acceptance and requests on USEN](USAGE-NOTES.en.md#acceptance-and-requests-on-usen).
 
 ### 3. Keep using the Wi‑Fi
 
@@ -101,7 +104,7 @@ A successful reconnection shows no dialog; the menu bar icon shows ✓ for 10 mi
 
 The coffee cup in the menu bar (its steam is drawn as Wi‑Fi waves, with an arrow for "a refill") shows the tool's state. It only reads the tool's files (it writes only a small file that remembers USEN chains, below); it sends nothing over the network.
 
-| Icon | Meaning |
+|  | Meaning |
 |---|---|
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-on-white.png"><img src="assets/icon/state-on.png" width="33" height="22" alt="Cup"></picture> | Running |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-check-white.png"><img src="assets/icon/state-check.png" width="33" height="22" alt="Cup ✓"></picture> | Reconnected automatically within the last 10 minutes |
@@ -109,11 +112,19 @@ The coffee cup in the menu bar (its steam is drawn as Wi‑Fi waves, with an arr
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="Cup …"></picture> | macOS is waiting for you to accept on the login page (on any network with a login page, not only supported ones). If the login page does not appear, open `http://captive.apple.com` in a browser |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="Faded cup"></picture> | Stopped (the background job is not registered). Run `./install.sh` to restart |
 
-Click it to see this Wi‑Fi's name (when it can tell), whether automatic reconnection is on, the estimated next time-out, and the last three events (reconnected, terms accepted, accepted on the login page, could not reconnect, stopped). The dot next to the name is green when automatic reconnection is on (also on USEN Wi‑Fi you joined for the first time, once you accept on the login page and it can tell the chain), yellow when it is waiting for the next time-out or for you to accept, red when reconnecting failed, and gray when it is not working (not accepted, offline, or stopped). The menu is in English only. It shows no MAC or IP addresses, so it is safe to show in screen sharing. On USEN Wi‑Fi it shows the chain when it can tell, such as `Tully's (USEN)`. It tells them apart by the partly hidden Wi‑Fi name that macOS writes to the system log (such as `tu********Fi`), reads it once when you join (and again about every 30 minutes if it cannot tell), and does not store it. Otherwise (for example, when it first looks more than two hours after you joined) it shows `USEN`. It never shows the shop's branch. Only Tully's has been checked at a real shop (Komeda has not). The estimate is shown only when the last authentication was on the current network within 60 minutes. When you accept on the login page of a network you have accepted before, it is also estimated from that time (only when the tool confirms it within a minute of your acceptance). On USEN Wi‑Fi you joined for the first time (a watched network), when it can tell the chain, it is estimated from when the tool confirmed your acceptance, or from when you joined or accepted shortly before that, whichever is earlier. The tool may confirm your acceptance a few minutes after you accept, so the estimate may be a few minutes off (not yet checked at a real shop). It is not shown after you rejoined the Wi‑Fi without the login page (waking from sleep, for example). It assumes the shop's limit is 60 minutes.
+Click it to see the current Wi‑Fi's name, whether automatic reconnection is on, the estimated next time-out, and the last three events (the menu is in English only). The dot next to the name is green when automatic reconnection is on, yellow when it is waiting for the next time-out or for you to accept, red when reconnecting failed, and gray when it is not working (not accepted, offline, or stopped). It shows no MAC or IP addresses, so it is safe to show in screen sharing.
 
-"Hide from Menu Bar" quits the icon; it comes back the next time you log in or run `./install.sh`. The tool itself keeps running either way.
+- On USEN Wi‑Fi it shows the chain when it can tell, such as `Tully's (USEN)`, and `USEN` otherwise. It tells them apart by the partly hidden Wi‑Fi name in the macOS system log and does not store that name. It never shows the shop's branch (only Tully's has been checked at a real shop).
+- The time-out estimate assumes the shop's limit is 60 minutes and counts from the last authentication on the current network. It is not shown after you rejoined without the login page (waking from sleep, for example). See §3.2 of [DESIGN.md](DESIGN.md) for the exact conditions.
+
+"Hide from Menu Bar" quits the icon; it comes back the next time you log in or run `./install.sh`. The tool itself keeps running either way. If you do not want the icon at all, reinstall with `./install.sh --no-menubar` (this removes only the icon).
 
 ### Check that it is working
+
+Usually the coffee cup in the menu bar is all you need. If the cup is shown and the dot next to the shop's Wi‑Fi name is green, automatic reconnection is on.
+
+<details>
+<summary>Check in detail from Terminal</summary>
 
 ```sh
 ./install.sh status
@@ -148,6 +159,8 @@ The main fields mean:
 
 What each log line means is listed in [Troubleshooting](#troubleshooting).
 
+</details>
+
 ### Common situations
 
 - You go to another shop: when the login window appears after you join, accept the terms yourself, as in step 2
@@ -159,9 +172,10 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 ### How it works
 
 - It uses the zsh, curl, jq, launchd, and JavaScript for Automation included with macOS. It checks the connection every 10 seconds and re-authenticates when it detects a time-out. You do not need to configure the session length.
+- The installer copies the script to `~/.local/bin/cafe-wifi-okawari` and registers it as a user LaunchAgent. It does not use administrator rights (`sudo`).
 - Its log and menu never show this Mac's MAC or IP address.
 - Networks are identified by the router's MAC address together with the brand (e.g. `doutor`). Shops of the same brand may share the same value, so it cannot always tell shops apart.
-- It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`), without sending anything. On other networks (e.g. at home) it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does, and sends nothing to Wi2. During that time it also checks the Mac's system log once for an acceptance on the login page (to find USEN networks; it sends nothing).
+- It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`). On other networks it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does (to find USEN networks). It never sends an acceptance to unrelated networks such as your home Wi‑Fi
 - Dialogs follow your macOS language (Japanese or English). Messages from `install.sh` and the menu bar are in English.
 
 ## Caveats
@@ -192,7 +206,7 @@ Dialogs appear in the middle of the screen and close by themselves after 2 minut
 
 ### When it cannot reconnect for you
 
-- Rejoining the Wi‑Fi after a time-out (waking from sleep, losing the signal, turning Wi‑Fi off and on): macOS opens its login window and keeps other apps off that Wi‑Fi until you accept, so the tool cannot help. Please accept in the login window yourself. It reconnects automatically again from the next time-out (if the tool confirms this acceptance within a minute, `captive login seen` is logged and the menu bar and `./install.sh status` show the next time-out estimate; if not, for example when the Mac went to sleep right after you accepted, the estimate is not shown until the next automatic reconnection)
+- Rejoining the Wi‑Fi after a time-out (waking from sleep, losing the signal, turning Wi‑Fi off and on): macOS opens its login window and keeps other apps off that Wi‑Fi until you accept, so the tool cannot help. Please accept in the login window yourself. It reconnects automatically again from the next time-out
 - On USEN, when macOS opens its login window first: the tool can no longer send anything. Please accept in the login window yourself (see [About USEN](#about-usen))
 - While the Mac sleeps: the tool does not run. If the session has timed out when the Mac wakes and the Wi‑Fi is still connected, it re-authenticates within about 10 seconds
 - When a daily usage cap is reached (e.g. Renoir): re-authentication is refused and the connection does not come back

@@ -63,7 +63,7 @@ case ${1-} in
     elif kb=$(awk -v n="$net" '$1 == n { f = 1; if (NF > 1) b = b (b == "" ? "" : ", ") $2 } END { print b; exit !f }' "$kn" 2>/dev/null); then
       row 'Current network' "gateway $net${kb:+ ($kb)}, accepted: auto re-authentication on"
     elif awk -v n="$net" -v t=$(( now - 86400 )) '$1 == n && $2 > t { f = 1 } END { exit !f }' "${kn:h}/watched" 2>/dev/null; then
-      # 接続画面での同意をシステムログで確かめた網（24時間以内）。USEN なら、次の時間切れで同意を記録して自動で送る。
+      # 認証画面での同意をシステムログで確かめた網（24時間以内）。USEN なら、次の時間切れで同意を記録して自動で送る。
       row 'Current network' "gateway $net, you accepted on its login page: if it is USEN Wi-Fi, auto re-authentication starts at the next time-out"
       awk -v n="$net" '$1 == n && $2 != "-" { f = 1 } END { exit !f }' "$HOME/Library/Caches/cafe-wifi-okawari.chain" 2>/dev/null && wl=1
     else
@@ -75,7 +75,7 @@ case ${1-} in
     if (( n == 0 )); then row Accepted 'none yet'
     else row Accepted "$n network$( (( n > 1 )) && print s)${b:+ (brand$( (( $#b > 1 )) && print s): ${(j:, :)b})}"; fi
 
-    # 最後の認証（自動の再認証・同意の記録・接続画面での同意を確かめた行。どの接続先でも）
+    # 最後の認証（自動の再認証・同意の記録・認証画面での同意を確かめた行。どの接続先でも）
     a=$(grep -E '^[0-9-]{10} [0-9:]{8} (re-authenticated|consent recorded|captive login seen) ' "$log" 2>/dev/null | tail -n 1) || a=
     if [[ -n $a ]] && t=$(date -j -f '%F %T' "${a[1,19]}" +%s 2>/dev/null); then
       w=(${=a[21,-1]}) i=${w[(i)net=*]}
@@ -86,9 +86,9 @@ case ${1-} in
       row 'Last auth' 'none logged yet'
     fi
     # 次の時間切れの目安（メニューバーと同じ条件。DESIGN.md §3.2）: 今の接続先での最後の認証から60分。制限時間は店で違うので
-    # 60分の店の場合として示す。接続画面での同意を確かめた行（ブランド付きの captive login seen。同意から60秒以内に書く）も
-    # 起点にする。接続画面での同意の記録（(captive login)。送る前に書く）は除く。その行の30秒より後に resolv.conf が
-    # 書き換わっていれば（接続画面を通らずにつなぎ直した）今の接続の認証ではないので、出さない。チェーンの分かった
+    # 60分の店の場合として示す。認証画面での同意を確かめた行（ブランド付きの captive login seen。同意から60秒以内に書く）も
+    # 起点にする。認証画面での同意の記録（(captive login)。送る前に書く）は除く。その行の30秒より後に resolv.conf が
+    # 書き換わっていれば（認証画面を通らずにつなぎ直した）今の接続の認証ではないので、出さない。チェーンの分かった
     # 見張り中の網では、見張りを始めた行（ブランドのない captive login seen）を使い、その前5分以内に resolv.conf が
     # 書き換わっていればその時刻を起点にする（早いほう）。
     if (( wl )); then
@@ -141,7 +141,7 @@ plutil -insert ProgramArguments -string $bin -append $plist
 plutil -insert StartInterval -integer $every $plist
 plutil -insert RunAtLoad -bool true $plist
 # DNS の設定が変わるたびに書き換わるファイルを見て、そのときにも実行する。認証画面つきの網では、
-# 接続画面で同意して通信できるようになった時刻に書き換わる（現地で実測）ので、同意の直後に記録できる。
+# 認証画面で同意して通信できるようになった時刻に書き換わる（現地で実測）ので、同意の直後に記録できる。
 plutil -insert WatchPaths -array $plist
 plutil -insert WatchPaths -string /var/run/resolv.conf -append $plist
 plutil -insert ProcessType -string Background $plist

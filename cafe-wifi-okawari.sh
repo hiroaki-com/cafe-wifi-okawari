@@ -12,8 +12,8 @@ PD=$HOME/Library/Caches/cafe-wifi-okawari.pending    # 捕捉中でまだ同意�
 SN=$HOME/Library/Caches/cafe-wifi-okawari.seen       # 通信できる状態で Wi2 のブランドを確かめた接続先と回数「MAC 回数」
 DG=$HOME/Library/Caches/cafe-wifi-okawari.probe      # 接続の状態を確かめられないことが続いている接続先と回数「MAC 回数」
 KN="$HOME/Library/Application Support/cafe-wifi-okawari/consented"   # 利用者が自分で同意した接続先「MAC ブランド」（1行1つ）。USEN は「MAC usen [規約のハッシュ]」
-WT="$HOME/Library/Application Support/cafe-wifi-okawari/watched"     # 接続画面での同意をシステムログで確かめた網「MAC 記録した時刻」（24時間有効・新しい50件まで）
-RC=/var/run/resolv.conf   # DNS の設定が変わるたびに書き換わる（接続画面での同意の直後も）。launchd の WatchPaths でもこれを見る
+WT="$HOME/Library/Application Support/cafe-wifi-okawari/watched"     # 認証画面での同意をシステムログで確かめた網「MAC 記録した時刻」（24時間有効・新しい50件まで）
+RC=/var/run/resolv.conf   # DNS の設定が変わるたびに書き換わる（認証画面での同意の直後も）。launchd の WatchPaths でもこれを見る
 JOIN=300                  # 接続してからこの秒数の間は、同意していない網でも状態を確かめる
 REJECT=3                  # 同じ接続先で認証サーバーの拒否がこの回数続いたら、自動の再同意をやめる
 log() { print -r -- "$(strftime '%F %T' $EPOCHSECONDS) $*" }
@@ -27,7 +27,7 @@ notify() {
   jp && m=$1
   /usr/bin/osascript -e "display alert \"cafe-wifi-okawari\" message \"$m\" giving up after 120" >/dev/null
 }
-HOWJA='Wi-Fi に接続し直すと出る接続画面か、ブラウザで http://captive.apple.com を開くと出る画面で'
+HOWJA='Wi-Fi に接続し直すと出る認証画面か、ブラウザで http://captive.apple.com を開くと出る画面で'
 HOWEN='the login page (reconnect to the Wi-Fi, or open http://captive.apple.com in a browser)'
 
 # -q で ~/.curlrc を無視し、実行条件（証明書検証・リダイレクト非追従）を固定する。-q は先頭必須。
@@ -49,7 +49,7 @@ state() {
 }
 
 # 接続先の識別子（既定ゲートウェイの MAC。取れなければ IP）を net に、そのインターフェースを ifc に入れる。通信はしない。
-# macOS は一度つないだことのある認証画面つきの網では、接続画面で同意するまで既定経路を作らない（DESIGN.md §1）。
+# macOS は一度つないだことのある認証画面つきの網では、認証画面で同意するまで既定経路を作らない（DESIGN.md §1）。
 # その間は net が空になり、何もしない。
 netid() {
   rt default; gw=$rg ifc=$ri
@@ -90,7 +90,7 @@ rec() {
       mv -f "$1.tmp" "$1"
   fi
 }
-# 今の接続で、利用者が接続画面で同意したか（システムログの websheet: success。行の中身は保存しない）。
+# 今の接続で、利用者が認証画面で同意したか（システムログの websheet: success。行の中身は保存しない）。
 # 数えるのは、今のリース開始と $1 のどちらよりも後の行だけ。$1 が 0（入店時の確認）なら、リース開始が
 # resolv.conf の更新より5分以上前のときは今の接続のリースと見なせないので読まない。
 # 0=あった 1=なかった 2=読めない（リース開始・ログ） 3=まだ読まない（resolv.conf の更新から15秒。ログへの書き込みの遅れを待つ）
@@ -109,15 +109,15 @@ netid
 [[ -n $net ]] || exit 0
 # 同じ MAC の網を同意済みとして持っているか。ブランドまでの照合は Wi2 に問い合わせてから行う。
 rec "$KN" "$net" && kmac=1 || kmac=0
-# 接続画面での同意をシステムログで確かめて見張っている網か（記録から24時間以内）
+# 認証画面での同意をシステムログで確かめて見張っている網か（記録から24時間以内）
 rec "$WT" "$net" && (( EPOCHSECONDS - rest < 86400 )) && watched=1 || watched=0
 # DHCP で配られたドメイン名が wi2.ne.jp なら Wi2 の網（ドトール・ガストで実測。手元の情報で、通信はしない）
 [[ -n $ifc && $(/usr/sbin/ipconfig getoption "$ifc" domain_name 2>/dev/null) == wi2.ne.jp ]] && wi2net=1 || wi2net=0
 zstat -A joined +mtime $RC 2>/dev/null || joined=(0)
 # 同意待ちの記録と、その更新からの秒数（pda）。起動の間隔（10秒）に依らず、知らせる・確かめ直す間隔を時間で決める。
 pd=() pda=0; [[ -r $PD ]] && { pd=(${=$(<"$PD")}); zstat -A m +mtime $PD 2>/dev/null && pda=$(( EPOCHSECONDS - m[1] )) }
-# USEN の同意待ちの網から離れている間は、同意待ちの基準時刻を今に進める（別の網での接続画面の同意を、戻ってから数えない）。
-# 既定経路がないだけ（macOS が接続画面を開いている）では進めない（上で終わる）。USEN の同意待ちを数えるのはその網にいるときだけ。
+# USEN の同意待ちの網から離れている間は、同意待ちの基準時刻を今に進める（別の網での認証画面の同意を、戻ってから数えない）。
+# 既定経路がないだけ（macOS が認証画面を開いている）では進めない（上で終わる）。USEN の同意待ちを数えるのはその網にいるときだけ。
 npd=$#pd
 if [[ ${pd[2]-} == usen && $pd[1] != "$net" ]]; then
   pd[3]=$EPOCHSECONDS npd=0
@@ -174,14 +174,14 @@ if (( s == 0 )); then
     samenet "before recording"
     rm -f "$PD"; pdn=0
   fi
-  # Wi2 の無料 Wi‑Fi に、本ツールが同意を送っていないのに通信できている = 利用者が接続画面で同意した
+  # Wi2 の無料 Wi‑Fi に、本ツールが同意を送っていないのに通信できている = 利用者が認証画面で同意した
   # （macOS は同意するまでこの網を使わせないので、接続直後の捕捉は本ツールからは見えない）。
   # ブランドを確かめるのは接続ごとに1回（失敗したら 30秒・60秒 と空けて3回まで）。つなぎ直したら（resolv.conf が新しい）確かめ直す。
   # 同意待ちのときは、確認に失敗しても保留を消さず、30秒→60秒→…→最大30分 と間隔を空けて確かめ続ける
   # （保留を書くとき・自動を止めるときに確認の記録を消すので、入店時の確認済みの記録には妨げられない）。
   sn=(); [[ -r $SN ]] && sn=(${=$(<"$SN")})
   t=0; [[ ${sn[1]-} == "$net" && ! $RC -nt $SN ]] && t=${sn[2]-3}
-  # Wi2 の網でも見張り中・同意待ちでもない網（入店時の USEN など）: 接続から5分以内に1回だけ、接続画面で
+  # Wi2 の網でも見張り中・同意待ちでもない網（入店時の USEN など）: 接続から5分以内に1回だけ、認証画面で
   # 同意したかをシステムログで確かめる。同意済みの網なら、60秒以内の同意だけをログに書く（次の時間切れの目安の起点。
   # 遅れた時刻を起点にしないため。DESIGN.md §3.2）。そうでなければ見張る。USEN への同意として記録するのは、
   # 最初の捕捉で USPOT-02 と確かめてから。
@@ -204,7 +204,7 @@ if (( s == 0 )); then
     (( EPOCHSECONDS - m[1] >= (t > 6 ? 1800 : 30 << (t - 1)) )) || exit 0
   fi
   k=$(( t + 1 ))
-  # USEN の同意待ち: 基準時刻と今のリース開始のどちらよりも後に、接続画面での同意がシステムログにあれば記録する。
+  # USEN の同意待ち: 基準時刻と今のリース開始のどちらよりも後に、認証画面での同意がシステムログにあれば記録する。
   # 平文の Success だけでは記録しない（偽れる）。なければ同意待ちを残し、Wi2 と同じ間隔を空けて読み直す。
   # 自動の停止（拒否3回・規約の変更）からの再開もここだけ（停止の時刻が基準時刻）。
   if (( pdn )) && [[ $pd[2] == usen ]]; then
@@ -216,7 +216,7 @@ if (( s == 0 )); then
     log "consent recorded net=$net usen"
     exit 0
   fi
-  # 同意済みの MAC では、この接続の最初の確認のときだけ、60秒以内の接続画面での同意もシステムログで確かめる
+  # 同意済みの MAC では、この接続の最初の確認のときだけ、60秒以内の認証画面での同意もシステムログで確かめる
   # （同意済みのブランドなら下の 0 でログに書く。DESIGN.md §3.2）。ログへの書き込みの遅れを待つ間（websheet の 3）は、
   # ブランドの確認も待つ。
   ws=1; (( kmac && ! t )) && { websheet $(( EPOCHSECONDS - 60 )); ws=$?; (( ws == 3 )) && exit 0 }
@@ -236,7 +236,7 @@ if (( s == 0 )); then
   exit 0
 fi
 
-# 同意待ち。保留を書いてから30秒以上たっても捕捉が続いていたら（OS の接続画面で済ませていなければ）1回だけ知らせる。
+# 同意待ち。保留を書いてから30秒以上たっても捕捉が続いていたら（OS の認証画面で済ませていなければ）1回だけ知らせる。
 waiting() {
   local k=2; [[ ${pd[2]-} == usen ]] && k=3   # USEN は「MAC usen 基準時刻」
   (( $#pd == k && pda >= 30 )) || return 0
@@ -332,7 +332,7 @@ if [[ $loc == "$WI2/wi2auth/redirect?"* ]]; then
   grep -q session_id "$jar" || fail "redirect failed" "no session_id" 1
   same || { log "network changed net=$net $brand before login"; exit 0 }
 
-  # 接続画面の JS（同意ページの「同意する」ボタンから呼ぶ XHR）と同じ要求を送る。Referer は着いたページ。
+  # 認証画面の JS（同意ページの「同意する」ボタンから呼ぶ XHR）と同じ要求を送る。Referer は着いたページ。
   t0=$EPOCHSECONDS
   res=$("${c[@]}" -w '\n%{http_code}' -H 'Content-Type: application/json' -H 'X-Requested-With: XMLHttpRequest' \
     -H "Origin: $WI2" -e "$WI2/freewifi/$brand/$page" \
@@ -357,7 +357,7 @@ elif uspot; then
   hs=$(/sbin/sha256 -q -s "$b")
   # 同意済みか照合する。規約の文面のハッシュは最初に送るときに記録し、以後違えば送らない（画面を表示せずに同意するので、読み直してもらう）。
   if ! rec "$KN" "$net usen"; then
-    if (( watched )); then   # 入店時に、利用者がこの網の接続画面で同意している
+    if (( watched )); then   # 入店時に、利用者がこの網の認証画面で同意している
       rec "$KN" "$net usen" "$net usen $hs"; rec "$WT" "$net" ''
       log "consent recorded net=$net usen (captive login)"
     else
@@ -371,7 +371,7 @@ elif uspot; then
     rec "$KN" "$net usen" "$net usen $hs"
   elif [[ $rest != "$hs" ]]; then
     rec "$KN" "$net usen" ''
-    print -r -- "$net usen $EPOCHSECONDS notified" > "$PD"   # 基準時刻は今。これより後の接続画面での同意だけで再開する
+    print -r -- "$net usen $EPOCHSECONDS notified" > "$PD"   # 基準時刻は今。これより後の認証画面での同意だけで再開する
     rm -f "$ST" "$SN"
     log "terms changed net=$net usen"
     notify "利用規約が変わったため、この Wi-Fi での自動再接続を止めました。${HOWJA}規約を読んで同意し直してください。" \
@@ -380,7 +380,7 @@ elif uspot; then
   fi
   [[ -z $rb || $rb == usen ]] || rej=0; rb=usen brand=usen
 
-  # 接続画面の step2 の「インターネットに接続する」と同じ要求を送る。誕生年・性別は空（任意の入力で、画面の初期値も空）。
+  # 認証画面の step2 の「インターネットに接続する」と同じ要求を送る。誕生年・性別は空（任意の入力で、画面の初期値も空）。
   # stamac は hex で確かめた値（16進数と区切りだけ）なので JSON を壊さない。
   t0=$EPOCHSECONDS
   res=$("${curl[@]}" -m 5 --proto '=http' -w '\n%{http_code}' -H 'Content-Type: application/json' -H "Origin: http://$dev" \
@@ -401,7 +401,7 @@ for i in {1..10}; do sleep 1; state && { probe=ok; break }; (( EPOCHSECONDS - t1
 
 # 途中で別の回線に切り替わっていたら、その疎通や失敗を元の接続先の結果として扱わない（次の回に確かめ直す）。
 same || { log "network changed net=$net $brand api=$api probe=$probe"; exit 0 }
-# API の結果と疎通回復を分けて記録する（OS の接続画面などによる復旧と区別できる）。t は同意を送り始めてから疎通が戻るまで。
+# API の結果と疎通回復を分けて記録する（OS の認証画面などによる復旧と区別できる）。t は同意を送り始めてから疎通が戻るまで。
 if [[ $api == ok && $probe == ok ]]; then
   rm -f "$ST"
   log "re-authenticated api=ok probe=ok net=$net $brand t=$(( EPOCHSECONDS - t0 ))s"
@@ -411,11 +411,11 @@ fi
 [[ $probe == ng ]] && notify=1 || notify=0
 # サーバーが応答したのに同意を受け付けず、疎通も戻らない = 拒否（利用上限・利用停止・条件の変更などを含む。
 # 一時的な障害と見分けられないので、回数で判断する）。続いたらこの接続先の自動の再同意をやめ、
-# 利用者が接続画面を確かめて自分で同意し直すのを待つ（同意し直せば、最初の同意と同じく記録して再開する）。
+# 利用者が認証画面を確かめて自分で同意し直すのを待つ（同意し直せば、最初の同意と同じく記録して再開する）。
 # USEN は応答の意味が分からないので、機器が応答したのに疎通が戻らなければ api に関係なく拒否と数える。
 if (( lrc == 0 )) && [[ ( $api == ng || $brand == usen ) && $probe == ng && $http == [1-4]?? ]] && (( ++rej >= REJECT )); then
   rec "$KN" "$net $brand" ''   # USEN はハッシュ付きの行も消す
-  # USEN は停止の時刻を基準時刻にし、それより後の接続画面での同意だけで再開する
+  # USEN は停止の時刻を基準時刻にし、それより後の認証画面での同意だけで再開する
   [[ $brand == usen ]] && print -r -- "$net usen $EPOCHSECONDS notified" > "$PD" || print -r -- "$net $brand notified" > "$PD"
   rm -f "$ST" "$SN"   # 利用者が同意し直したら、入店時の確認済みの記録に関係なく確かめて記録できるように
   log "auto stopped net=$net $brand rejected x$rej http=$http curl=$lrc res=$(mask "$res")"

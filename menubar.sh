@@ -63,7 +63,7 @@ chain() {
 }
 
 # ログの末尾 16KB のうち、直近の出来事として出す種類の行（ローテーションしないので全体は読まない）。
-# 接続画面での同意をシステムログで確かめた行（captive login seen）も出す。
+# 認証画面での同意をシステムログで確かめた行（captive login seen）も出す。
 # 通信できている間のブランドの確認の失敗（redirect failed … net=…）は再接続の失敗ではないので除く。
 hits=(${(M)${(f)"$(tail -c 16384 "$log" 2>/dev/null)"}:#[0-9](#c4)-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] (re-authenticated|consent recorded|captive login seen|login failed|redirect failed|auto stopped) *~*redirect failed * net=*})
 
@@ -76,7 +76,7 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
   netid
 
   if [[ -z $net ]]; then
-    # 既定経路がない。Wi‑Fi に IPv4 があるか、macOS が接続画面を待っていれば接続画面待ち（どの網かは分からない）
+    # 既定経路がない。Wi‑Fi に IPv4 があるか、macOS が認証画面を待っていれば認証画面待ち（どの網かは分からない）
     wifi=$(networksetup -listallhardwareports 2>/dev/null | awk '$0 == "Hardware Port: Wi-Fi" { getline; print $2; exit }')
     if [[ -n $wifi ]] && { [[ -n $(ipconfig getifaddr "$wifi" 2>/dev/null) ]] ||
          [[ $(scutil <<< "show State:/Network/Interface/$wifi/CaptiveNetwork" 2>/dev/null) == *'WaitingOnUI : TRUE'* ]] }; then
@@ -96,7 +96,7 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
       done
       dot=green name=${(j:, :)b} st='Auto Reconnect On'
     elif awk -v n="$net" -v t=$(( now - 86400 )) '$1 == n && $2 > t { f = 1 } END { exit !f }' "$WT" 2>/dev/null; then
-      # 見張り中（§3.1）。チェーンが分かれば USEN の網で、利用者は接続画面で同意している。次の時間切れで USPOT-02 と
+      # 見張り中（§3.1）。チェーンが分かれば USEN の網で、利用者は認証画面で同意している。次の時間切れで USPOT-02 と
       # 確かめてから自動で送るので On と同じに出す（送る条件は変えない）。分からなければ黄の「次の時間切れから」
       chain
       if [[ -n $ck ]]; then dot=green name="$cname[$ck] (USEN)" st='Auto Reconnect On' wl=1
@@ -119,11 +119,11 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
     fi
     rows[i]="$dot$TB${name:-This Wi‑Fi}"
 
-    # 次の時間切れの目安: 今の接続先での最後の認証から60分。接続画面での同意を確かめた行（ブランド付きの captive login seen。
-    # 同意から60秒以内に書く）も起点にする。接続画面での同意の記録（(captive login)。送る前に書く）は除く。
-    # その行の30秒より後に resolv.conf が書き換わっていれば（接続画面を通らずにつなぎ直した）、今の接続の認証ではないので出さない。
+    # 次の時間切れの目安: 今の接続先での最後の認証から60分。認証画面での同意を確かめた行（ブランド付きの captive login seen。
+    # 同意から60秒以内に書く）も起点にする。認証画面での同意の記録（(captive login)。送る前に書く）は除く。
+    # その行の30秒より後に resolv.conf が書き換わっていれば（認証画面を通らずにつなぎ直した）、今の接続の認証ではないので出さない。
     # チェーンの分かった見張り中の網では、見張りを始めた行（ブランドのない captive login seen。接続から5分以内に書く）を使い、
-    # その前5分以内に resolv.conf が書き換わっていれば（接続・接続画面での同意）その時刻を起点にする（早いほう）。
+    # その前5分以内に resolv.conf が書き換わっていれば（接続・認証画面での同意）その時刻を起点にする（早いほう）。
     if (( wl )); then
       a=(${(M)hits:#??????????????????? captive login seen net=$net})
       tip="Estimated from when you accepted on the login page, if the shop's limit is 60 minutes. It may be a few minutes off."

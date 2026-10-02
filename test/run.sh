@@ -246,7 +246,7 @@ reset; touch $M/authed
 run MAC=$A DOM=wi2.ne.jp; ok 'Wi2 の網（DHCP のドメイン名）は時間が経っても確かめる' '(( $(grep -c hotspot-detect $M/calls) == 1 ))'
 reset; run MAC=$A DOM=example.jp
                           ok '別のドメイン名の網では通信しない' '[[ ! -s $M/calls ]]'
-reset; run MAC=$A NOROUTE=1; ok '既定経路がない（OS が接続画面の同意を待っている）なら何もしない' '(( rc == 0 )) && [[ ! -s $M/calls ]]'
+reset; run MAC=$A NOROUTE=1; ok '既定経路がない（OS が認証画面の同意を待っている）なら何もしない' '(( rc == 0 )) && [[ ! -s $M/calls ]]'
 reset; mkknown $A; logs=()
 for i in {1..4}; do run MAC=$A PROBE=down; [[ -n $out ]] && logs+=("${out#* * }"); done
 ok '同意済みの網で確かめられないことが続けば 1・2・4 回目だけ記録' '[[ "${(j:|:)logs}" == "probe failed x1 net=$A if=en0 curl=7 http=000|probe failed x2 net=$A if=en0 curl=7 http=000|probe failed x4 net=$A if=en0 curl=7 http=000" ]]'
@@ -257,7 +257,7 @@ ok 'Wi2 の網で想定外の HTTP 応答なら記録（Wi2 には送らない�
 reset; joined; run MAC=$A PROBE=down
 ok '関係のない網では確かめられなくても記録しない' '[[ -z $out && ! -e $DG ]]'
 
-# --- 接続画面での同意（macOS が同意まで網を使わせないので、同意後の状態から記録する） ---
+# --- 認証画面での同意（macOS が同意まで網を使わせないので、同意後の状態から記録する） ---
 reset; touch $M/authed
 run MAC=$A DOM=wi2.ne.jp; ok '通信できる Wi2 の網: ブランドを確かめて記録' '[[ $(<"$KN") == "$A doutor" ]] && [[ $out == *"consent recorded net=$A doutor (online)" ]] && (( redirs == 1 && posts == 0 ))'
                           ok '確かめるのは引数なしの redirect' 'grep -qx "$W/wi2auth/redirect" $M/calls'
@@ -564,10 +564,10 @@ rewind() { local p=(${=$(<$PD)}); p[3]=$(( p[3] - 100 )); print -r -- "$p" > $PD
 snap() { cat $KN $WT $PD 2>/dev/null }
 PRED='--predicate subsystem == "com.apple.captive" AND eventMessage CONTAINS "websheet: success"'
 
-# 入店時: 通信できていて、今の接続のリース開始より後に接続画面での同意があれば見張る
+# 入店時: 通信できていて、今の接続のリース開始より後に認証画面での同意があれば見張る
 reset; ago 20 $M/resolv; touch $M/authed
 run MAC=$A WEBSHEET=$(now 10)
-ok 'USEN 入店時: リース開始より後に接続画面での同意があれば見張る' '[[ $(<$WT) == "$A "<-> && $out == *"captive login seen net=$A" ]] && (( reads == 1 && posts == 0 )) && [[ ! -e $KN ]]'
+ok 'USEN 入店時: リース開始より後に認証画面での同意があれば見張る' '[[ $(<$WT) == "$A "<-> && $out == *"captive login seen net=$A" ]] && (( reads == 1 && posts == 0 )) && [[ ! -e $KN ]]'
 ok 'USEN 入店時: 読むのは captive の websheet: success の行だけで、リース開始から' 'grep -qF -- "$PRED" $M/logcalls && grep -qF -- "--start $(strftime "%F %T" $(stat -f %m $M/resolv))" $M/logcalls'
 ok 'USEN 入店時: ログにシステムログの行を残さない' '[[ $out != *websheet* ]]'
 run MAC=$A WEBSHEET=$(now 10)
@@ -575,7 +575,7 @@ ok 'USEN 入店時: 見張ったら読み直さない' '(( reads == 0 )) && [[ -
 for w verdict in '' 'ない' $(now 30) 'リース開始より前にしかない'; do
   reset; ago 20 $M/resolv; touch $M/authed
   run MAC=$A WEBSHEET=$w
-  ok "USEN 入店時: 接続画面での同意が${verdict}なら見張らない" '[[ ! -e $WT && -z $out ]] && (( reads == 1 ))'
+  ok "USEN 入店時: 認証画面での同意が${verdict}なら見張らない" '[[ ! -e $WT && -z $out ]] && (( reads == 1 ))'
   run MAC=$A WEBSHEET=$(now 10)
   ok "USEN 入店時: 同意が${verdict}接続でも読み直さない" '(( reads == 0 )) && [[ ! -e $WT ]]'
 done
@@ -607,7 +607,7 @@ run MAC=$A WEBSHEET=$(now 10);   ok 'USEN 入店時: 同意待ちの網ではシ
 reset; ago 400 $M/resolv; touch $M/authed
 run MAC=$A WEBSHEET=$(now 10);   ok 'USEN 入店時: 接続から5分以上たっていれば読まない（通信もしない）' '(( reads == 0 )) && [[ ! -s $M/calls ]]'
 
-# 同意済みの網に新しくつないだ: 60秒以内の接続画面での同意だけを、ログに書く（次の時間切れの目安の起点）。記録ファイルは変えない
+# 同意済みの網に新しくつないだ: 60秒以内の認証画面での同意だけを、ログに書く（次の時間切れの目安の起点）。記録ファイルは変えない
 lstart() { local x=$(<$M/logcalls); x=${x#*--start }; strftime -r '%Y-%m-%d %H:%M:%S' "${x[1,19]}" }   # 読んだ範囲の始まり
 CS=" captive login seen net=$A"
 reset; ago 20 $M/resolv; touch $M/authed; mkknown $A "usen $HASH"; k0=$(snap)
@@ -697,7 +697,7 @@ reset; watch $A 86401; joined
 run MAC=$A "$UL" RECOVER=1
 ok 'USEN 見張りの記録から24時間を過ぎた網: 送らずに同意待ち' '(( posts == 0 )) && [[ $(<$PD) == "$A usen "<-> && $out == *"consent pending net=$A usen" && ! -e $KN ]]'
 
-# 見張りも同意もない網で捕捉 → 同意待ち → 接続画面での同意で記録
+# 見張りも同意もない網で捕捉 → 同意待ち → 認証画面での同意で記録
 reset; joined
 run MAC=$A "$UL" RECOVER=1
 ok 'USEN 見張りも同意もない網で捕捉: 送らず、同意待ちに「MAC usen 時刻」' '(( posts == 0 && notes == 0 )) && [[ $(<$PD) == "$A usen "<-> && $out == *"consent pending net=$A usen" && ! -e $KN ]]'
@@ -710,7 +710,7 @@ touch $M/authed
 run MAC=$A;               ok 'USEN 同意待ち: 平文の Success だけでは記録しない' '[[ ! -e $KN && -e $PD ]] && (( reads == 1 ))'
 rewind; ago 30 $SN
 run MAC=$A WEBSHEET=$(now 5)
-ok 'USEN 同意待ち: 基準時刻とリース開始より後に接続画面での同意があれば記録' '[[ $(<"$KN") == "$A usen" && ! -e $PD && $out == *"consent recorded net=$A usen" ]]'
+ok 'USEN 同意待ち: 基準時刻とリース開始より後に認証画面での同意があれば記録' '[[ $(<"$KN") == "$A usen" && ! -e $PD && $out == *"consent recorded net=$A usen" ]]'
 rm $M/authed
 run MAC=$A "$UL" RECOVER=1
 ok 'USEN 記録したあとの最初の送信で、規約のハッシュを記録する' '[[ $(<"$KN") == "$A usen $HASH" && $out == *"re-authenticated api=ok probe=ok net=$A usen"* ]] && (( uposts == 1 ))'
@@ -772,7 +772,7 @@ ok 'USEN が HTTP 200 を返しても疎通なし×3 なら止める' '[[ $o1 ==
 touch $M/authed; run MAC=$A
 ok 'USEN 停止のあと、平文の Success だけでは再開しない' '[[ ! -s $KN && -e $PD ]] && (( posts == 0 ))'
 rewind; ago 1800 $SN; run MAC=$A WEBSHEET=$(now 5)
-ok 'USEN 停止のあと、接続画面での同意があれば再開する' 'grep -qx "$A usen" "$KN" && [[ ! -e $PD ]]'
+ok 'USEN 停止のあと、認証画面での同意があれば再開する' 'grep -qx "$A usen" "$KN" && [[ ! -e $PD ]]'
 reset; mkknown $A "usen $HASH"
 for i in {1..4}; do ureject UHTTP=000; done
 ok 'USEN の送信がタイムアウト×4 なら止めない' 'grep -qx "$A usen $HASH" "$KN" && [[ $out == *"login failed x4 api=ng probe=ng http=000 curl=28"* ]]'
@@ -787,7 +787,7 @@ ok 'USEN 規約の文面が変わったら送らず、止めて知らせる' '((
 touch $M/authed; run MAC=$A
 ok 'USEN 規約の変更のあと、平文の Success だけでは記録し直さない' '[[ ! -s $KN && -e $PD ]]'
 rewind; ago 1800 $SN; run MAC=$A WEBSHEET=$(now 5)
-ok 'USEN 規約の変更のあと、接続画面での同意で記録し直す' '[[ $(<"$KN") == "$A usen" ]]'
+ok 'USEN 規約の変更のあと、認証画面での同意で記録し直す' '[[ $(<"$KN") == "$A usen" ]]'
 rm $M/authed; run MAC=$A "$UL" RECOVER=1 UJS=changed
 ok 'USEN 規約の変更のあと、次の送信で今の文面のハッシュを記録する' '[[ $(<"$KN") == "$A usen $HASH2" ]] && (( uposts == 1 ))'
 
@@ -901,19 +901,19 @@ mb MAC=$A;                ok 'メニューバー: USEN の同意待ちで知ら�
 mkknown $A; print -r -- "2 $(now -60) $A 0 1 doutor" > $ST; print -r -- "$A doutor notified" > $PD
 mb MAC=$A;                ok 'メニューバー: 失敗と同意待ちが重なれば、印は赤のまま案内を両方出す' '[[ $icon == warn && $rows == "$R${NL}red${TB}Doutor${NL}-${TB}$ON${NL}$W1${NL}$W2" ]]'
 rm -f $ST
-# 接続画面待ち・未接続（既定経路がない）
+# 認証画面待ち・未接続（既定経路がない）
 WL="yellow${TB}Waiting for Login Page${NL}-${TB}If the login page doesn't appear, open http://captive.apple.com."
 print -r -- "$A doutor notified" > $PD
-mb MAC=$A NOROUTE=1;      ok 'メニューバー: 注意の最中に既定経路がなくなり、Wi‑Fi に IPv4 があれば接続画面待ち' '[[ $icon == wait && $rows == "$R${NL}$WL" ]]'
+mb MAC=$A NOROUTE=1;      ok 'メニューバー: 注意の最中に既定経路がなくなり、Wi‑Fi に IPv4 があれば認証画面待ち' '[[ $icon == wait && $rows == "$R${NL}$WL" ]]'
 mb MAC=$A NOROUTE=1 MYIP= WAITUI=TRUE
-                          ok 'メニューバー: Wi‑Fi に IPv4 がなくても、macOS が接続画面を待っていれば接続画面待ち' '[[ $icon == wait && $rows == "$R${NL}$WL" ]]'
+                          ok 'メニューバー: Wi‑Fi に IPv4 がなくても、macOS が認証画面を待っていれば認証画面待ち' '[[ $icon == wait && $rows == "$R${NL}$WL" ]]'
 mb MAC=$A NOROUTE=1 MYIP=; ok 'メニューバー: どちらもなければ未接続（アイコンは動作中）' '[[ $icon == on && $rows == "$R${NL}gray${TB}Offline" ]]'
 # 再認証直後（✓）と優先順位
 mbreset; mkknown $A
 print -r -- "$(lt 590) re-authenticated api=ok probe=ok net=$A doutor t=2s" > $LG
 mb MAC=$A;                ok 'メニューバー: 再認証から10分以内は ✓' '[[ $icon == check ]]'
 mb MAC=$B;                ok 'メニューバー: ✓ は今の接続先に依らない' '[[ $icon == check ]]'
-mb MAC=$A NOROUTE=1;      ok 'メニューバー: 接続画面待ちは ✓ より優先' '[[ $icon == wait ]]'
+mb MAC=$A NOROUTE=1;      ok 'メニューバー: 認証画面待ちは ✓ より優先' '[[ $icon == wait ]]'
 print -r -- "2 $(now -60) $A 0 1 doutor" > $ST
 mb MAC=$A;                ok 'メニューバー: 注意は ✓ より優先' '[[ $icon == warn ]]'
 touch $M/notloaded
@@ -934,32 +934,32 @@ mb MAC=$A;                ok 'メニューバー: 入店時の同意の記録か
 mbreset; mkknown $A "usen $HASH"
 print -rl -- "$(lt 3700) re-authenticated api=ok probe=ok net=$A usen t=1s" "$(lt 120) consent recorded net=$A usen (captive login)" \
   "$(lt 110) login failed x1 api=ng probe=ng http=200 curl=0 res=" > $LG
-mb MAC=$A;                ok 'メニューバー: 接続画面での同意の記録（captive login）のあと送信に失敗したら目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
+mb MAC=$A;                ok 'メニューバー: 認証画面での同意の記録（captive login）のあと送信に失敗したら目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
 print -r -- "$(lt 60) re-authenticated api=ok probe=ok net=$A usen t=1s" >> $LG
 mb MAC=$A;                ok 'メニューバー: そのあと再認証すれば、その時刻から60分' '[[ $rows == *"${NT}$(hm -3540)$TIP${NL}"* ]]'
 ago 40 $M/resolv
 mb MAC=$A;                ok 'メニューバー: 行から30秒以内に resolv.conf が書き換わっても目安を出す' '[[ $rows == *Next\ Time-out* ]]'
 ago 20 $M/resolv
 mb MAC=$A;                ok 'メニューバー: 行の30秒より後に resolv.conf が書き換わっていれば（つなぎ直し）目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
-# 接続画面での同意を確かめた行（captive login seen）。ブランド付きの行だけを目安の起点にする
+# 認証画面での同意を確かめた行（captive login seen）。ブランド付きの行だけを目安の起点にする
 mbreset; mkknown $A
 print -r -- "$(lt 600) captive login seen net=$A doutor" > $LG
-mb MAC=$A;                ok 'メニューバー: 接続画面での同意を確かめた行から60分後を目安に（✓ は付けない）' \
+mb MAC=$A;                ok 'メニューバー: 認証画面での同意を確かめた行から60分後を目安に（✓ は付けない）' \
   '[[ $icon == on && $rows == "$R${NL}green${TB}Doutor${NL}-${TB}$ON${NT}$(hm -3000)$TIP${RE}Today $(hm 600)${TB}Accepted on Login Page · Doutor" ]]'
-mb MAC=$B;                ok 'メニューバー: 接続画面での同意を確かめた行も、別の接続先では目安にしない' '[[ $rows != *Next\ Time-out* && $rows == *"Accepted on Login Page · Doutor" ]]'
+mb MAC=$B;                ok 'メニューバー: 認証画面での同意を確かめた行も、別の接続先では目安にしない' '[[ $rows != *Next\ Time-out* && $rows == *"Accepted on Login Page · Doutor" ]]'
 ago 500 $M/resolv
-mb MAC=$A;                ok 'メニューバー: 接続画面での同意を確かめた行の30秒より後に resolv.conf が書き換わっていれば目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
+mb MAC=$A;                ok 'メニューバー: 認証画面での同意を確かめた行の30秒より後に resolv.conf が書き換わっていれば目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
 mbreset; mkknown $A "usen $HASH"
 print -r -- "$(lt 600) captive login seen net=$A usen" > $LG
-mb MAC=$A;                ok 'メニューバー: USEN の網で接続画面での同意を確かめた行からも目安を出す' \
+mb MAC=$A;                ok 'メニューバー: USEN の網で認証画面での同意を確かめた行からも目安を出す' \
   '[[ $icon == on && $rows == *"${NT}$(hm -3000)$TIP${RE}Today $(hm 600)${TB}Accepted on Login Page · USEN" ]]'
 print -r -- "$A tullys 1" > $ST.chain
-mb MAC=$A;                ok 'メニューバー: 接続画面での同意を確かめた USEN の行も、チェーンが分かればチェーン' '[[ $rows == *"${TB}Accepted on Login Page · Tully'"'"'s" ]]'
+mb MAC=$A;                ok 'メニューバー: 認証画面での同意を確かめた USEN の行も、チェーンが分かればチェーン' '[[ $rows == *"${TB}Accepted on Login Page · Tully'"'"'s" ]]'
 mbreset; watch $A
 print -r -- "$(lt 600) captive login seen net=$A" > $LG
 mb MAC=$A;                ok 'メニューバー: ブランドのない行（見張りを始めた網）は、チェーンが分からなければ目安にせず、直近の出来事にだけ出す' \
   '[[ $rows == "$R${NL}yellow${TB}This Wi‑Fi${NL}-${TB}$NX${RE}Today $(hm 600)${TB}Accepted on Login Page" ]]'
-# チェーンの分かった見張り中の網（来店時に接続画面で同意した USEN の網）: 緑の On と、見張りを始めた行からの目安
+# チェーンの分かった見張り中の網（来店時に認証画面で同意した USEN の網）: 緑の On と、見張りを始めた行からの目安
 WTIP="${TB}Estimated from when you accepted on the login page, if the shop's limit is 60 minutes. It may be a few minutes off."
 print -r -- "$A tullys 1" > $ST.chain
 mb MAC=$A;                ok 'メニューバー: 見張り中でチェーンが分かれば、緑の On と、見張りを始めた行から60分後の目安（専用のツールチップ）' \
@@ -1053,7 +1053,7 @@ print -rl -- "$d2 10:00:00 re-authenticated api=ok probe=ok net=$A skylark t=9s"
   "$d0 00:00:31 consent pending net=$B doutor" "$d0 00:00:32 captive login seen net=$B" "$d0 00:00:33 probe failed x1 net=$A if=en0 curl=7 http=000" \
   "$d0 00:00:34 redirect failed x1 net=$A curl=28 http=000" "$d0 00:00:35 network changed net=$A doutor api=ok probe=ng" \
   "$d0 00:00:40 login failed x3 api=ng probe=ng http=200 curl=0 res={\"result\":false}" > $LG
-mb MAC=$B;                ok 'メニューバー: 直近の出来事は新しい順に3件（失敗はブランドなし。接続画面での同意を確かめた行も出す。確認の失敗・同意待ちなどは出さない）' \
+mb MAC=$B;                ok 'メニューバー: 直近の出来事は新しい順に3件（失敗はブランドなし。認証画面での同意を確かめた行も出す。確認の失敗・同意待ちなどは出さない）' \
   '[[ $rows == "$R${NL}$OFF${RE}Today 00:00${TB}Couldn'"'"'t Reconnect${EV}Today 00:00${TB}Accepted on Login Page${EV}Today 00:00${TB}Couldn'"'"'t Reconnect" ]]'
 sed -i '' '/ 00:00:[1-4]/d' $LG
 mb MAC=$B;                ok 'メニューバー: 今日・昨日の境目と、それより前は月-日' \
@@ -1153,12 +1153,12 @@ ok '状態: 行の30秒より後に resolv.conf が書き換わっていれば�
 touch -t 202001010000 $M/resolv
 print -r -- "$(date -v-1M '+%F %T') consent recorded net=$A usen (captive login)" >> "$H/Library/Logs/cafe-wifi-okawari.log"
 MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
-ok '状態: 接続画面での同意の記録（captive login）は目安に使わない（最後の認証としては出す）' \
+ok '状態: 認証画面での同意の記録（captive login）は目安に使わない（最後の認証としては出す）' \
   '[[ $out == *"Last auth        "*"(1 min ago), consent recorded on usen"* && $out == *"Next time-out    around $(date -j -v+60M -f "%F %T" "$t2" +%H:%M), "* ]]'
 t4=$(date -v-2M '+%F %T')
 print -r -- "$t4 captive login seen net=$A doutor" >> "$H/Library/Logs/cafe-wifi-okawari.log"
 MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
-ok '状態: 接続画面での同意を確かめた行を最後の認証として出し、その60分後を目安にする' \
+ok '状態: 認証画面での同意を確かめた行を最後の認証として出し、その60分後を目安にする' \
   '[[ $out == *"Last auth        $t4 (2 min ago), captive login seen on doutor"$'"'"'\n'"'"'"Next time-out    around $(date -j -v+60M -f "%F %T" "$t4" +%H:%M), "* ]]'
 t5=$(date -v-1M '+%F %T')
 print -r -- "$t5 captive login seen net=$A" >> "$H/Library/Logs/cafe-wifi-okawari.log"
