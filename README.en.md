@@ -289,6 +289,14 @@ On repeated failures, the retry interval backs off from 30 seconds up to 30 minu
 
 </details>
 
+## Reporting problems and verification results
+
+Choose a bug report or verification report from the [report templates](https://github.com/hiroaki-com/cafe-wifi-okawari/issues/new/choose). Japanese or English is welcome. Include your macOS version, CPU, tool version (unknown is fine), Wi2 / USEN / unknown, steps, and results. Distinguish automatic reconnection after a real time-out from manual acceptance and mock tests.
+
+Issues are public. Do not attach full logs, `cafe-wifi-okawari-ctl status` output, screenshots, or network captures. Status output and logs include network details and times; the menu also shows times. Exclude MAC/IP addresses (including the gateway), SSIDs, shop names/locations, visit dates or activity times, usernames/personal file paths, authentication URLs, cookies, and tokens from the title and body as well.
+
+For errors, manually enter only a category from the log reference above (e.g. `probe failed`) and numeric `curl` / `http` codes. Whole log lines and response bodies are not needed. You can keep your local records unchanged. Check the preview for private information before posting.
+
 ## Development
 
 ```sh
