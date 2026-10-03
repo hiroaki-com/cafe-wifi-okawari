@@ -66,23 +66,25 @@ macOS 15 以降（標準の `/usr/bin/jq` を使います）。Apple Silicon・I
 
 ### 1. 導入する
 
-ターミナルを開き（⌘+スペースで「ターミナル」と入力）、次の3行をまとめて貼り付けて Enter を押してください。1分ほどで終わります。最新の版を一時フォルダに取得して展開し、導入します（取得したものをそのまま実行に流すことはしません）。
+ターミナルを開き（⌘+スペースで「ターミナル」と入力）、次のどちらかの1行を貼り付けて Enter を押してください。
+
+方法A: 公開版を入れる（推奨）
+
+最新の公開版を一時フォルダに取得して導入します。新しい版に更新するときも、同じ1行を実行します。
 
 ```sh
-cd "$(mktemp -d)"
-curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.tar.gz
-tar -xzf cafe-wifi-okawari.tar.gz && zsh cafe-wifi-okawari/install.sh
+cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.tar.gz && tar -xzf cafe-wifi-okawari.tar.gz && zsh cafe-wifi-okawari/install.sh
 ```
 
-`Installed:` と出れば完了です。パスワードの入力や追加のソフトは要りません。ターミナルは閉じてかまいません。メニューバーにコーヒーカップが出て、Mac を再起動しても自動で動き始めます。取得したフォルダは導入後に要らなくなります。
+方法B: Git で入れる
 
-<details>
-<summary>ブラウザで取得する・Git で導入する</summary>
+Git を使っている人向けです。入るのは公開版ではなく `main` の最新です。更新は、そのフォルダで `git pull && zsh install.sh` を実行します。
 
-- ブラウザ: [cafe-wifi-okawari.zip](https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.zip) を取得し、Finder で開いて展開します（Safari は自動で展開します）。中身を確かめたあと、ターミナルで `zsh ` と入力し（最後に空白）、展開したフォルダの `install.sh` をターミナルにドラッグして Enter を押します。「ダウンロード」フォルダへのアクセスを求められたら許可してください
-- Git: `git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git` のあと、`cd cafe-wifi-okawari && zsh install.sh`。更新は同じフォルダで `git pull && zsh install.sh`
+```sh
+git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git && cd cafe-wifi-okawari && zsh install.sh
+```
 
-</details>
+どちらも `Installed:` と出れば完了です。メニューバーにコーヒーカップが出て、Mac を再起動しても自動で動き始めます。
 
 ### 2. お店の Wi‑Fi で、最初の1回だけ自分で同意する
 
@@ -132,7 +134,7 @@ tar -xzf cafe-wifi-okawari.tar.gz && zsh cafe-wifi-okawari/install.sh
 - USEN の Wi‑Fi では、チェーンが分かれば `Tully's (USEN)`、分からなければ `USEN` と出ます。macOS のシステムログにある一部を伏せた Wi‑Fi 名から見分け、その名前は保存しません。店舗名は出しません（実店舗で確認したのはタリーズのみ）
 - 時間切れの目安は、お店の制限時間を60分として、今の接続先での最後の認証から求めます。認証画面を通らずにつなぎ直したとき（スリープからの復帰など）は出ません。詳しい条件は [DESIGN.md](DESIGN.md) の §3.2 にあります
 
-「Hide from Menu Bar」はアイコンを終了します。次のログインか、導入の手順をもう一度実行すると戻ります。本ツール自体は、どちらの場合も動いたままです。アイコン自体が不要なら、導入の手順の `install.sh` のあとに ` --no-menubar` を付けて入れ直してください（アイコンだけを消します）。
+「Hide from Menu Bar」はアイコンを終了します。次のログインか、導入の手順をもう一度実行すると戻ります。本ツール自体は、どちらの場合も動いたままです。アイコン自体が不要なら、導入の手順で Enter を押す前に ` --no-menubar` を付けて入れ直してください（アイコンだけを消します）。
 
 ### 動いているか確かめる
 
@@ -182,10 +184,47 @@ Recent log:
 - 別のお店に行ったとき: Wi‑Fi につないで認証画面が出たら、2 と同じくご自身で同意してください
 - 「最初の1回だけ…同意してください」というダイアログが出たとき: 記録していないお店で時間切れになりました。本ツールは何も送っていないので、認証画面でご自身で同意してください。認証画面は、Wi‑Fi につなぎ直すか、ブラウザで `http://captive.apple.com` を開くと表示されます
 - 「自動で再接続できませんでした」「自動再接続を止めました」というダイアログが出たとき: 同じく認証画面を確認し、必要ならご自身で同意してください。原因はログで確かめられます（[困ったとき](#困ったとき)）
-- 更新したいとき: [導入](#1-導入する)の3行をもう一度実行してください。同意の記録は残ります。新しい版を知りたい場合は、GitHub の Watch → Custom → Releases で通知を受け取れます
+- 更新したいとき: [導入](#1-導入する)の手順をもう一度行ってください。同意の記録は残ります。新しい版を知りたい場合は、GitHub の Watch → Custom → Releases で通知を受け取れます
 - 使うのをやめたいとき: `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall` で削除できます（[削除](#削除)）
 
 ### 仕組み
+
+全体の構成は次のとおりです。macOS 標準の launchd が、本体とメニューバー表示の2つを起動します。
+
+```text
+launchd [macOS 標準]
+起動管理
+|
++-- cafe-wifi-okawari.sh [導入時に追加]
+|   接続監視・自動再認証
+|   |
+|   +-- Apple [通信先]
+|   |   疎通確認・認証画面の検知
+|   |
+|   +-- Wi2 サーバー / USEN 店内機器 [通信先]
+|   |   認証先
+|   |
+|   +-- macOS の接続情報・システムログ [macOS 標準]
+|   |   参照
+|   |
+|   +-- 状態ファイル・ログ [実行時に生成]
+|       同意・試行結果など
+|
++-- menubar.js [導入時に追加]
+    常駐・アイコン・メニュー表示
+    |
+    +-- menubar.sh [導入時に追加]
+        表示する状態を判定
+        |
+        +-- 状態ファイル・ログ [実行時に生成]
+        |   参照
+        |
+        +-- 接続情報・システムログ [macOS 標準]
+        |   参照
+        |
+        +-- launchd の本体登録状態 [macOS 標準]
+            参照
+```
 
 - macOS 標準の zsh・curl・jq・launchd・JavaScript for Automation で動きます。接続状態を10秒ごとに確認し、時間切れを見つけてから再認証します。制限時間の長さに合わせた設定は不要です
 - 導入時にスクリプトを `~/.local/bin/cafe-wifi-okawari` にコピーし、ログインユーザーの LaunchAgent として登録します。管理者権限（`sudo`）は使いません

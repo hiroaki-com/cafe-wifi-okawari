@@ -66,23 +66,25 @@ It runs with your logged-in user's permissions. It talks to Apple's connectivity
 
 ### 1. Install
 
-Open Terminal (press ⌘+Space and type "Terminal"), paste these three lines at once, and press Enter. It takes about a minute. They download the latest release into a temporary folder, extract it, and install it (nothing downloaded is piped straight into a shell).
+Open Terminal (press ⌘+Space and type "Terminal"), paste one of the lines below, and press Enter.
+
+#### Option A: Install the published release (recommended)
+
+It downloads the latest release into a temporary folder and installs it. To update to a new version, run the same line.
 
 ```sh
-cd "$(mktemp -d)"
-curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.tar.gz
-tar -xzf cafe-wifi-okawari.tar.gz && zsh cafe-wifi-okawari/install.sh
+cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.tar.gz && tar -xzf cafe-wifi-okawari.tar.gz && zsh cafe-wifi-okawari/install.sh
 ```
 
-When you see `Installed:`, you are done. No password or additional software is needed, and you can close Terminal. A coffee cup appears in the menu bar, and the tool starts again automatically after you restart your Mac. You no longer need the downloaded folder after installing.
+#### Option B: Install with Git
 
-<details>
-<summary>Download with a browser, or install with Git</summary>
+For people who already use Git. It installs the latest `main`, not the published release. To update, run `git pull && zsh install.sh` in that folder.
 
-- Browser: download [cafe-wifi-okawari.zip](https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.zip) and open it in Finder to extract it (Safari extracts it automatically). After looking through it, type `zsh ` (with a trailing space) in Terminal, drag the extracted folder's `install.sh` onto the Terminal window, and press Enter. If you are asked to allow access to the Downloads folder, allow it
-- Git: `git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git`, then `cd cafe-wifi-okawari && zsh install.sh`. To update, run `git pull && zsh install.sh` in the same folder
+```sh
+git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git && cd cafe-wifi-okawari && zsh install.sh
+```
 
-</details>
+Either way, when you see `Installed:`, you are done. A coffee cup appears in the menu bar, and the tool starts again automatically after you restart your Mac.
 
 ### 2. Accept the terms yourself once at the shop
 
@@ -132,7 +134,7 @@ Click it to see the current Wi‑Fi's name, whether automatic reconnection is on
 - On USEN Wi‑Fi it shows the chain when it can tell, such as `Tully's (USEN)`, and `USEN` otherwise. It tells them apart by the partly hidden Wi‑Fi name in the macOS system log and does not store that name. It never shows the shop's branch (only Tully's has been checked at a real shop).
 - The time-out estimate assumes the shop's limit is 60 minutes and counts from the last authentication on the current network. It is not shown after you rejoined without the login page (waking from sleep, for example). See §3.2 of [DESIGN.md](DESIGN.md) for the exact conditions.
 
-"Hide from Menu Bar" quits the icon; it comes back the next time you log in or run the install steps again. The tool itself keeps running either way. If you do not want the icon at all, reinstall with ` --no-menubar` added after `install.sh` in the install steps (this removes only the icon).
+"Hide from Menu Bar" quits the icon; it comes back the next time you log in or run the install steps again. The tool itself keeps running either way. If you do not want the icon at all, reinstall following the install steps, adding ` --no-menubar` before you press Enter (this removes only the icon).
 
 ### Check that it is working
 
@@ -182,10 +184,47 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 - You go to another shop: when the login window appears after you join, accept the terms yourself, as in step 2
 - A dialog asks you to accept the terms yourself once: the session timed out at a shop the tool has not recorded. It sent nothing, so please accept on the login page yourself. To get the login page, reconnect to the Wi‑Fi or open `http://captive.apple.com` in a browser
 - A dialog says it could not reconnect, or that it stopped reconnecting: please check the login page in the same way and accept yourself if needed. The log tells you why ([Troubleshooting](#troubleshooting))
-- You want to update: run the three [install](#1-install) lines again. The networks you accepted are kept. To hear about new versions, use Watch → Custom → Releases on GitHub
+- You want to update: follow the [install](#1-install) steps again. The networks you accepted are kept. To hear about new versions, use Watch → Custom → Releases on GitHub
 - You want to stop using it: run `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall` ([Uninstall](#uninstall))
 
 ### How it works
+
+The overall structure is shown below. launchd, which comes with macOS, starts two parts: the main script and the menu bar display.
+
+```text
+launchd [macOS built-in]
+Starts and manages the tool
+|
++-- cafe-wifi-okawari.sh [added at install]
+|   Watches the connection, re-authenticates automatically
+|   |
+|   +-- Apple [remote]
+|   |   Connectivity check, login page detection
+|   |
+|   +-- Wi2 servers / USEN in-shop devices [remote]
+|   |   Where the acceptance is sent
+|   |
+|   +-- macOS network information and system log [macOS built-in]
+|   |   Read only
+|   |
+|   +-- State files and log [created at run time]
+|       Accepted networks, attempt results, etc.
+|
++-- menubar.js [added at install]
+    Stays running, shows the icon and menu
+    |
+    +-- menubar.sh [added at install]
+        Decides which state to show
+        |
+        +-- State files and log [created at run time]
+        |   Read only
+        |
+        +-- Network information and system log [macOS built-in]
+        |   Read only
+        |
+        +-- launchd registration of the main script [macOS built-in]
+            Read only
+```
 
 - It uses the zsh, curl, jq, launchd, and JavaScript for Automation included with macOS. It checks the connection every 10 seconds and re-authenticates when it detects a time-out. You do not need to configure the session length.
 - The installer copies the script to `~/.local/bin/cafe-wifi-okawari` and registers it as a user LaunchAgent. It does not use administrator rights (`sudo`).
