@@ -138,7 +138,7 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
     fi
   fi
 else
-  kind=off rows=("head${TB}cafe-wifi-okawari" "gray${TB}Stopped" "-${TB}Run ./install.sh to Restart")
+  kind=off rows=("head${TB}cafe-wifi-okawari" "gray${TB}Stopped" "-${TB}Run install.sh to Restart")
 fi
 
 # 直近の出来事（新しい順に3件）。時刻・種類・ブランド・秒数だけ（MAC・IP は出さない）。USEN はチェーンが分かっている接続先ならチェーン

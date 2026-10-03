@@ -6,6 +6,7 @@ setopt extended_glob   # [A-Za-z0-9_-]## と (|\?*)、<0-255>
 zmodload zsh/datetime   # EPOCHSECONDS・strftime
 zmodload -F zsh/stat b:zstat
 
+VERSION=1.0.0   # 版。Release のタグ（v1.0.0）と一致させる（.github/workflows/release.yml で確かめる。DESIGN.md §6.1）
 WI2=https://service.wi2.ne.jp
 ST=$HOME/Library/Caches/cafe-wifi-okawari            # 連続失敗回数・次回試行時刻・接続先・拒否回数・知らせたか・拒否したブランド
 PD=$HOME/Library/Caches/cafe-wifi-okawari.pending    # 捕捉中でまだ同意していない接続先「MAC ブランド [notified]」。USEN は「MAC usen 基準時刻 [notified]」

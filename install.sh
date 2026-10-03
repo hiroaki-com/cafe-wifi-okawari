@@ -1,11 +1,13 @@
 #!/bin/zsh
-# 使い方: ./install.sh（導入・更新） / ./install.sh --no-menubar（メニューバーの表示なしで導入・更新）
-#         ./install.sh status（動作の確認） / ./install.sh uninstall（削除。ログは残す）
+# 使い方: zsh install.sh（導入・更新） / zsh install.sh --no-menubar（メニューバーの表示なしで導入・更新）
+#         zsh install.sh status（動作の確認） / zsh install.sh uninstall（削除。ログは残す）
 # ユーザー権限の LaunchAgent として登録する。sudo は不要。
+# 導入時に自身を $ctl へ複製する。取得したフォルダを消しても、複製で status・uninstall ができる（導入・更新は取得したフォルダからだけ。DESIGN.md §6.1）。
 set -eu
 
 label=local.cafe-wifi-okawari
 bin=$HOME/.local/bin/cafe-wifi-okawari
+ctl=$HOME/.local/bin/cafe-wifi-okawari-ctl
 plist=$HOME/Library/LaunchAgents/$label.plist
 log=$HOME/Library/Logs/cafe-wifi-okawari.log
 kn="$HOME/Library/Application Support/cafe-wifi-okawari/consented"
@@ -15,6 +17,8 @@ mbin=$HOME/.local/bin/cafe-wifi-okawari-menubar
 mplist=$HOME/Library/LaunchAgents/$mlabel.plist
 every=10   # 起動の間隔（秒）。launchd は既定で10秒より短い間隔ではジョブを起動しない
 # メッセージは英語のみ。
+# 本体の版（VERSION=）を読む。$1=本体のパス。読めなければ空
+ver() { sed -n 's/^VERSION=\([0-9][0-9.]*\).*/\1/p' "$1" 2>/dev/null | head -n 1 }
 
 menubar=1
 case ${1-} in
@@ -40,12 +44,13 @@ case ${1-} in
       row Service "loaded (LaunchAgent $label)"
       row Schedule "every $every s, and whenever the network settings change"
       row Program "$bin"
+      v=$(ver $bin); [[ -n $v ]] && row Version "$v"
       ec=$(print -r -- "$lc" | awk -F' = ' '$1 ~ /^[ \t]*last exit code$/ { print $2; exit }')
       runs=$(print -r -- "$lc" | awk -F' = ' '$1 ~ /^[ \t]*runs$/ { print $2; exit }')
       [[ -n $ec ]] && row 'Last exit code' "$ec${runs:+ ($runs runs since loaded)}"
     else
       on=0
-      row Service "not loaded (run ./install.sh to install or re-register)"
+      row Service "not loaded (run install.sh to install or re-register)"
     fi
     if [[ ! -e $mplist ]]; then row 'Menu bar' 'not installed'
     elif [[ $(launchctl print gui/$UID/$mlabel 2>/dev/null | awk -F' = ' '$1 ~ /^[ \t]*state$/ { print $2; exit }') == running ]]; then row 'Menu bar' running
@@ -118,7 +123,7 @@ case ${1-} in
   uninstall)
     launchctl bootout gui/$UID/$label 2>/dev/null || true
     launchctl bootout gui/$UID/$mlabel 2>/dev/null || true
-    rm -f $plist $bin $mplist $mbin{.sh,.js,.png,@2x.png} $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen,.probe,.chain} \
+    rm -f $plist $bin $ctl $mplist $mbin{.sh,.js,.png,@2x.png} $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen,.probe,.chain} \
       $HOME/Library/Caches/cafe-wifi-okawari.chain.*(N)
     rm -rf "${kn:h}"   # 同意した接続先の記録
     print -r -- "Uninstalled: removed the LaunchAgents ($label, $mlabel), the programs and the list of accepted networks"
@@ -127,16 +132,28 @@ case ${1-} in
   *) print -u2 -r -- "usage: $0 [--no-menubar|status|uninstall]"; exit 2 ;;
 esac
 
+# 導入・更新は取得したフォルダの install.sh からだけ（$ctl には本体などが並んでいない）
+src=${0:A:h}
+if [[ ! -f $src/cafe-wifi-okawari.sh ]]; then
+  print -u2 -r -- "Error: $0 can only show status or uninstall (cafe-wifi-okawari.sh is not next to it)"
+  print -u2 -r -- "  To install or update, download the latest release and run its install.sh (see the README)"
+  exit 1
+fi
+
 # スクリプトを固定の場所へ複製する（リポジトリを移動・削除しても動き続ける）。
 [[ -e $bin ]] && verb=Updated || verb=Installed
 mkdir -p ${bin:h} ${plist:h} ${log:h}
-install -m 755 ${0:A:h}/cafe-wifi-okawari.sh $bin
+install -m 755 $src/cafe-wifi-okawari.sh $bin
+install -m 755 ${0:A} $ctl
 
 # plist は plutil で組み立てる（HOME に & や < があっても XML が壊れない）。
 rm -f $plist
 plutil -create xml1 $plist
 plutil -insert Label -string $label $plist
+# 本体は直接実行せず /bin/zsh に読ませる。ブラウザで取得したファイルのダウンロード属性（com.apple.quarantine）は
+# 複製先にも引き継がれるので、実行するのを Apple 署名の zsh にして Gatekeeper の判定を受けないようにする（DESIGN.md §6.1）。
 plutil -insert ProgramArguments -array $plist
+plutil -insert ProgramArguments -string /bin/zsh -append $plist
 plutil -insert ProgramArguments -string $bin -append $plist
 plutil -insert StartInterval -integer $every $plist
 plutil -insert RunAtLoad -bool true $plist
@@ -163,10 +180,10 @@ load $plist $label
 
 # メニューバーの表示。ログインしている画面のセッション（Aqua）でだけ動かす。落ちても立ち上げ直さない（KeepAlive なし。DESIGN.md §3.2）
 if (( menubar )); then
-  install -m 755 ${0:A:h}/menubar.sh $mbin.sh
-  install -m 644 ${0:A:h}/menubar.js $mbin.js
-  install -m 644 ${0:A:h}/assets/icon/menuBarTemplate.png $mbin.png
-  install -m 644 ${0:A:h}/assets/icon/menuBarTemplate@2x.png $mbin@2x.png
+  install -m 755 $src/menubar.sh $mbin.sh
+  install -m 644 $src/menubar.js $mbin.js
+  install -m 644 $src/assets/icon/menuBarTemplate.png $mbin.png
+  install -m 644 $src/assets/icon/menuBarTemplate@2x.png $mbin@2x.png
   rm -f $mplist
   plutil -create xml1 $mplist
   plutil -insert Label -string $mlabel $mplist
@@ -180,9 +197,10 @@ else
   launchctl bootout gui/$UID/$mlabel 2>/dev/null || true
   rm -f $mplist $mbin{.sh,.js,.png,@2x.png}
 fi
-print -r -- "$verb: $bin"
+print -r -- "$verb: $bin (version $(ver $bin))"
 print -r -- "  Runs every $every s, and whenever the network settings change (LaunchAgent $label)"
 if (( menubar )); then print -r -- "  Menu bar: coffee cup icon (LaunchAgent $mlabel)"
 else print -r -- "  Menu bar: not installed (--no-menubar)"; fi
 print -r -- "  Log: $log"
-print -r -- "  Check it with: ./install.sh status"
+print -r -- "  Check it with: zsh ~/.local/bin/cafe-wifi-okawari-ctl status"
+print -r -- "  Uninstall with: zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall"

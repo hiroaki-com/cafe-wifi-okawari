@@ -74,7 +74,7 @@ function refresh() {
   open.target = handler
   open.enabled = $.NSFileManager.defaultManager.fileExistsAtPath(LOG)
   menu.addItem(open)
-  // 終了するだけ（KeepAlive なしなので、次のログインか ./install.sh で戻る）
+  // 終了するだけ（KeepAlive なしなので、次のログインか install.sh で戻る）
   const hide = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent('Hide from Menu Bar', 'terminate:', '')
   hide.target = app
   menu.addItem(hide)

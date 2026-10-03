@@ -1,0 +1,3 @@
+# 配布物（git archive・GitHub のソースアーカイブ）に含めないもの（DESIGN.md §6.1）
+.github export-ignore
+.gitattributes export-ignore

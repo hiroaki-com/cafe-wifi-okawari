@@ -918,7 +918,7 @@ print -r -- "2 $(now -60) $A 0 1 doutor" > $ST
 mb MAC=$A;                ok 'メニューバー: 注意は ✓ より優先' '[[ $icon == warn ]]'
 touch $M/notloaded
 mb MAC=$A;                ok 'メニューバー: 停止中は注意より優先し、今の接続先・案内・目安を出さない' \
-  '(( rc == 0 )) && [[ $icon == off && $rows == "$R${NL}gray${TB}Stopped${NL}-${TB}Run ./install.sh to Restart${RE}Today $(hm 590)${TB}Reconnected · Doutor · 2 s" ]]'
+  '(( rc == 0 )) && [[ $icon == off && $rows == "$R${NL}gray${TB}Stopped${NL}-${TB}Run install.sh to Restart${RE}Today $(hm 590)${TB}Reconnected · Doutor · 2 s" ]]'
 rm -f $M/notloaded $ST
 print -r -- "$(lt 610) re-authenticated api=ok probe=ok net=$A doutor t=2s" > $LG
 mb MAC=$A;                ok 'メニューバー: 再認証から10分を過ぎれば ✓ を外す' '[[ $icon == on ]]'
@@ -1075,8 +1075,14 @@ mplist="$H/Library/LaunchAgents/local.cafe-wifi-okawari.menubar.plist" mbin="$H/
 print 2 > $M/bootstrap_fail
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '導入: HOME に & < > があっても成功' '(( rc == 0 )) && plutil -lint -s "$plist"'
-ok '導入: 初回は Installed と表示'   '[[ $out == "Installed: $H/.local/bin/cafe-wifi-okawari"$'"'"'\n'"'"'* ]]'
-ok '導入: plist のパスが正しい'        '[[ $(plutil -extract ProgramArguments.0 raw "$plist") == "$H/.local/bin/cafe-wifi-okawari" ]]'
+V=$(sed -n 's/^VERSION=\([0-9][0-9.]*\).*/\1/p' $root/cafe-wifi-okawari.sh)
+ok '版: 本体の VERSION は x.y.z の形'  '[[ $V == <->.<->.<-> ]]'
+ok '導入: 初回は Installed と版を表示'   '[[ $out == "Installed: $H/.local/bin/cafe-wifi-okawari (version $V)"$'"'"'\n'"'"'* ]]'
+ok '導入: 本体は /bin/zsh に読ませて起動する（ダウンロード属性が付いていても Gatekeeper を通らない）' \
+  '[[ $(plutil -extract ProgramArguments.0 raw "$plist") == /bin/zsh && $(plutil -extract ProgramArguments.1 raw "$plist") == "$H/.local/bin/cafe-wifi-okawari" && $(plutil -extract ProgramArguments raw "$plist") == 2 ]]'
+ctl="$H/.local/bin/cafe-wifi-okawari-ctl"
+ok '導入: install.sh 自身を -ctl として複製し、確認と削除の方法を表示' \
+  '[[ -x $ctl ]] && cmp -s $ctl $root/install.sh && [[ $out == *"${NL}  Check it with: zsh ~/.local/bin/cafe-wifi-okawari-ctl status${NL}  Uninstall with: zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall" ]]'
 ok '導入: 接続したときにも起動する'   '[[ $(plutil -extract WatchPaths.0 raw "$plist") == /var/run/resolv.conf ]]'
 ok '導入: 10秒ごとに起動する'           '[[ $(plutil -extract StartInterval raw "$plist") == 10 ]]'
 ok '導入: bootstrap の一時失敗をやり直す' '(( $(grep -c "^bootstrap .*/local.cafe-wifi-okawari.plist$" $M/launchctl) == 3 ))'
@@ -1087,6 +1093,20 @@ ok '導入: メニューバーの plist（osascript で .js を起動・ログ�
   'plutil -lint -s "$mplist" && [[ "$(pa 0)|$(pa 1)|$(pa 2)|$(pa 3)" == "/usr/bin/osascript|-l|JavaScript|$mbin.js" && $(plutil -extract ProgramArguments raw "$mplist") == 4 &&
    $(plutil -extract RunAtLoad raw "$mplist") == true && $(plutil -extract LimitLoadToSessionType raw "$mplist") == Aqua ]] && ! plutil -extract KeepAlive raw "$mplist" >/dev/null 2>&1'
 ok '導入: メニューバーを登録する' 'grep -qxF "bootstrap gui/$UID $mplist" $M/launchctl'
+rm -f $M/launchctl
+HOME=$H PATH=$T/bin:$PATH zsh $ctl > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '導入: -ctl からの導入・更新は断り、取得の手順を案内する（何も登録しない）' \
+  '(( rc == 1 )) && [[ $out == "Error: "*"can only show status or uninstall"*"download the latest release"* && ! -e $M/launchctl ]]'
+HOME=$H PATH=$T/bin:$PATH zsh $ctl status > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '状態: -ctl でも確認でき、本体の版を表示' '(( rc == 0 )) && [[ $out == *"${NL}Version          $V${NL}"* ]]'
+X="$T/dl/cafe-wifi-okawari 2 ダウンロード"; mkdir -p "$X"; cp -R $root/{install.sh,cafe-wifi-okawari.sh,menubar.sh,menubar.js,assets} "$X"/
+HOME=$H PATH=$T/bin:$PATH /bin/zsh "$X/install.sh" > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '導入: 空白・日本語・連番を含む展開先からでも、実行権限なしで導入できる' \
+  '(( rc == 0 )) && [[ $out == Updated:* ]] && cmp -s "$H/.local/bin/cafe-wifi-okawari" $root/cafe-wifi-okawari.sh && cmp -s $mbin.png $root/assets/icon/menuBarTemplate.png'
+chmod -x "$X"/*.sh
+HOME=$H PATH=$T/bin:$PATH /bin/zsh "$X/install.sh" > $M/out 2>&1; rc=$?
+ok '導入: 実行権限のないファイルからでも導入でき、導入先は実行できる' '(( rc == 0 )) && [[ -x "$H/.local/bin/cafe-wifi-okawari" && -x $ctl && -x $mbin.sh ]]'
+rm -rf $T/dl
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '再導入も成功'                      '(( rc == 0 ))'
 ok '導入: 2回目は Updated と表示'    '[[ $out == Updated:* ]]'
@@ -1197,8 +1217,8 @@ HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out
 ok '状態: 未登録なら 1 で終わる'        '(( rc == 1 )) && [[ $out == "Service          not loaded "* && $out != *Program* ]]'
 rm -f $M/notloaded
 rm -f $M/launchctl
-HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh uninstall > $M/out 2>&1; rc=$? out=$(<$M/out)
-ok '削除: ログ以外は残らない'          '[[ $out == Uninstalled:* ]] && (( rc == 0 )) && [[ $(cd "$H" && find . -type f) == ./Library/Logs/cafe-wifi-okawari.log ]]'
+HOME=$H PATH=$T/bin:$PATH zsh $ctl uninstall > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok '削除: -ctl で削除でき、-ctl 自身も含めログ以外は残らない'          '[[ $out == Uninstalled:* ]] && (( rc == 0 )) && [[ $(cd "$H" && find . -type f) == ./Library/Logs/cafe-wifi-okawari.log ]]'
 ok '削除: 本体とメニューバーの登録を外す' '[[ $(<$M/launchctl) == "bootout gui/$UID/local.cafe-wifi-okawari${NL}bootout gui/$UID/local.cafe-wifi-okawari.menubar" ]]'
 HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '状態: 記録がなければ同意済みなしと表示' '[[ $out == *$'"'"'\nAccepted         none yet\n'"'"'* ]]'

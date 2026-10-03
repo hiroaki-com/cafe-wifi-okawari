@@ -56,7 +56,7 @@ This is an unofficial tool. It is not endorsed or recommended by Wi2, USEN, or a
 - Read and accept the terms yourself the first time. After that, the tool re-sends your acceptance automatically without showing the terms page or its notices. Use it only if you understand this and want automatic re-acceptance.
 - Use it only within what the provider's terms and the shop's rules allow. If it is unclear whether automated use is allowed, use the normal login page until you have confirmed it with the provider. Do not use it to get around usage limits or required steps.
 - There are limits to how it determines acceptance, identifies networks, and detects terms changes. It cannot guarantee a manual first acceptance at every shop.
-- Stop using it if you learn of terms changes, see a usage cap or suspension, are asked to stop, or encounter continued failures. To stop and remove it, run `./install.sh uninstall` in the repository directory.
+- Stop using it if you learn of terms changes, see a usage cap or suspension, are asked to stop, or encounter continued failures. To stop and remove it, run `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall`.
 
 Before installing, please read the full [Usage notes and automatic acceptance](USAGE-NOTES.en.md).
 
@@ -66,15 +66,23 @@ It runs with your logged-in user's permissions. It talks to Apple's connectivity
 
 ### 1. Install
 
-Open Terminal (press ⌘+Space and type "Terminal"), paste these three lines at once, and press Enter. It takes about a minute.
+Open Terminal (press ⌘+Space and type "Terminal"), paste these three lines at once, and press Enter. It takes about a minute. They download the latest release into a temporary folder, extract it, and install it (nothing downloaded is piped straight into a shell).
 
 ```sh
-git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git
-cd cafe-wifi-okawari
-./install.sh
+cd "$(mktemp -d)"
+curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.tar.gz
+tar -xzf cafe-wifi-okawari.tar.gz && zsh cafe-wifi-okawari/install.sh
 ```
 
-When you see `Installed:`, you are done. No password is needed, and you can close Terminal. A coffee cup appears in the menu bar, and the tool starts again automatically after you restart your Mac.
+When you see `Installed:`, you are done. No password or additional software is needed, and you can close Terminal. A coffee cup appears in the menu bar, and the tool starts again automatically after you restart your Mac. You no longer need the downloaded folder after installing.
+
+<details>
+<summary>Download with a browser, or install with Git</summary>
+
+- Browser: download [cafe-wifi-okawari.zip](https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.zip) and open it in Finder to extract it (Safari extracts it automatically). After looking through it, type `zsh ` (with a trailing space) in Terminal, drag the extracted folder's `install.sh` onto the Terminal window, and press Enter. If you are asked to allow access to the Downloads folder, allow it
+- Git: `git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git`, then `cd cafe-wifi-okawari && zsh install.sh`. To update, run `git pull && zsh install.sh` in the same folder
+
+</details>
 
 ### 2. Accept the terms yourself once at the shop
 
@@ -124,7 +132,7 @@ Click it to see the current Wi‑Fi's name, whether automatic reconnection is on
 - On USEN Wi‑Fi it shows the chain when it can tell, such as `Tully's (USEN)`, and `USEN` otherwise. It tells them apart by the partly hidden Wi‑Fi name in the macOS system log and does not store that name. It never shows the shop's branch (only Tully's has been checked at a real shop).
 - The time-out estimate assumes the shop's limit is 60 minutes and counts from the last authentication on the current network. It is not shown after you rejoined without the login page (waking from sleep, for example). See §3.2 of [DESIGN.md](DESIGN.md) for the exact conditions.
 
-"Hide from Menu Bar" quits the icon; it comes back the next time you log in or run `./install.sh`. The tool itself keeps running either way. If you do not want the icon at all, reinstall with `./install.sh --no-menubar` (this removes only the icon).
+"Hide from Menu Bar" quits the icon; it comes back the next time you log in or run the install steps again. The tool itself keeps running either way. If you do not want the icon at all, reinstall with ` --no-menubar` added after `install.sh` in the install steps (this removes only the icon).
 
 ### Check that it is working
 
@@ -134,7 +142,7 @@ Usually the coffee cup in the menu bar is all you need. If the cup is shown and 
 <summary>Check in detail from Terminal</summary>
 
 ```sh
-./install.sh status
+zsh ~/.local/bin/cafe-wifi-okawari-ctl status
 ```
 
 You will see something like this:
@@ -143,6 +151,7 @@ You will see something like this:
 Service          loaded (LaunchAgent local.cafe-wifi-okawari)
 Schedule         every 10 s, and whenever the network settings change
 Program          /Users/you/.local/bin/cafe-wifi-okawari
+Version          1.0.0
 Last exit code   0 (412 runs since loaded)
 Menu bar         running
 Current network  gateway 0:0:5e:0:1:1 (doutor), accepted: auto re-authentication on
@@ -173,8 +182,8 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 - You go to another shop: when the login window appears after you join, accept the terms yourself, as in step 2
 - A dialog asks you to accept the terms yourself once: the session timed out at a shop the tool has not recorded. It sent nothing, so please accept on the login page yourself. To get the login page, reconnect to the Wi‑Fi or open `http://captive.apple.com` in a browser
 - A dialog says it could not reconnect, or that it stopped reconnecting: please check the login page in the same way and accept yourself if needed. The log tells you why ([Troubleshooting](#troubleshooting))
-- You want to update: run `git pull` in the repository directory, then `./install.sh` again
-- You want to stop using it: run `./install.sh uninstall` ([Uninstall](#uninstall))
+- You want to update: run the three [install](#1-install) lines again. The networks you accepted are kept. To hear about new versions, use Watch → Custom → Releases on GitHub
+- You want to stop using it: run `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall` ([Uninstall](#uninstall))
 
 ### How it works
 
@@ -183,7 +192,7 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 - Its log and menu never show this Mac's MAC or IP address.
 - Networks are identified by the router's MAC address together with the brand (e.g. `doutor`). Shops of the same brand may share the same value, so it cannot always tell shops apart.
 - It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`). On other networks it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does (to find USEN networks). It never sends an acceptance to unrelated networks such as your home Wi‑Fi
-- Dialogs follow your macOS language (Japanese or English). Messages from `install.sh` and the menu bar are in English.
+- Dialogs follow your macOS language (Japanese or English). Messages from `install.sh` (`cafe-wifi-okawari-ctl`) and the menu bar are in English.
 
 ## Caveats
 
@@ -198,11 +207,11 @@ The Wi‑Fi stays connected and your IP address does not change. Many apps carry
 - Large uploads and downloads: may fail (apps that cannot resume start over)
 - SSH, remote desktop, online games: the session may disconnect
 
-Before an important call, stream, or presentation, please check the next time-out in the menu bar or with `./install.sh status` and plan around it, or use another connection such as tethering. The tool re-authenticates only after a time-out; it does not renew ahead of time.
+Before an important call, stream, or presentation, please check the next time-out in the menu bar or with `cafe-wifi-okawari-ctl status` and plan around it, or use another connection such as tethering. The tool re-authenticates only after a time-out; it does not renew ahead of time.
 
 ### Dialogs appear only when you are offline
 
-A successful reconnection shows no dialog (the menu bar icon shows ✓, and it is logged; see `./install.sh status`), so the tool does not interrupt your screen every hour. A dialog appears only in these cases, all of them while you have no internet connection:
+A successful reconnection shows no dialog (the menu bar icon shows ✓, and it is logged; see `cafe-wifi-okawari-ctl status`), so the tool does not interrupt your screen every hour. A dialog appears only in these cases, all of them while you have no internet connection:
 
 - You need to accept the terms yourself the first time
 - Automatic reconnection failed (once while failures continue)
@@ -228,7 +237,7 @@ Dialogs appear in the middle of the screen and close by themselves after 2 minut
 ## Uninstall
 
 ```sh
-./install.sh uninstall
+zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall
 ```
 
 This also removes the menu bar icon, the list of networks you accepted, and the USEN networks being watched. The log at `~/Library/Logs/cafe-wifi-okawari.log` is kept; delete it by hand if you no longer need it.
@@ -238,11 +247,11 @@ This also removes the menu bar icon, the list of networks you accepted, and the 
 To check that it is running (what it shows is described in [Check that it is working](#check-that-it-is-working); it sends nothing over the network, and exits with 1 if it is not registered):
 
 ```sh
-./install.sh status
+zsh ~/.local/bin/cafe-wifi-okawari-ctl status
 ```
 
 - If the login window appears, read the terms and notices and accept yourself. If it does not appear, open `http://captive.apple.com` in a browser.
-- If automatic reconnection stops or failures continue, check the normal login page for usage caps, suspensions, or terms changes. Run `./install.sh uninstall` if you need to stop the tool (see [Usage notes](USAGE-NOTES.en.md#when-to-stop-it)).
+- If automatic reconnection stops or failures continue, check the normal login page for usage caps, suspensions, or terms changes. Run `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall` if you need to stop the tool (see [Usage notes](USAGE-NOTES.en.md#when-to-stop-it)).
 - For more detail, expand the log reference below.
 
 <details>

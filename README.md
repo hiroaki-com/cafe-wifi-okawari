@@ -56,7 +56,7 @@ macOS 15 以降（標準の `/usr/bin/jq` を使います）。Apple Silicon・I
 - 初回はご自身で規約を確認し、同意してください。以後は規約画面やお知らせを表示せず、同意を自動で送り直します。この動作を理解し、自動の再同意を希望する場合にお使いください。
 - 提供者の規約と店舗のルールで認められた範囲で利用してください。自動操作の扱いが不明な場合は、提供者に確認できるまで通常の接続方法を使ってください。利用上限や必要な手続きの回避には使わないでください。
 - 同意の判定・接続先の識別・規約変更の検知には限界があります。店舗ごとの初回同意を保証するものではありません。
-- 規約変更、利用上限・停止の表示、中止の要請、失敗の継続がある場合は使用を止めてください。停止・削除は、リポジトリのディレクトリで `./install.sh uninstall` を実行します。
+- 規約変更、利用上限・停止の表示、中止の要請、失敗の継続がある場合は使用を止めてください。停止・削除は `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall` を実行します。
 
 導入前に「[利用上の注意と自動同意について](USAGE-NOTES.md)」の全文をお読みください。
 
@@ -66,15 +66,23 @@ macOS 15 以降（標準の `/usr/bin/jq` を使います）。Apple Silicon・I
 
 ### 1. 導入する
 
-ターミナルを開き（⌘+スペースで「ターミナル」と入力）、次の3行をまとめて貼り付けて Enter を押してください。1分ほどで終わります。
+ターミナルを開き（⌘+スペースで「ターミナル」と入力）、次の3行をまとめて貼り付けて Enter を押してください。1分ほどで終わります。最新の版を一時フォルダに取得して展開し、導入します（取得したものをそのまま実行に流すことはしません）。
 
 ```sh
-git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git
-cd cafe-wifi-okawari
-./install.sh
+cd "$(mktemp -d)"
+curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.tar.gz
+tar -xzf cafe-wifi-okawari.tar.gz && zsh cafe-wifi-okawari/install.sh
 ```
 
-`Installed:` と出れば完了です。パスワードの入力は要りません。ターミナルは閉じてかまいません。メニューバーにコーヒーカップが出て、Mac を再起動しても自動で動き始めます。
+`Installed:` と出れば完了です。パスワードの入力や追加のソフトは要りません。ターミナルは閉じてかまいません。メニューバーにコーヒーカップが出て、Mac を再起動しても自動で動き始めます。取得したフォルダは導入後に要らなくなります。
+
+<details>
+<summary>ブラウザで取得する・Git で導入する</summary>
+
+- ブラウザ: [cafe-wifi-okawari.zip](https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.zip) を取得し、Finder で開いて展開します（Safari は自動で展開します）。中身を確かめたあと、ターミナルで `zsh ` と入力し（最後に空白）、展開したフォルダの `install.sh` をターミナルにドラッグして Enter を押します。「ダウンロード」フォルダへのアクセスを求められたら許可してください
+- Git: `git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git` のあと、`cd cafe-wifi-okawari && zsh install.sh`。更新は同じフォルダで `git pull && zsh install.sh`
+
+</details>
 
 ### 2. お店の Wi‑Fi で、最初の1回だけ自分で同意する
 
@@ -124,7 +132,7 @@ cd cafe-wifi-okawari
 - USEN の Wi‑Fi では、チェーンが分かれば `Tully's (USEN)`、分からなければ `USEN` と出ます。macOS のシステムログにある一部を伏せた Wi‑Fi 名から見分け、その名前は保存しません。店舗名は出しません（実店舗で確認したのはタリーズのみ）
 - 時間切れの目安は、お店の制限時間を60分として、今の接続先での最後の認証から求めます。認証画面を通らずにつなぎ直したとき（スリープからの復帰など）は出ません。詳しい条件は [DESIGN.md](DESIGN.md) の §3.2 にあります
 
-「Hide from Menu Bar」はアイコンを終了します。次のログインか `./install.sh` で戻ります。本ツール自体は、どちらの場合も動いたままです。アイコン自体が不要なら、`./install.sh --no-menubar` で入れ直してください（アイコンだけを消します）。
+「Hide from Menu Bar」はアイコンを終了します。次のログインか、導入の手順をもう一度実行すると戻ります。本ツール自体は、どちらの場合も動いたままです。アイコン自体が不要なら、導入の手順の `install.sh` のあとに ` --no-menubar` を付けて入れ直してください（アイコンだけを消します）。
 
 ### 動いているか確かめる
 
@@ -134,7 +142,7 @@ cd cafe-wifi-okawari
 <summary>ターミナルで詳しく確かめる</summary>
 
 ```sh
-./install.sh status
+zsh ~/.local/bin/cafe-wifi-okawari-ctl status
 ```
 
 表示は英語で、次のようになります。
@@ -143,6 +151,7 @@ cd cafe-wifi-okawari
 Service          loaded (LaunchAgent local.cafe-wifi-okawari)
 Schedule         every 10 s, and whenever the network settings change
 Program          /Users/you/.local/bin/cafe-wifi-okawari
+Version          1.0.0
 Last exit code   0 (412 runs since loaded)
 Menu bar         running
 Current network  gateway 0:0:5e:0:1:1 (doutor), accepted: auto re-authentication on
@@ -173,8 +182,8 @@ Recent log:
 - 別のお店に行ったとき: Wi‑Fi につないで認証画面が出たら、2 と同じくご自身で同意してください
 - 「最初の1回だけ…同意してください」というダイアログが出たとき: 記録していないお店で時間切れになりました。本ツールは何も送っていないので、認証画面でご自身で同意してください。認証画面は、Wi‑Fi につなぎ直すか、ブラウザで `http://captive.apple.com` を開くと表示されます
 - 「自動で再接続できませんでした」「自動再接続を止めました」というダイアログが出たとき: 同じく認証画面を確認し、必要ならご自身で同意してください。原因はログで確かめられます（[困ったとき](#困ったとき)）
-- 更新したいとき: リポジトリのディレクトリで `git pull` のあと `./install.sh` を再実行してください
-- 使うのをやめたいとき: `./install.sh uninstall` で削除できます（[削除](#削除)）
+- 更新したいとき: [導入](#1-導入する)の3行をもう一度実行してください。同意の記録は残ります。新しい版を知りたい場合は、GitHub の Watch → Custom → Releases で通知を受け取れます
+- 使うのをやめたいとき: `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall` で削除できます（[削除](#削除)）
 
 ### 仕組み
 
@@ -183,7 +192,7 @@ Recent log:
 - この Mac の MAC アドレス・IP アドレスは、ログにもメニューにも出しません
 - 接続先は、店内の Wi‑Fi ルーターの MAC アドレスとブランド（`doutor` など）の組で見分けます。同じブランドの店どうしで同じ値になることがあるため、店舗を一意に見分けられるとは限りません
 - Wi2 の Wi‑Fi かどうかは、Wi‑Fi から配られるドメイン名（`wi2.ne.jp`）で見分けます。ほかの Wi‑Fi では、つないでから5分間だけ、macOS と同じく Apple の `captive.apple.com` で認証画面の有無を確かめます（USEN の Wi‑Fi を見つけるため）。自宅など関係のない Wi‑Fi に同意を送ることはありません
-- ダイアログは、macOS の言語設定に合わせて日本語か英語で表示されます。`install.sh` のメッセージとメニューバーは英語です
+- ダイアログは、macOS の言語設定に合わせて日本語か英語で表示されます。`install.sh`（`cafe-wifi-okawari-ctl`）のメッセージとメニューバーは英語です
 
 ## 使うときの注意
 
@@ -198,11 +207,11 @@ Wi‑Fi は切れず、IP アドレスも変わりません。多くのアプリ
 - 大きなファイルのアップロード・ダウンロード: 失敗する（途中から再開できないアプリでは、最初からやり直しになる）
 - SSH・リモートデスクトップ・オンラインゲーム: 接続が切れる
 
-大事な通話・配信・発表の前は、メニューバーか `./install.sh status` で次の時間切れの目安を確かめて予定を組むか、テザリングなど別の回線をお使いください。本ツールは時間切れを見つけてから再認証するため、先回りして認証し直すことはしません。
+大事な通話・配信・発表の前は、メニューバーか `cafe-wifi-okawari-ctl status` で次の時間切れの目安を確かめて予定を組むか、テザリングなど別の回線をお使いください。本ツールは時間切れを見つけてから再認証するため、先回りして認証し直すことはしません。
 
 ### ダイアログが出るのは、つながっていないときだけです
 
-自動で再接続できたときはダイアログを出しません（メニューバーのアイコンに ✓ が付き、ログにも記録します。`./install.sh status` で確認できます）。1時間ごとに画面に割り込まないためです。ダイアログが出るのは次の場合だけで、どれもインターネットにつながっていないときです。
+自動で再接続できたときはダイアログを出しません（メニューバーのアイコンに ✓ が付き、ログにも記録します。`cafe-wifi-okawari-ctl status` で確認できます）。1時間ごとに画面に割り込まないためです。ダイアログが出るのは次の場合だけで、どれもインターネットにつながっていないときです。
 
 - 最初の1回の同意が必要なとき
 - 自動で再接続できなかったとき（失敗が続く間に1回）
@@ -228,7 +237,7 @@ Wi‑Fi は切れず、IP アドレスも変わりません。多くのアプリ
 ## 削除
 
 ```sh
-./install.sh uninstall
+zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall
 ```
 
 メニューバーのアイコンと、同意した接続先と、見張っている USEN の Wi‑Fi の記録も削除されます。ログ（`~/Library/Logs/cafe-wifi-okawari.log`）は残るので、不要なら手動で削除してください。
@@ -238,11 +247,11 @@ Wi‑Fi は切れず、IP アドレスも変わりません。多くのアプリ
 まず次のコマンドで動作を確かめてください。通信はしません。常駐処理が登録されていなければ、終了コード 1 で終わります。表示の見方は「[動いているか確かめる](#動いているか確かめる)」にあります。
 
 ```sh
-./install.sh status
+zsh ~/.local/bin/cafe-wifi-okawari-ctl status
 ```
 
 - 認証画面が出たら、規約や案内を確認し、ご自身で同意してください。画面が出なければ、ブラウザで `http://captive.apple.com` を開いてください。
-- 自動停止や失敗が続く場合は、通常の認証画面で利用上限・利用停止・規約変更などを確認してください。停止が必要な場合は `./install.sh uninstall` を実行します（[利用上の注意](USAGE-NOTES.md#利用を停止する場合)）。
+- 自動停止や失敗が続く場合は、通常の認証画面で利用上限・利用停止・規約変更などを確認してください。停止が必要な場合は `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall` を実行します（[利用上の注意](USAGE-NOTES.md#利用を停止する場合)）。
 - 詳しく調べる場合は、下のログ一覧を開いてください。
 
 <details>

@@ -1,0 +1,31 @@
+# タグ（v1.2.0 の形）の push で配布物を作り、下書きの Release に添付する（DESIGN.md §6.1）。
+# 公開は作者が手で行う。リリースノートには実網で確かめた範囲を書いてから公開する。
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: タグと本体の版が一致するか
+        run: |
+          v=$(sed -n 's/^VERSION=\([0-9][0-9.]*\).*/\1/p' cafe-wifi-okawari.sh)
+          [[ "v$v" == "$GITHUB_REF_NAME" ]] || { echo "tag $GITHUB_REF_NAME does not match VERSION=$v"; exit 1; }
+      - name: 模擬試験
+        run: zsh test/run.sh
+      # 名前と最上位のフォルダ名に版を入れない（releases/latest/download/ の固定URLで取れるように）
+      - name: 配布物を作る
+        run: |
+          git archive --format=tar.gz --prefix=cafe-wifi-okawari/ -o cafe-wifi-okawari.tar.gz "$GITHUB_REF_NAME"
+          git archive --format=zip --prefix=cafe-wifi-okawari/ -o cafe-wifi-okawari.zip "$GITHUB_REF_NAME"
+          shasum -a 256 cafe-wifi-okawari.tar.gz cafe-wifi-okawari.zip
+      - name: 下書きの Release に添付する
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" cafe-wifi-okawari.tar.gz cafe-wifi-okawari.zip --draft --title "$GITHUB_REF_NAME" \
+            --notes "実網で確かめた範囲 / Verified on real networks: (記入してから公開する / fill in before publishing)"

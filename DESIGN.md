@@ -211,8 +211,9 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | ファイル | 役割 |
 |---|---|
 | `cafe-wifi-okawari.sh` | 検知と再認証（唯一のロジック）。導入先は `~/.local/bin/cafe-wifi-okawari` |
-| `install.sh` | 導入・更新・状態の確認・削除（メッセージは英語のみ）。既定でメニューバーの表示（§3.2）も入れる（`--no-menubar` なら入れず、入っていれば消す）。plist を `$HOME` に合わせて `plutil` で生成する（パスに `&` などがあっても壊れない）。`StartInterval=10`、`WatchPaths=/var/run/resolv.conf`（認証画面で同意して通信できるようになった時刻に書き換わる）、`ProcessType=Background`。`bootout` 直後の `bootstrap` の一時失敗は最大10回やり直す。`status` は通信せずに、登録と最後の終了コード・メニューバーの表示の状態・今の接続先（本体の `netid` と同じく経路表と ARP から）が同意済みか・同意済みの件数とブランド・最後の認証の時刻と次の時間切れの目安（§3.2 と同じ条件を満たすときだけ）・ログの最新5行を出す。見張り中の網（24時間以内）は別に表示する（§3.1） |
+| `install.sh` | 導入・更新・状態の確認・削除（メッセージは英語のみ）。既定でメニューバーの表示（§3.2）も入れる（`--no-menubar` なら入れず、入っていれば消す）。plist を `$HOME` に合わせて `plutil` で生成する（パスに `&` などがあっても壊れない）。`StartInterval=10`、`WatchPaths=/var/run/resolv.conf`（認証画面で同意して通信できるようになった時刻に書き換わる）、`ProcessType=Background`。本体は `/bin/zsh <本体>` として起動する（§6.1）。導入時に自身を `~/.local/bin/cafe-wifi-okawari-ctl` へ複製し、そこからは `status`・`uninstall` だけを受け付ける（§6.1）。完了表示と `status` に本体の `VERSION` を出す。`bootout` 直後の `bootstrap` の一時失敗は最大10回やり直す。`status` は通信せずに、登録と最後の終了コード・メニューバーの表示の状態・今の接続先（本体の `netid` と同じく経路表と ARP から）が同意済みか・同意済みの件数とブランド・最後の認証の時刻と次の時間切れの目安（§3.2 と同じ条件を満たすときだけ）・ログの最新5行を出す。見張り中の網（24時間以内）は別に表示する（§3.1） |
 | `menubar.sh`・`menubar.js`・`assets/icon/` | メニューバーの表示（判定・表示・アイコンの画像）。導入先と LaunchAgent は §3.2 |
+| `.github/workflows/release.yml`・`.gitattributes` | タグの push で版の一致と模擬試験を確かめ、配布物（`cafe-wifi-okawari.tar.gz`・`.zip`）を下書きの Release に添付する。`.github` は配布物に含めない（§6.1） |
 | `test/run.sh` | 模擬の curl・route・arp・ipconfig・ifconfig・defaults・osascript・launchctl・networksetup・scutil による分岐試験。GitHub Actions（macOS）で push ごとに実行 |
 | `~/Library/LaunchAgents/local.cafe-wifi-okawari.plist` | LaunchAgent 定義（`install.sh` が生成） |
 | `~/Library/Logs/cafe-wifi-okawari.log` | 同意の記録・同意待ち・認証画面での同意を確かめた行と、再認証の成功・失敗・想定外の応答だけ（通常時は何も書かない） |
@@ -224,7 +225,7 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | `~/Library/Application Support/cafe-wifi-okawari/consented` | 利用者が自分で同意した接続先「MAC ブランド」（1行1つ）。USEN は「MAC usen [<規約のハッシュ>]」。ここにある接続先だけ自動で再認証する |
 | `~/Library/Application Support/cafe-wifi-okawari/watched` | （USEN で追加）認証画面での同意をシステムログで確かめた網「MAC 記録した時刻」（1行1つ、新しい50件まで）。24時間で無効（読むときに捨てる）。同意を記録したとき・対象外と確かめたとき・Wi2 の網と分かったときに外す。確かめられなかった（通信失敗など）だけでは外さない |
 
-`install.sh uninstall` は2つの plist・本体・メニューバーの4ファイル（2つのスクリプトとアイコンの 1x・2x）・`~/Library/Caches` の5ファイル・`Application Support/cafe-wifi-okawari`（`watched` を含む）を消し、ログは残す。
+`install.sh uninstall` は2つの plist・本体・`cafe-wifi-okawari-ctl`・メニューバーの4ファイル（2つのスクリプトとアイコンの 1x・2x）・`~/Library/Caches` の5ファイル・`Application Support/cafe-wifi-okawari`（`watched` を含む）を消し、ログは残す。
 
 ### 3.1 USEN の分岐
 
@@ -374,7 +375,7 @@ Hide from Menu Bar
 | 状態 | 行 |
 |---|---|
 | 見出し | 動作中・停止中とも `cafe-wifi-okawari`（動作中であることは印の行で分かるので書かない） |
-| 停止中 | 灰の `Stopped` と、続けて `Run ./install.sh to Restart` |
+| 停止中 | 灰の `Stopped` と、続けて `Run install.sh to Restart` |
 | 同意済み | 緑の `Skylark`、続けて `Auto Reconnect On` |
 | 未同意（自宅など） | 灰の `This Wi‑Fi`（SSID は取れないので網の名前を出せない）、続けて `Auto Reconnect Off` |
 | 未接続 | 灰の `Offline` |
@@ -396,7 +397,7 @@ Hide from Menu Bar
 - 直近の出来事は、見出し `Recent` の下に、上の5種類の行を新しい順に3件。1件もなければ区切り線と見出しごと出さない
 - 日付は、今日なら `Today`、昨日なら `Yesterday`、それより前は `09-28`。時刻は24時間制の `HH:MM`。日時と中身は2列にそろえる
 - ブランド名は先頭だけ大文字（`skylark` → `Skylark`）。`usen` は `USEN`（チェーンが分かっている接続先なら `Tully's`。接続先の行では `Tully's (USEN)`）。同じ MAC で同意済みのブランドが複数あれば `Doutor, Starbucks` と並べる（`install.sh status` と同じ）。本体は英字・数字・`-`・`_` だけのブランド名しか記録しないが、そのほかの文字を含む語は出さない（MAC・IP を出さないため）
-- 停止中は、見出しと `Stopped`・`Run ./install.sh to Restart` と直近の出来事だけ。接続先・次の時間切れ・案内は出さない（自動再接続が動いていないのに `Auto Reconnect On` と読めるため）
+- 停止中は、見出しと `Stopped`・`Run install.sh to Restart` と直近の出来事だけ。接続先・次の時間切れ・案内は出さない（自動再接続が動いていないのに `Auto Reconnect On` と読めるため）
 - 末尾の `Open Log`（ログを既定のアプリで開く。ログがなければ押せない）と `Hide from Menu Bar` は操作なので、`menubar.js` が付ける
 - 案内の行（!・…）は押せない行として出す。認証画面を開くボタンは付けない（操作を増やさない）
 - 画面共有や録画に写るので、端末とゲートウェイの MAC・IP は出さない（直近の出来事は時刻・種類・ブランド・秒数だけ）。SSID・店舗名は画面共有を理由に除かない（SSID は macOS が位置情報の許可なしには返さないので出していない。USEN のチェーンは下の方法で出す。店舗名は出さない）
@@ -541,20 +542,68 @@ head<TAB>Recent
 ## 6. 導入・停止
 
 ```sh
-./install.sh             # 導入・更新（スクリプトを複製し、plist を生成して登録。メニューバーの表示も入れる）
-./install.sh --no-menubar  # メニューバーの表示なしで導入・更新（入っていれば消す）
-./install.sh status      # 動作の確認（英語。通信しない。未登録なら 1 で終わる）
-./install.sh uninstall   # 停止・削除（同意の記録も消す。ログは残す）
+zsh install.sh               # 導入・更新（スクリプトを複製し、plist を生成して登録。メニューバーの表示も入れる）
+zsh install.sh --no-menubar  # メニューバーの表示なしで導入・更新（入っていれば消す）
+zsh ~/.local/bin/cafe-wifi-okawari-ctl status     # 動作の確認（英語。通信しない。未登録なら 1 で終わる）
+zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall  # 停止・削除（同意の記録も消す。ログは残す）
 ```
 
-スクリプトは `~/.local/bin` へ複製するので、導入後にリポジトリを移動・削除しても動く。利用者向けの概要・使い方は README.md（日本語）と README.en.md（英語）、利用上の注意と自動同意の詳細は USAGE-NOTES.md と USAGE-NOTES.en.md。ダイアログは macOS の優先言語（`defaults read -g AppleLanguages` の先頭）が日本語なら日本語、それ以外は英語。
+スクリプトは `~/.local/bin` へ複製するので、導入後に取得したフォルダを移動・削除しても動く。`cafe-wifi-okawari-ctl` は `install.sh` の複製で、`status`・`uninstall` は取得したフォルダの `install.sh` でも同じように動く（§6.1）。利用者向けの概要・使い方は README.md（日本語）と README.en.md（英語）、利用上の注意と自動同意の詳細は USAGE-NOTES.md と USAGE-NOTES.en.md。ダイアログは macOS の優先言語（`defaults read -g AppleLanguages` の先頭）が日本語なら日本語、それ以外は英語。
+
+### 6.1 Gitを使わない導入
+
+現在のREADMEは `git clone` を入口にしている。[Appleの説明](https://developer.apple.com/documentation/xcode/installing-the-command-line-tools)では、開発ツールのないmacOSで `git` を実行するとCommand Line Toolsの追加インストールを求める。「追加ソフト不要」を取得から満たすため、Gitを必須にしない導入経路を設ける。READMEの第一の手順はこの経路にし、Gitは選択肢として残す。
+
+方針は、GitHub上の配布物で広く使われる形（タグ付きのRelease・名前を固定した添付ファイル・`releases/latest/download/` の固定URL）にそろえる。ネットワークから取得した内容を直接シェルへ流す方式（`curl … | sh`）、Homebrew等の追加依存、自動更新は導入しない（§8）。
+
+**配布物**
+
+- mainの「Download ZIP」は入口にしない。版が分からず、実網で確かめる前の変更も配ってしまうため。配るのはタグ（`v1.2.0` の形）を付けたGitHub Releaseだけにし、Releaseは模擬試験の通過と、動作を変えた部分の実網での確認（§7）のあとに作る。リリースノートには実網で確かめた範囲を書く。
+- タグのpushでワークフローが `git archive --prefix=cafe-wifi-okawari/` から `cafe-wifi-okawari.tar.gz` と `cafe-wifi-okawari.zip` を作り、Releaseに添付する。ファイル名と最上位のフォルダ名に版を入れないので、READMEは `https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/<ファイル名>` を版ごとに書き換えずに案内できる。添付ファイルのSHA-256はReleaseの画面に出るので、確かめたい人は `shasum -a 256` で照合できる。
+- 版は本体に1行で持ち（`VERSION=1.0.0`）、タグと一致しなければワークフロー（`.github/workflows/release.yml`）を失敗させる。ワークフローは模擬試験も通してから、下書きのReleaseに添付する。公開は作者がリリースノートに実網で確かめた範囲を書いてから手で行う。`.github` は `export-ignore` で配布物から除く。インストーラーの完了表示・`status`・Issueの版の欄に同じ値を出す。Gitで導入した人も同じ値で報告できる。
+
+**取得と導入**
+
+READMEの第一の手順は、今と同じく「ターミナルに数行を貼り付ける」形にする。
+
+```sh
+cd "$(mktemp -d)"
+curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.tar.gz
+tar -xzf cafe-wifi-okawari.tar.gz && zsh cafe-wifi-okawari/install.sh
+```
+
+- いったんファイルに保存してから実行するので、シェルへ直接流す方式には当たらない。curlとtarは標準のコマンドで、`curl` で保存したファイルにはダウンロード属性（`com.apple.quarantine`）が付かず、「ダウンロード」フォルダへのアクセス許可の画面も出ない。一時フォルダへ展開し、既存の `git clone` のフォルダを上書きしない。
+- 中身を先に読みたい人向けに、ブラウザでZIPを取得してFinderで展開する経路も残す。この場合はターミナルで `zsh ` と入力し、展開したフォルダの `install.sh` をドラッグして実行する。「ダウンロード」フォルダへのアクセス許可の画面が出ることと、展開したファイルにダウンロード属性が付くことを前提にする。
+- どの経路でも `zsh` に読ませて実行し、実行権限に依存しない（インストーラーは `${0:A:h}` から取得元を求める）。展開先の空白・日本語・連番にも対応する。利用条件の案内は取得の手順より前に置く。Gitによる導入は既にGitを使っている人向けの選択肢として残す。
+
+**取得元フォルダに依存しない**
+
+- 導入時にインストーラー自身も `~/.local/bin/cafe-wifi-okawari-ctl` へ複製し、`status`・`uninstall` はこちらで実行できるようにする（`zsh ~/.local/bin/cafe-wifi-okawari-ctl status`）。導入・更新は取得したフォルダの `install.sh` だけで行い、複製から導入しようとしたら取得の手順を案内して終わる。これで取得元フォルダ（一時フォルダを含む）を消しても停止・削除の手段が残り、READMEの「リポジトリのディレクトリで」という前提がなくなる。`uninstall` はこの複製も消す。
+- LaunchAgentは本体を直接実行せず、`/bin/zsh <本体>` として起動する（メニューバーが `osascript` で `.js` を読み、`/bin/zsh` で `.sh` を読むのと同じ形）。ブラウザ経路では展開したファイルのダウンロード属性が `install` の複製先にも引き継がれるため、実行の対象をApple署名のzshにしてGatekeeperの判定を受けないようにする。`xattr` で属性を消す処理は入れない。
+
+**更新**
+
+- 導入と同じ手順をもう一度実行する（同じ数行の貼り付け、またはZIPを別フォルダへ展開してその `install.sh`）。事前のuninstallは同意の記録を消すため行わない。Gitで導入した人は `git pull && zsh install.sh`。
+- 更新の確認のための通信は持たない。新しい版を知りたい人には、GitHubの「Watch → Custom → Releases」を案内する。
+
+未検証の確認条件（模擬試験で確かめたものは §7）:
+
+- 開発ツールのないMacで、curl経路・ブラウザ経路の両方で、取得から導入まで追加インストールを求められないこと。ブラウザ経路ではダウンロード属性の付いたまま、LaunchAgentとメニューバーが起動し、Gatekeeperの画面が出ないことを確かめる。
+- 空白・日本語・連番を含む展開先でも、必要なスクリプト・アイコンが導入できること。
+- 取得元フォルダを消したあとも、`cafe-wifi-okawari-ctl` で `status`・`uninstall` ができ、`uninstall` で何も残らないこと（ログを除く）。
+- 更新後も同意の記録が保持され、版の表示・status・メニューバー・削除の案内が一貫すること。
+- タグと本体の版が食い違うとワークフローが失敗し、Releaseの添付ファイルが固定URLから取れること。
+- ZIP取得・展開の検証と、LaunchAgentの登録・実網での再認証の検証を分ける。公開ZIPの取得だけでは導入成功と扱わない。
+- 導入手順を実装するときはREADMEの日英を同時に更新し、インストーラーの動作変更（`/bin/zsh` での起動・`-ctl` の複製と削除・版の表示）は `test/run.sh` に模擬試験を足す。
+
+実装済み（`/bin/zsh` での起動・`-ctl` の複製と削除・`-ctl` からの導入の拒否・版の表示・リリースのワークフロー）。模擬試験では空白・日本語・連番を含む展開先と実行権限のないファイルからの導入を確かめた。手元のMac（macOS 27.0・開発ツールあり）では、ダウンロード属性を手で付けた実行権限なしの複製（フォルダ名に空白と連番）から更新し、導入先にも属性が引き継がれたまま、LaunchAgentが `/bin/zsh` で起動して終了コード0で3回動き、メニューバーも動いた。取得元フォルダを消したあとも `-ctl status` が動き、`-ctl` からの導入は断った。Releaseはまだ作っておらず、固定URL・curl経路・ブラウザで実際に取得したファイル・開発ツールのないMacでの導入は未検証。
 
 ## 7. 検証
 
 | 確認項目 | 結果 |
 |---|---|
 | 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`・`menubar.js` の `osacompile -l JavaScript`） | OK |
-| 模擬試験 `zsh test/run.sh`（378項目。うち USEN の分岐と `install.sh status` の見張り表示が119項目、同意済みの Wi2 の網での認証画面の同意が11項目、メニューバーの表示が79項目（USEN のチェーンが24項目、見張り中の網の表示が10項目）、`install.sh` のメニューバーと次の時間切れの目安が21項目） | OK。GitHub Actions でも実行。既存の項目のうち、仕様を変えた6項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない・同意済みの網でも入店時にシステムログを読む・直近の出来事に `captive login seen` を出す・チェーンの分かった見張り中の網を緑の On にする）は書き換えた。Wi2 のつなぎ直しの項目は、同意済みの MAC で15秒待つようになったので、resolv.conf の更新から20秒の状態で確かめる |
+| 模擬試験 `zsh test/run.sh`（384項目。うち USEN の分岐と `install.sh status` の見張り表示が119項目、同意済みの Wi2 の網での認証画面の同意が11項目、メニューバーの表示が79項目（USEN のチェーンが24項目、見張り中の網の表示が10項目）、`install.sh` のメニューバーと次の時間切れの目安が21項目） | OK。GitHub Actions でも実行。既存の項目のうち、仕様を変えた6項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない・同意済みの網でも入店時にシステムログを読む・直近の出来事に `captive login seen` を出す・チェーンの分かった見張り中の網を緑の On にする）は書き換えた。Wi2 のつなぎ直しの項目は、同意済みの MAC で15秒待つようになったので、resolv.conf の更新から20秒の状態で確かめる |
 | 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、すべて NG として検出（例: `-b "$jar"` を外す・同意の本文を変えると、どちらも23項目が失敗）。USEN の実装では33通りの変異（例: `--noproxy` を外す・性別を空でなく送る・GET のあとの same() を外す・同意の行の削除を行全体の一致にする・基準時刻の +1 を外す）をすべて検出。メニューバーの実装では37通り（例: 注意の接続先の照合を外す・Wi‑Fi でなく先頭のポートを使う・目安の captive login の除外や resolv.conf の30秒を変える・出来事を4件にする・`--no-menubar` で消さない・`KeepAlive` を付ける）をすべて検出（最初は2通りを見逃したので、試験の行の並びと `status` の30秒の境目を足した）。アイコンの組み込みでは4通り（1x・2x のどちらかを入れない・`--no-menubar` と uninstall で画像を残す）をすべて検出。USEN のチェーンでは12通り（例: 探す範囲をリース開始の10秒前からに戻す・2時間の範囲を広げる・インターフェースの照合を外す・最初の行で判定する・伏せ字の SSID を残す・Wi2 の網でも読む・見つからなかった行を出来事に使う・読んだあとの接続先の確認を外す・共通の一時ファイルに戻す・uninstall で一時ファイルを残す）をすべて検出（最初はインターフェースの照合を外しても通ったので、別のインターフェースの行があとに出る形に試験を直した。一時ファイルの試験も、直前の試験のキャッシュが残っていて壊した版でも通ったので、直前で消すようにした）。同意済みの網での認証画面の同意では12通り（例: 60秒の窓を外す・広げる・Wi2 の再試行でも読む・15秒待ちを外す・同意済みのブランドでなくても書く・USEN の `usen` を付けない・確かめ済みの接続でも読む・メニューバーと `status` で起点の語や照合の形を戻す・出来事の読み替えを外す）をすべて検出。メニューの印と見出し（2026-10-02）では10通り（例: 失敗で赤にしない・同意待ちで赤を黄に上書きする・同意待ちで黄にしない・見張り中を緑にする・名前がないときの `This Wi‑Fi` を外す・`Recent` の見出しを外す・未接続や停止中を灰にしない）をすべて検出。見張り中の網の表示（2026-10-02）では9通り（例: チェーンが分かっても緑にしない・`resolv.conf` の早いほうを使わない・5分の範囲を外す・行のあとの更新も起点にする・60分の判定を外す・`status` でチェーンの控えのキーが `-` でも出す）をすべて検出（最初は行のあとの更新を起点にする変異を2通りとも見逃したので、起点が60分の境目をまたぐ試験を足した） |
 | 実際の curl の Cookie の保存と送信 | OK。空の jar で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る（ローカルの HTTPS サーバーと実網） |
 | LaunchAgent からの知らせ | `display notification` は **NG**（macOS 27。終了コード 0 だが表示されず、許可も求められない）。`display alert … giving up after 120` は表示された |
@@ -685,6 +734,7 @@ head<TAB>Recent
 | `install.sh status`: そのあとにブランド付きの `captive login seen` / さらにブランドのない `captive login seen` | `captive login seen on doutor` と、その60分後の目安 / 最後の認証として出すが、目安はブランド付きの行から |
 | `install.sh status`: 見張り中の網で10分前にブランドのない `captive login seen`、チェーンの控えなし / 控えに `tullys` / resolv.conf がその2分前・50秒後に書き換わる / 控えのキーが `-` / 3610秒前の行と20秒後の書き換え | 目安なし / 行の60分後の目安（`from when you accepted on the login page` と `it may be a few minutes off` を添える）/ resolv.conf の時刻から60分・目安なし / 目安なし / 目安なし |
 | `install.sh`: 既定 / `--no-menubar` / そのあとの再導入 / 削除 | メニューバーの4ファイル（アイコンの 1x・2x を含む）と plist（`osascript -l JavaScript <js>`・`RunAtLoad`・`Aqua`・`KeepAlive` なし）を入れて登録 / 本体だけ更新し、メニューバーを外して消す / 戻る / 両方の登録を外し、ログ以外は残らない |
+| `install.sh`: 版の形 / 導入時の表示 / plist / `-ctl` の複製 / `-ctl` からの導入 / `-ctl status` / 空白・日本語・連番を含む展開先 / 実行権限なし / `-ctl uninstall` | `VERSION` が x.y.z / `Installed: … (version x.y.z)` と `-ctl` での確認・削除の案内 / `ProgramArguments` が `/bin/zsh`・本体の2つ / `install.sh` と同じ内容 / 1 で終わり何も登録しない / `Version` 行 / 導入できる / 導入先は実行可能 / `-ctl` も含めログ以外は残らない。5通りの変異（`/bin/zsh` を外す・`-ctl` を複製しない・削除で `-ctl` を残す・`-ctl` からの導入を拒まない・`Version` 行を出さない）をすべて検出 |
 | `install.sh status`: メニューバーが動いている / 止まっている / 入っていない | `Menu bar  running` / `not running` / `not installed` |
 
 `test/run.sh` で確かめているメニューバーの表示は次のとおり（`menubar.sh` の出力。模擬の `networksetup` は有線のポートを先に並べ、`ipconfig getifaddr` は Wi‑Fi の en0 だけ IPv4 を返す）。
@@ -695,7 +745,7 @@ head<TAB>Recent
 | 状態ファイルの接続先が今と同じで「知らせたか」が 1 / 接続先が違う / 0 / 旧形式 | `warn`、印は赤、失敗の案内（状態の行の直後）/ 注意にしない / 注意にしない / 注意にしない（異常終了しない） |
 | 同意待ち `MAC ブランド notified`・`MAC usen 基準時刻 notified` / 接続先が違う / notified なし / 失敗の注意と重なる | `warn`、印は黄、同意の案内 / 注意にしない / 注意にしない / 印は赤のまま、失敗と同意の案内を両方 |
 | 注意の最中に既定経路がなくなる: Wi‑Fi に IPv4 あり / IPv4 なしで `WaitingOnUI` が TRUE / どちらもない | `wait`、黄の `Waiting for Login Page` と認証画面の案内 / `wait` / `on` で灰の `Offline` |
-| 再認証から590秒 / 610秒、別の接続先でも / 認証画面待ち・注意と重なる / 停止中と重なる | `check` / `on`、`check` / `wait`・`warn` を優先 / `off`。見出し・灰の `Stopped`・`Run ./install.sh to Restart`・直近の出来事だけ |
+| 再認証から590秒 / 610秒、別の接続先でも / 認証画面待ち・注意と重なる / 停止中と重なる | `check` / `on`、`check` / `wait`・`warn` を優先 / `off`。見出し・灰の `Stopped`・`Run install.sh to Restart`・直近の出来事だけ |
 | 今の接続先で600秒前に再認証 / 別の接続先へ移る / 3700秒前・3500秒前に入店時の同意の記録 | 60分後の目安とツールチップ / 出さない / 出さない・出す |
 | 3700秒前に再認証 → `consent recorded … usen (captive login)` → `login failed` / そのあと再認証 / 行の20秒後・50秒後に resolv.conf が書き換わる | 出さない / その時刻から60分 / 出す・出さない |
 | 600秒前に `captive login seen net=… doutor` / 別の接続先 / 行の100秒後に resolv.conf が書き換わる / `… usen`（チェーンが分かる）/ ブランドのない行（見張り中） | 60分後の目安（`on`。✓ にしない）と `Accepted on Login Page · Doutor` / 目安なし / 目安なし / 目安と `· USEN`（`· Tully's`）/ チェーンが分からなければ目安なし、`Accepted on Login Page` |
@@ -718,5 +768,6 @@ head<TAB>Recent
 - アンケート・会員登録・メール登録が必要なポータル
 - 時間切れ前の先回り再認証（検知方式で十分）
 - 設定ファイル、ログのローテーション（正常時は1時間に1行、障害時も1日約50行）
-- 成功時の通知。常駐処理から出せるのはダイアログだけで、集中モードでも止まらず、画面共有・録画にも写る。再認証は約60分ごとに起きるので、通話や録画に割り込ませない。成功はメニューバーの ✓（§3.2）・ログ・`./install.sh status` で確かめる
+- 成功時の通知。常駐処理から出せるのはダイアログだけで、集中モードでも止まらず、画面共有・録画にも写る。再認証は約60分ごとに起きるので、通話や録画に割り込ませない。成功はメニューバーの ✓（§3.2）・ログ・`cafe-wifi-okawari-ctl status` で確かめる
 - macOS 標準のポータル画面（Captive Network Assistant）の無効化（全ネットワークに影響する）
+- 自動更新・更新の確認のための通信（§6.1。新しい版は GitHub の Release で知らせる）

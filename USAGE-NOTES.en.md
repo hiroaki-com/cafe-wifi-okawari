@@ -28,6 +28,6 @@ Only USEN's USPOT-02 portal is supported. On a new network, after installation, 
 
 The tool cannot tell a refusal due to a usage cap or suspension from a temporary network problem. If the auth server refuses the acceptance (on USEN, if the device responds) three times in a row on the same network and the connection does not come back, the tool stops re-accepting on that network and tells you in a dialog (accept on the login page yourself to resume). On timeouts and server errors it does not stop; it keeps retrying with a growing interval (up to 30 minutes). If a cap or suspension is shown, or failures continue, stop automatic reconnection and check the normal login page.
 
-Run `./install.sh uninstall` in the repository directory to remove the background job and the list of recorded networks.
+Run `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall` to remove the background job and the list of recorded networks.
 
 The license of this tool does not grant any right to use a Wi‑Fi service, nor permission for any action that violates the provider's terms.
