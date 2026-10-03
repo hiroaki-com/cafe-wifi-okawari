@@ -287,7 +287,7 @@ run MAC=$A DOM=wi2.ne.jp; ok '失敗の直後には確かめ直さない（起�
 ago 30 $SN
 run MAC=$A DOM=wi2.ne.jp; ok '30秒たてばやり直す' '[[ $(<"$KN") == "$A doutor" ]]'
 reset; touch $M/authed
-run MAC=$A DOM=wi2.ne.jp BARE=timeout; ago 30 $SN; run MAC=$A DOM=wi2.ne.jp BARE=timeout; ago 59 $SN
+run MAC=$A DOM=wi2.ne.jp BARE=timeout; ago 30 $SN; run MAC=$A DOM=wi2.ne.jp BARE=timeout; ago 55 $SN
 run MAC=$A DOM=wi2.ne.jp; ok '2回目の失敗のあとは60秒空ける' '(( redirs == 0 ))'
 reset; touch $M/authed
 run MAC=$A DOM=wi2.ne.jp BRAND='x y'
@@ -734,11 +734,17 @@ ok 'USEN 同意待ちの網が Wi2 の網なら、同意待ちを消して Wi2 �
 # 同意待ちの基準時刻
 reset; mkpend; touch $M/authed
 run MAC=$A WEBSHEET=$(now 2); ok 'USEN 基準時刻（対照）: そのまま戻れば同じ行で記録できる' 'grep -qx "$A usen" "$KN"'
-reset; mkpend; touch $M/authed
-w1=$(now 2)
-run MAC=$B WEBSHEET=$w1;  ok 'USEN 同意待ちがあっても、別の網では確かめない（自宅などで通信しない）' '[[ ! -s $M/calls ]] && (( reads == 0 ))'
-                          ok 'USEN 別の網にいる間は、同意待ちの基準時刻を今に進める' '(( ${$(<$PD)[(w)3]} >= w1 + 2 ))'
-run MAC=$A WEBSHEET=$w1;  ok 'USEN 別の網で同意してから戻っても、その行では記録しない（同意待ちは残る）' '[[ ! -e $KN && -e $PD ]] && (( reads == 1 ))'
+reset; mkpend; touch $M/authed; p0=$(<$PD); ago 50 $PD
+run MAC=$B;               ok 'USEN 同意待ちがあっても、別の網では確かめない（自宅などで通信しない）' '[[ ! -s $M/calls ]] && (( reads == 0 ))'
+ok 'USEN 別の網で resolv.conf が基準時刻より前のままなら、同意待ちを書き直さない' '[[ $(<$PD) == "$p0" ]] && (( EPOCHSECONDS - $(stat -f %m $PD) >= 50 ))'
+# 別の網で認証画面で同意すると、その網が既定経路になって resolv.conf が書き換わる（同意の行はその前）
+w1=$(now 25); ago 20 $M/resolv
+run MAC=$B;               ok 'USEN 別の網にいる間に resolv.conf が書き換われば、同意待ちの基準時刻を今に進める' '(( ${$(<$PD)[(w)3]} >= w1 + 25 ))'
+p1=$(<$PD); ago 50 $PD
+run MAC=$B
+                          ok 'USEN 進めたあとは、resolv.conf が変わらない限り書き直さない' '[[ $(<$PD) == "$p1" ]] && (( EPOCHSECONDS - $(stat -f %m $PD) >= 50 ))'
+run MAC=$A WEBSHEET=$w1 LEASE=$(now 300)
+                          ok 'USEN 別の網で同意してから戻っても、その行では記録しない（同意待ちは残る）' '[[ ! -e $KN && -e $PD ]] && (( reads == 1 ))'
 reset; mkpend; touch $M/authed
 run MAC=$A WEBSHEET=${$(<$PD)[(w)3]}
                           ok 'USEN 基準時刻と同じ秒の行は数えない（別の網での同意と区別できない）' '[[ ! -e $KN && -e $PD ]] && (( reads == 1 ))'
@@ -931,6 +937,12 @@ print -r -- "$(lt 3700) consent recorded net=$A doutor (online)" > $LG
 mb MAC=$A;                ok 'メニューバー: 最後の認証から60分を過ぎていれば目安を出さない' '[[ $rows != *Next\ Time-out* ]]'
 print -r -- "$(lt 3500) consent recorded net=$A doutor (online)" > $LG
 mb MAC=$A;                ok 'メニューバー: 入店時の同意の記録からも目安を出す' '[[ $rows == *"${NT}$(hm -100)$TIP${NL}"* ]]'
+# 削除して入れ直すと、認証済みの網で同意を記録し直す（(online)）。同じ接続の前の認証を起点にする
+print -rl -- "$(lt 1800) re-authenticated api=ok probe=ok net=$A doutor t=2s" "$(lt 700) consent recorded net=$A doutor (online)" > $LG
+mb MAC=$A;                ok 'メニューバー: 入れ直したあとの同意の記録し直しより、同じ接続の前の認証を目安の起点にする' '[[ $rows == *"${NT}$(hm -1800)$TIP${NL}"* ]]'
+ago 1000 $M/resolv
+mb MAC=$A;                ok 'メニューバー: 前の認証のあとにつなぎ直していれば、同意の記録を起点にする' '[[ $rows == *"${NT}$(hm -2900)$TIP${NL}"* ]]'
+touch -t 202001010000 $M/resolv
 mbreset; mkknown $A "usen $HASH"
 print -rl -- "$(lt 3700) re-authenticated api=ok probe=ok net=$A usen t=1s" "$(lt 120) consent recorded net=$A usen (captive login)" \
   "$(lt 110) login failed x1 api=ng probe=ng http=200 curl=0 res=" > $LG
@@ -1141,7 +1153,7 @@ ok '状態: 登録済みなら 0 で終わり、英語で登録の詳細を表�
   '(( rc == 0 )) && [[ $out == "Service          loaded (LaunchAgent local.cafe-wifi-okawari)"$'"'"'\n'"'"'"Schedule "*$'"'"'\n'"'"'"Last exit code   0 (7 runs since loaded)"$'"'"'\n'"'"'* ]]'
 ok '状態: 今の接続先が同意済みならブランドと自動再認証を表示' '[[ $out == *"Current network  gateway $A (doutor), accepted: auto re-authentication on"* ]]'
 ok '状態: 同意済みの件数とブランド（重複なし・整列）を表示' '[[ $out == *$'"'"'\n'"'"'"Accepted         3 networks (brands: doutor, starbucks)"$'"'"'\n'"'"'* ]]'
-ok '状態: ログの最新5行を字下げして表示' '[[ $out == *"Log              "*"(6 lines)"$'"'"'\n\nRecent log (last 5 lines):\n  L2\n'"'"'*"  L6" && $out != *L1* ]]'
+ok '状態: ログの最新5行を字下げして表示' '[[ $out == *"Log              "*"(6 lines)"$'"'"'\n\nRecent log (last 5 lines):\n  L2\n'"'"'*"  L6" && $out != *"  L1"* ]]'
 ok '状態: 認証の記録がなければそう表示し、目安は出さない' '[[ $out == *"Last auth        none logged yet"* && $out != *Next\ time-out* ]]'
 MAC=cc:cc:cc:cc:cc:09 HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
 ok '状態: 今の接続先が未同意ならそう表示' '[[ $out == *"Current network  gateway cc:cc:cc:cc:cc:09, not accepted: auto re-authentication off"* ]]'
@@ -1208,6 +1220,15 @@ ok '状態: 行のあと30秒以内の resolv.conf の書き換えは起点に�
 touch -t 202001010000 $M/resolv; print -r -- "$D - 1" > "$HC"
 MAC=$D HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
 ok '状態: チェーンが見つからなかった接続先（控えのキーが -）なら目安を出さない' '[[ $out != *Next\ time-out* ]]'
+t8=$(date -v-30M '+%F %T') t9=$(date -v-10M '+%F %T')
+print -rl -- "$t8 re-authenticated api=ok probe=ok net=$A doutor t=2s" "$t9 consent recorded net=$A doutor (online)" > "$H/Library/Logs/cafe-wifi-okawari.log"
+MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 入れ直したあとの同意の記録し直し（(online)）より、同じ接続の前の認証を目安の起点にする（最後の認証としては出す）' \
+  '[[ $out == *"Last auth        $t9 "*"consent recorded on doutor"* && $out == *"Next time-out    around $(date -j -v+60M -f "%F %T" "$t8" +%H:%M), "* ]]'
+touch -t $(date -j -v+5M -f '%F %T' "$t8" +%Y%m%d%H%M.%S) $M/resolv
+MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; out=$(<$M/out)
+ok '状態: 前の認証のあとにつなぎ直していれば、同意の記録を起点にする' '[[ $out == *"Next time-out    around $(date -j -v+60M -f "%F %T" "$t9" +%H:%M), "* ]]'
+touch -t 202001010000 $M/resolv
 print -rl -- "$t1 consent recorded net=$A doutor (online)" > "$H/Library/Logs/cafe-wifi-okawari.log"
 MAC=$A HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '状態: 60分を過ぎていれば目安を出さない' \

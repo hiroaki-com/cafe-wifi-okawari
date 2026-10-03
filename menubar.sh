@@ -133,6 +133,12 @@ if launchctl print gui/$UID/$label >/dev/null 2>&1; then
     fi
     zstat -A m +mtime $RC 2>/dev/null || m=(0)
     if (( $#a )) && at $a[-1] && (( m[1] <= t + 30 )); then
+      # 最後の行が同意の記録し直し（(online)。削除して入れ直したあと、認証済みの網で書く）なら認証の時刻ではないので、
+      # それより前の (online) でない行が同じ接続のもの（その30秒より後に resolv.conf が書き換わっていない）ならそちらを起点にする
+      if [[ $a[-1] == *' (online)' ]]; then
+        u=$t b=(${a:#*' (online)'})
+        (( $#b )) && at $b[-1] && (( m[1] <= t + 30 )) || t=$u
+      fi
       (( wl && m[1] < t && m[1] > t - 300 )) && t=$m[1]
       (( now - t < 3600 )) && rows+="-${TB}Next Time-out$TB~$(strftime '%H:%M' $(( t + 3600 )))$TB$tip"
     fi

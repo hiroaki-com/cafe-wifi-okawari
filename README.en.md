@@ -132,7 +132,7 @@ Click it to see the current Wi‑Fi's name, whether automatic reconnection is on
 - ! appears when you need to accept the terms yourself once, or to check the login page because reconnecting failed. The menu says which
 - … appears on any network with a login page, not only supported ones. If the login page does not appear, open `http://captive.apple.com` in a browser
 - On USEN Wi‑Fi it shows the chain when it can tell, such as `Tully's (USEN)`, and `USEN` otherwise. It tells them apart by the partly hidden Wi‑Fi name in the macOS system log and does not store that name. It never shows the shop's branch (only Tully's has been checked at a real shop).
-- The time-out estimate assumes the shop's limit is 60 minutes and counts from the last authentication on the current network. It is not shown after you rejoined without the login page (waking from sleep, for example). See §3.2 of [DESIGN.md](DESIGN.md) for the exact conditions.
+- The time-out estimate assumes the shop's limit is 60 minutes and counts from the last authentication on the current network. It is not shown after you rejoined without the login page (waking from sleep, for example). If you uninstall and reinstall the tool, it still counts from the earlier authentication on the same connection. See §3.2 of [DESIGN.md](DESIGN.md) for the exact conditions.
 
 "Hide from Menu Bar" quits the icon; it comes back the next time you log in or run the install steps again. The tool itself keeps running either way. If you do not want the icon at all, reinstall following the install steps, adding ` --no-menubar` before you press Enter (this removes only the icon).
 

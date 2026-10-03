@@ -119,11 +119,14 @@ zstat -A joined +mtime $RC 2>/dev/null || joined=(0)
 pd=() pda=0; [[ -r $PD ]] && { pd=(${=$(<"$PD")}); zstat -A m +mtime $PD 2>/dev/null && pda=$(( EPOCHSECONDS - m[1] )) }
 # USEN の同意待ちの網から離れている間は、同意待ちの基準時刻を今に進める（別の網での認証画面の同意を、戻ってから数えない）。
 # 既定経路がないだけ（macOS が認証画面を開いている）では進めない（上で終わる）。USEN の同意待ちを数えるのはその網にいるときだけ。
+# 進めるのは resolv.conf が基準時刻以後に書き換わったときだけ（認証画面で同意した網は、そのあと既定経路になって resolv.conf が
+# 書き換わるので、同意の行はその前になる）。同じ網にいる間は書き直さない（DESIGN.md §3.1）。
 npd=$#pd
-if [[ ${pd[2]-} == usen && $pd[1] != "$net" ]]; then
-  pd[3]=$EPOCHSECONDS npd=0
+if [[ ${pd[2]-} == usen && $pd[1] != "$net" ]] && (( joined[1] >= ${pd[3]-0} )); then
+  pd[3]=$EPOCHSECONDS
   print -r -- "$pd" > "$PD"
 fi
+[[ ${pd[2]-} == usen && $pd[1] != "$net" ]] && npd=0
 # 関係のない網（自宅など）では通信しない。確かめるのは、Wi2 の網・同意済みの網・見張り中の網・同意待ちのとき・接続した直後だけ。
 (( wi2net || kmac || watched || npd || EPOCHSECONDS - joined[1] < JOIN )) || exit 0
 myip=$(/usr/sbin/ipconfig getifaddr "$ifc" 2>/dev/null)   # 始めたときの端末の IP（same で途中の回線の切り替わりを見分ける）

@@ -95,16 +95,20 @@ case ${1-} in
     # 起点にする。認証画面での同意の記録（(captive login)。送る前に書く）は除く。その行の30秒より後に resolv.conf が
     # 書き換わっていれば（認証画面を通らずにつなぎ直した）今の接続の認証ではないので、出さない。チェーンの分かった
     # 見張り中の網では、見張りを始めた行（ブランドのない captive login seen）を使い、その前5分以内に resolv.conf が
-    # 書き換わっていればその時刻を起点にする（早いほう）。
+    # 書き換わっていればその時刻を起点にする（早いほう）。最後の行が同意の記録し直し（(online)。削除して入れ直したあと、
+    # 認証済みの網で書く）なら認証の時刻ではないので、それより前の (online) でない行（p）が同じ接続のものならそちらを起点にする。
+    p=
     if (( wl )); then
       a=$(awk -v n="net=$net" 'NF == 6 && $3 $4 $5 == "captiveloginseen" && $6 == n' "$log" 2>/dev/null | tail -n 1) || a=
       how='from when you accepted on the login page, '; off=' and it may be a few minutes off'
     else
-      a=$(grep -E '^[0-9-]{10} [0-9:]{8} (re-authenticated|consent recorded|captive login seen) ' "$log" 2>/dev/null | grep -F " net=$net " | grep -vF '(captive login)' | tail -n 1) || a=
-      how= off=
+      a=$(grep -E '^[0-9-]{10} [0-9:]{8} (re-authenticated|consent recorded|captive login seen) ' "$log" 2>/dev/null | grep -F " net=$net " | grep -vF '(captive login)') || a=
+      [[ $a == *' (online)' ]] && p=$(print -r -- "$a" | grep -vF ' (online)' | tail -n 1)
+      a=${a##*$'\n'} how= off=
     fi
     m=$(stat -f %m /var/run/resolv.conf 2>/dev/null) || m=0
     if [[ -n $net && -n $a ]] && t=$(date -j -f '%F %T' "${a[1,19]}" +%s 2>/dev/null) && (( m <= t + 30 )); then
+      [[ -n $p ]] && u=$(date -j -f '%F %T' "${p[1,19]}" +%s 2>/dev/null) && (( m <= u + 30 )) && t=$u
       (( wl && m < t && m > t - 300 )) && t=$m
       if (( t + 3600 > now )); then
         row 'Next time-out' "around $(date -r $(( t + 3600 )) +%H:%M), in $(dur $(( t + 3600 - now ))) (${how}if the shop's limit is 60 minutes$off)"
