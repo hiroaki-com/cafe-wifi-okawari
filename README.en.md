@@ -32,6 +32,7 @@ Free Wi‑Fi from Wi2 and USEN (USPOT-02) where you only need to accept the term
 | Doutor / Excelsior Caffé | `DOUTOR_FREE_Wi-Fi` | Tested |
 | Skylark group (Gusto, etc.) | `.Wi2_Free_at_【SK.GROUP】` | Tested |
 | Tully's Coffee | `tullys_Wi-Fi` | Tested |
+| Café de Crié | Not officially published | Tested |
 | Starbucks | `at_STARBUCKS_Wi2` | Expected to work |
 | Renoir / Miyama Coffee | `Renoir_Miyama_Wi-Fi` | Expected to work |
 | Komeda's Coffee | `Komeda_Wi-Fi` | Not yet tested |
@@ -40,6 +41,7 @@ Tested networks have been checked at real shops for both recording the initial a
 
 - Some Skylark brands have ended their Wi‑Fi service
 - The 3-hour daily cap at Renoir / Miyama Coffee cannot be extended
+- Café de Crié does not publish its SSID or time limit
 
 Networks that need a sign-up, an email address, or a survey (for example McDonald's) are not supported.
 

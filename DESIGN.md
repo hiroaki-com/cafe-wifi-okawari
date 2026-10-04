@@ -9,7 +9,7 @@
 | 項目 | 内容 |
 |---|---|
 | 対象 PC | macOS 15 以降（標準の `/usr/bin/jq` を使うため）。Apple Silicon・Intel。実機の確認は macOS 27.0 / arm64。追加依存なし（`/bin/zsh`・`/usr/bin/curl`・`/usr/bin/jq`・launchd など OS 標準のみ） |
-| 対象 Wi‑Fi | Wi2（Wire and Wireless, AS131160）のワンタップ認証。ドトール・すかいらーく（ガスト）で実測、スタバ・ルノアールは同じ方式の見込み（§1.1）。USEN（USPOT-02）は実装済み。タリーズで入店時の検知と時間切れからの自動再認証まで実測、コメダは未確認（§1.2） |
+| 対象 Wi‑Fi | Wi2（Wire and Wireless, AS131160）のワンタップ認証。ドトール・すかいらーく（ガスト）・カフェ・ド・クリエで実測、スタバ・ルノアールは同じ方式の見込み（§1.1）。USEN（USPOT-02）は実装済み。タリーズで入店時の検知と時間切れからの自動再認証まで実測、コメダは未確認（§1.2） |
 | 時間制限 | 固定タイマーを持たず、ポータルに戻されたことを検知して再認証する。制限時間が何分でもそのまま動く。回数は数えない |
 | 前提 | 規約に同意するだけで使える網に限る。ID・パスワード・メールアドレスは扱わない。任意の入力欄（USEN の誕生年・性別）は空で送り、保存しない。OSS として公開する |
 
@@ -47,6 +47,7 @@
 | e2053c8 | OK（タリーズ、USEN）。時間切れで `consent recorded … usen (captive login)` → `re-authenticated … usen t=1s`。macOS の認証画面は出なかった。見張りの行は、認証画面での同意をシステムログで確かめてから手で書いた（入店時の検知 b' は通っていない） |
 | e2053c8（2回目） | OK（タリーズの別の店舗、USEN）。入店時に認証画面で同意すると、本ツールが `captive login seen` を書いた（b'）。時間切れで `consent recorded … usen (captive login)` → `re-authenticated … usen t=1s`、次の時間切れも `t=1s` |
 | 64644df | OK（タリーズの上と同じ店舗、USEN）。時間切れで `re-authenticated … usen t=2s`。通信が止まったのは約6秒。macOS は気づかず、`resolv.conf` も書き換わらなかった |
+| 9926e90 | OK（カフェ・ド・クリエ、Wi2 の `cafe-de-wifi`）。入店時に `consent recorded … (online)`、時間切れで `t=2s`。通信が止まったのは約11秒 |
 
 ### 1.1 主要チェーンの認証方式（2026-09-30 時点）
 
@@ -58,6 +59,7 @@
 | スターバックス | at_STARBUCKS_Wi2 | Wi2 | 同意のみ | 1時間・繰り返し利用可 | 対応見込み（JS 一致） |
 | ガスト等すかいらーく | .Wi2_Free_at_【SK.GROUP】 | Wi2 | 同意のみ | 60分・再認証で継続 | 対応（入店時の記録と自動再認証まで実測）。バーミヤンなどは 2025-06-30 で提供終了 |
 | ルノアール・ミヤマ珈琲 | Renoir_Miyama_Wi-Fi | Wi2 | 同意のみ | 1日1回3時間 | 対応見込み（JS 一致）。上限後は延長されない想定 |
+| カフェ・ド・クリエ | 公式の記載なし | Wi2 | 同意のみ | 公式の記載なし（実測は約61分） | 対応（入店時の記録と自動再認証まで実測） |
 | タリーズ | tullys_Wi-Fi | USEN | 同意（誕生年・性別は任意） | 60分 | 実装済み。入店時の検知と時間切れからの自動再認証まで実測（§1.2） |
 | コメダ珈琲 | Komeda_Wi-Fi（一部 .FREE_Wi-Fi_PASSPORT_J） | USEN | 同意（誕生年・性別は任意） | 60分・回数無制限 | 実装済み・現地未確認（§1.2） |
 | マクドナルド | 00_MCD-FREE-WIFI | 日本マクドナルド | 会員登録・ログイン | 60分 | 対象外 |
@@ -73,6 +75,7 @@
 - ルノアール: [公式の Wi‑Fi ページ](https://www.ginza-renoir.co.jp/wifi/)（「１日１回３時間無料」）、[よくあるご質問](https://www.ginza-renoir.co.jp/wifi/faq.html)（「利用規約に同意して頂くだけでワンタップで接続」）
 - タリーズ: [接続方法の案内 PDF](https://www.tullys.co.jp/wifi/pdf/usen.pdf)（USEN の画面だけを案内。60分、「利用時間を超過後、認証画面が再度表示されます」）。Wi2 側の `/freewifi/tullys/` のページは今も 200 を返すが、以前の名残で、今の店舗の網ではない
 - コメダ: [接続案内 PDF](https://www.komeda.co.jp/pdf/Komeda_Wi-Fi_guide.pdf)（2026-01 更新。USEN、60分、回数無制限）。[サービスページ](https://www.komeda.co.jp/service/convenient.html)の本文は「メールアドレスの登録か SNS 認証」のままだが、新しい PDF を採る
+- カフェ・ド・クリエ: [公式サイト](https://c-united.co.jp/crie/)に SSID・時間制限の記載なし。Wi2 の画面の文言と規約はドトールと同じ
 - マクドナルド: [公式ページ](https://www.mcdonalds.co.jp/shop/mcdwifi/)。モスバーガー: [2025-12-10 からの変更](https://www.mos.jp/topics/20251205_1/)
 
 **Wi2 のブランド差**: どのブランドも、同意ページ（`/freewifi/<ブランド>/agreement.html` か `index.html`）の JS に `xhr/login`・`login_method:"onetap"`・`agree:"1"` があり、ランディングは共通の雛形 `/freewifi/<ブランド>/landing.html` だった。本ツールはブランド名を固定していない。ただし捕捉中の転送先は `index.html` と `landing.html` しか受け付けないので、`agreement.html` へ転送するブランドがあれば `redirect failed … to=…/agreement.html` で止まる（スタバ・ルノアールで要確認）。
@@ -622,13 +625,13 @@ cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawar
 | メニューバーの印と見出し | OK。試作（別のアイコン）で、緑・黄・赤・灰の印と見出し、印のない行の文字がそろうことを9つの見本でスクリーンショットで確かめた。本実装の `menubar.js` でも、実際の記録（見張り中の USEN の網）で黄の印・`Recent` の見出し・2列の出来事が出た。押せない行の文字は色を指定しても薄い色のまま（印は薄くならない） |
 | メニューバーのツールチップ（`Next Time-out`） | 未確認。カーソルを行に載せる操作を自動で再現できなかった。状態の行は無効の項目なので、無効の項目でツールチップが出るかを実機で確かめる |
 | `menubar.js --check` | OK。手元（`ok:  9 items`）と GitHub Actions の macOS（`macos-26-arm64`。`ok:  5 items`。本体が未登録なので停止中の表示）で、画面のない CI でも `NSStatusBar` とメニューを作れた（2026-09-30） |
-| 入店時の同意の記録 | OK（ドトール・ガストで `consent recorded … (online)`） |
+| 入店時の同意の記録 | OK（ドトール・ガスト・クリエで `consent recorded … (online)`） |
 | 削除して入れ直したあとの次の時間切れの目安（§3.2） | OK（ドトール、2026-10-03）。再認証のあと削除して入れ直し、約17分後に `consent recorded … (online)` が出た実際のログで、修正前は `(online)` の行から60分（再認証から約77分）、修正後は再認証から60分を出した。実際の時間切れでの `re-authenticated` は再認証の約64分後で、修正後の目安の約4分後（その前の周期も約64分。60分の店として出す目安より、この店の時間切れは数分遅い） |
-| 実際の時間切れでの自動再認証 | OK（ドトール2回・ガスト1回。§1 の現地試験の結果） |
+| 実際の時間切れでの自動再認証 | OK（ドトール2回・ガスト1回・クリエ1回。§1 の現地試験の結果） |
 | 捕捉中の転送先 | 同意ページ `index.html` と `session_id`（ドトールで実測。ガストは再認証できたことから同じと見られる）。認証済みでは `landing.html` |
 | 転送先の `mac`・`ip` | 捕捉中の値が `ifconfig en0` の ether・`ipconfig getifaddr en0` と一致 |
-| Wi2 の網の DHCP のドメイン名 | `wi2.ne.jp`（ドトール・ガスト）。ほかのブランドは未確認 |
-| 時間切れまでの時間 | 同意から約61〜63分（4回） |
+| Wi2 の網の DHCP のドメイン名 | `wi2.ne.jp`（ドトール・ガスト・クリエ）。ほかのブランドは未確認 |
+| 時間切れまでの時間 | 同意から約61〜63分（5回） |
 | 実際の店のゲートウェイの MAC | 取れる。VRRP の仮想 MAC だった |
 | 実際の `launchctl` での再導入・起動の間隔 | 再導入は3回続けて成功。10秒の間隔で起動（`run interval = 10 seconds`） |
 | `/var/run/resolv.conf` が書き換わる時刻 | 認証画面で同意して通信できるようになった時刻（`Online (websheet: success)`）と一致（Wi2・USEN とも）。リースの更新と時間切れからの再認証では書き換わらなかった（Wi2・USEN とも。再認証はそれぞれ1回） |
