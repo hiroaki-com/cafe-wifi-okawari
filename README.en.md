@@ -62,6 +62,10 @@ This is an unofficial tool. It is not endorsed or recommended by Wi2, USEN, or a
 
 Before installing, please read the full [Usage notes and automatic acceptance](USAGE-NOTES.en.md).
 
+### Etiquette
+
+This tool saves you the trouble of reconnecting while you work; it is not meant to encourage long stays. Even when the Wi‑Fi stays connected, the shop's rules, such as time limits on stays, still apply. When the shop is busy, give up your seat early and use the usual good manners so everyone can enjoy the shop.
+
 ## Install and use
 
 It runs with your logged-in user's permissions. It talks to Apple's connectivity check page and the Wi‑Fi authentication service, and sends no information to the author's server. It does not handle IDs, passwords, or email addresses. You can inspect the [published scripts](cafe-wifi-okawari.sh) and use the [uninstall command](#uninstall) to remove the background job when you no longer need it.
