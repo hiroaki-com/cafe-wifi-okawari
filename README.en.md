@@ -243,7 +243,7 @@ Starts and manages the tool
 
 ### Each time-out briefly interrupts your connection
 
-At each time-out (at Doutor, about 60 minutes after you accept or the tool re-authenticates), your connection is down until re-authentication completes: up to 10 seconds for the tool to notice, plus a few seconds after it sends the acceptance, so expect at most a dozen or so seconds (measured: about 6 seconds at Gusto and Tully's).
+At each time-out (at Doutor, about 60 minutes after you accept or the tool re-authenticates), your connection is down until re-authentication completes: up to 10 seconds for the tool to notice, plus a few seconds after it sends the acceptance, so expect at most a dozen or so seconds (measured: about 4 seconds at Komeda, about 6 seconds at Gusto and Tully's, and about 11 seconds at Café de Crié).
 
 The Wi‑Fi stays connected and your IP address does not change. Many apps carry on once the connection is back, but the effect of the gap varies by app. For example:
 
