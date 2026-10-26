@@ -20,6 +20,7 @@ Do not include MAC/IP addresses (including the gateway), SSIDs, shop names/locat
 - CPU（Apple Silicon / Intel / 不明） / CPU (Apple Silicon / Intel / unknown):
 - ツールの版（`status` の `Version` 行。Gitで導入した場合はコミットでも可。分かる場合だけ。取得日時は不要） / Tool version (the `Version` line of `status`; a commit is fine for Git installs; if known; no download date):
 - メニューバーあり・なし / With or without menu bar:
+- ネットワークの診断あり・なし / With or without network check:
 - Wi2 / USEN / 不明 / unknown:
 - VPN・プライベートリレーの使用有無 / VPN / Private Relay enabled:
 

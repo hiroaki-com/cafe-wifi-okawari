@@ -20,6 +20,7 @@ Do not include MAC/IP addresses (including the gateway), SSIDs, shop names/locat
 - CPU（Apple Silicon / Intel / 不明） / CPU (Apple Silicon / Intel / unknown):
 - ツールの版（`status` の `Version` 行。Gitで導入した場合はコミットでも可。分かる場合だけ。取得日時は不要） / Tool version (the `Version` line of `status`; a commit is fine for Git installs; if known; no download date):
 - メニューバーあり・なし / With or without menu bar:
+- ネットワークの診断あり・なし / With or without network check:
 - Wi2 / USEN / 不明 / unknown:
 - VPN・プライベートリレーの使用有無 / VPN / Private Relay enabled:
 
@@ -32,6 +33,7 @@ Use “passed / failed / not tested” for each item. Distinguish automatic reco
 - 初回の手動同意の記録 / Recording the first manual acceptance:
 - 実際の時間切れ後の自動再接続（試した回数・成功回数） / Automatic reconnection after a real time-out (attempts / successes):
 - メニューバーの状態表示 / Menu bar status:
+- ネットワークの診断（危険・注意が誤って出なかったか。出た項目の ID と値の語だけ） / Network check (no false risks or notices; only the ID and value words of any that appeared):
 - 更新 / Update:
 - 削除 / Uninstall:
 
