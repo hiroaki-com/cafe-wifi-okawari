@@ -1,5 +1,6 @@
 #!/bin/zsh
 # 使い方: zsh install.sh（導入・更新） / zsh install.sh --no-menubar（メニューバーの表示なしで導入・更新）
+#         zsh install.sh --no-netcheck（ネットワークの診断なしで導入・更新。--no-menubar と組み合わせられる）
 #         zsh install.sh status（動作の確認） / zsh install.sh uninstall（削除。ログは残す）
 # ユーザー権限の LaunchAgent として登録する。sudo は不要。
 # 導入時に自身を $ctl へ複製する。取得したフォルダを消しても、複製で status・uninstall ができる（導入・更新は取得したフォルダからだけ。DESIGN.md §6.1）。
@@ -16,14 +17,17 @@ mlabel=$label.menubar
 mbin=$HOME/.local/bin/cafe-wifi-okawari-menubar
 mplist=$HOME/Library/LaunchAgents/$mlabel.plist
 every=10   # 起動の間隔（秒）。launchd は既定で10秒より短い間隔ではジョブを起動しない
+# ネットワークの診断（DESIGN.md §3.3）。本体とは別の LaunchAgent で、本体の動作に関係しない。結果は nc、Check Now の要求は nc.now
+nlabel=$label.netcheck
+nbin=$HOME/.local/bin/cafe-wifi-okawari-netcheck
+nplist=$HOME/Library/LaunchAgents/$nlabel.plist
+nc=$HOME/Library/Caches/cafe-wifi-okawari.netcheck
 # メッセージは英語のみ。
 # 本体の版（VERSION=）を読む。$1=本体のパス。読めなければ空
 ver() { sed -n 's/^VERSION=\([0-9][0-9.]*\).*/\1/p' "$1" 2>/dev/null | head -n 1 }
 
-menubar=1
+menubar=1 netcheck=1
 case ${1-} in
-  '') ;;
-  --no-menubar) menubar=0 ;;
   status)
     # 登録の状態・メニューバーの表示・今の接続先・同意済みの接続先・最後の認証と次の時間切れの目安・ログの最新5行を表示する（英語のみ）。
     # 通信はしない（今の接続先は経路表と ARP キャッシュから、本体の netid と同じ方法で読む）。登録がなければ 1 で終わる。
@@ -73,6 +77,15 @@ case ${1-} in
       awk -v n="$net" '$1 == n && $2 != "-" { f = 1 } END { exit !f }' "$HOME/Library/Caches/cafe-wifi-okawari.chain" 2>/dev/null && wl=1
     else
       row 'Current network' "gateway $net, not accepted: auto re-authentication off"
+    fi
+    # ネットワークの診断。注意・危険の行は、結果が今の接続先のもので、60秒以内に書かれたときだけ（ID と値の語だけを出す）
+    if [[ ! -e $nplist ]]; then row 'Network check' 'not installed'
+    elif launchctl print gui/$UID/$nlabel >/dev/null 2>&1; then row 'Network check' running
+    else row 'Network check' 'not running'; fi
+    if [[ -n $net && -e $nplist && $(head -n 1 $nc 2>/dev/null) == "v1 $net "* ]] && (( now - $(stat -f %m $nc) <= 60 )); then
+      awk 'NR > 1 && $2 ~ /^(risk|notice)$/ && $1 $3 ~ /^[a-z0-9-]+$/ {
+        n = ""; for (i = 4; i <= NF; i++) if ($i ~ /^n=[0-9]+$/) n = " (" substr($i, 3) ")"
+        print "  " ($2 == "risk" ? "Risk" : "Notice") ": " $1 " " $3 n }' $nc
     fi
 
     n=$(grep -c . "$kn" 2>/dev/null) || n=0
@@ -127,14 +140,21 @@ case ${1-} in
   uninstall)
     launchctl bootout gui/$UID/$label 2>/dev/null || true
     launchctl bootout gui/$UID/$mlabel 2>/dev/null || true
-    rm -f $plist $bin $ctl $mplist $mbin{.sh,.js,.png,@2x.png} $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen,.probe,.chain} \
-      $HOME/Library/Caches/cafe-wifi-okawari.chain.*(N)
+    launchctl bootout gui/$UID/$nlabel 2>/dev/null || true
+    rm -f $plist $bin $ctl $mplist $mbin{.sh,.js,.png,@2x.png} $nplist $nbin $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen,.probe,.chain} \
+      $HOME/Library/Caches/cafe-wifi-okawari.chain.*(N) $nc{,.*(N)}
     rm -rf "${kn:h}"   # 同意した接続先の記録
-    print -r -- "Uninstalled: removed the LaunchAgents ($label, $mlabel), the programs and the list of accepted networks"
+    print -r -- "Uninstalled: removed the LaunchAgents ($label, $mlabel, $nlabel), the programs and the list of accepted networks"
     print -r -- "  Log kept: $log (delete it by hand if you no longer need it)"
     exit 0 ;;
-  *) print -u2 -r -- "usage: $0 [--no-menubar|status|uninstall]"; exit 2 ;;
 esac
+for a; do
+  case $a in
+    --no-menubar) menubar=0 ;;
+    --no-netcheck) netcheck=0 ;;
+    *) print -u2 -r -- "usage: $0 [--no-menubar] [--no-netcheck] | status | uninstall"; exit 2 ;;
+  esac
+done
 
 # 導入・更新は取得したフォルダの install.sh からだけ（$ctl には本体などが並んでいない）
 src=${0:A:h}
@@ -201,10 +221,33 @@ else
   launchctl bootout gui/$UID/$mlabel 2>/dev/null || true
   rm -f $mplist $mbin{.sh,.js,.png,@2x.png}
 fi
+# ネットワークの診断（DESIGN.md §3.3）。10秒ごとと、DNS の設定が変わったとき・メニューバーの Check Now の要求ファイルができたときに動かす。
+# 標準出力・標準エラーはログに向けない（網やプロセスから来た文をログに入れない。診断は自分で1行ずつ追記する）
+if (( netcheck )); then
+  install -m 755 $src/netcheck.sh $nbin
+  rm -f $nplist
+  plutil -create xml1 $nplist
+  plutil -insert Label -string $nlabel $nplist
+  plutil -insert ProgramArguments -array $nplist
+  for a in /bin/zsh $nbin; do plutil -insert ProgramArguments -string $a -append $nplist; done
+  plutil -insert StartInterval -integer $every $nplist
+  plutil -insert RunAtLoad -bool true $nplist
+  plutil -insert WatchPaths -array $nplist
+  for a in /var/run/resolv.conf $nc.now; do plutil -insert WatchPaths -string $a -append $nplist; done
+  plutil -insert ProcessType -string Background $nplist
+  plutil -insert LowPriorityIO -bool true $nplist
+  plutil -lint -s $nplist
+  load $nplist $nlabel
+else
+  launchctl bootout gui/$UID/$nlabel 2>/dev/null || true
+  rm -f $nplist $nbin $nc{,.*(N)}
+fi
 print -r -- "$verb: $bin (version $(ver $bin))"
 print -r -- "  Runs every $every s, and whenever the network settings change (LaunchAgent $label)"
 if (( menubar )); then print -r -- "  Menu bar: coffee cup icon (LaunchAgent $mlabel)"
 else print -r -- "  Menu bar: not installed (--no-menubar)"; fi
+if (( netcheck )); then print -r -- "  Network check: checks this Wi-Fi and this Mac every $every s without sending anything (LaunchAgent $nlabel)"
+else print -r -- "  Network check: not installed (--no-netcheck)"; fi
 print -r -- "  Log: $log"
 print -r -- "  Check it with: zsh ~/.local/bin/cafe-wifi-okawari-ctl status"
 print -r -- "  Uninstall with: zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall"

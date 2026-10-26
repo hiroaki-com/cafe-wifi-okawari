@@ -1,8 +1,9 @@
 #!/bin/zsh
 # メニューバーに出す状態を決める（DESIGN.md §3.2）。判定はすべてここで行い、menubar.js は表示するだけ。
-# 出力: 1行目はアイコンの種類（off・warn・wait・check・on）。2行目以降はメニューの行で、タブで区切った
-# 「種類 表示 [右の列] [ツールチップ]」。種類は head（見出し）・green・yellow・red・gray（左の印の色）・-（印なし）。
-# 空行は区切り線。通信しない。本体の記録ファイルとログは読むだけ。表示は英語のみ。
+# 出力: 1行目はアイコンの種類（off・warn・wait・check・on）。ネットワークの診断で危険があれば、空白と risk を足す（⚠）。
+# 2行目以降はメニューの行で、タブで区切った「種類 表示 [右の列] [ツールチップ]」。種類は head（見出し）・green・yellow・red・
+# gray（左の印の色）・-（印なし）。空行は区切り線。種類の前に > が付いた行は、直前の > のない行のサブメニューの行（> だけなら区切り線）。
+# 通信しない。本体の記録ファイルとログ、診断の結果ファイルは読むだけ。表示は英語のみ。
 set -u
 setopt extended_glob   # [A-Za-z0-9_-]## と ~
 zmodload zsh/datetime   # EPOCHSECONDS・strftime
@@ -147,6 +148,94 @@ else
   kind=off rows=("head${TB}cafe-wifi-okawari" "gray${TB}Stopped" "-${TB}Run install.sh to Restart")
 fi
 
+# ネットワークの診断（§3.3）。診断の LaunchAgent が入っていなければ何も出さない（--no-netcheck は今のまま）。本体の停止中も出す。
+# 読むのは netcheck.sh の結果ファイルと Check Now の要求ファイルだけ。表にない ID・段階・値の行は読み捨てる。
+# 「⚠」（1行目の risk）は、結果が今の接続先のもので、危険の行があるときだけ
+risk=
+if [[ -e $HOME/Library/LaunchAgents/$label.netcheck.plist ]]; then
+  [[ $kind == off ]] && netid   # 停止中は今の接続先を求めていない
+  NC=$ST.netcheck nr=() sub=() nk=0 nn=0 nd=gray
+  [[ -r $NC ]] && { nr=(${(f)"$(<$NC)"}) }
+  zstat -A nm +mtime $NC 2>/dev/null || nm=(0)
+  if [[ -z $net ]]; then ns=Off
+  elif (( ! $#nr )); then ns='Checking…'
+  elif (( now - nm[1] > 60 )); then ns='Not Running'
+  elif [[ -e $NC.now || $nr[1] != "v1 $net "* ]]; then ns='Checking…'
+  else
+    typeset -A lb=(wifi 'Wi‑Fi Security' gateway Gateway routes Routes proxy Proxy ipv6 'IPv6 Routers' firewall Firewall
+      airplay 'AirPlay Receiver' sharing Sharing open 'Open to This Network' updates 'macOS Updates'
+      rootcerts 'Added Root Certificates' vpn VPN privaddr 'Private Wi‑Fi Address')
+    typeset -A vl=(ok OK none None off Off on On stealth On unknown Unknown not-wifi 'Not Wi‑Fi' changed Changed
+      extra 'Extra Routes' public 'Public Subnet' bypass 'Bypasses VPN' autodiscovery 'Auto-Discovery On' set Set
+      multiple Multiple partial Partial uptodate 'Up to Date' not-checked 'Not Checked Recently'
+      auto-off 'Auto Security Updates Off' remote-login 'Remote Login' file-sharing 'File Sharing'
+      remote-management 'Remote Management' screen-sharing 'Screen Sharing' ollama Ollama lmstudio 'LM Studio'
+      jupyter Jupyter mcp-inspector 'MCP Inspector' blocked 'Blocked by Firewall' apps Apps available Available added Added)
+    typeset -A dc=(ok green notice yellow risk red unknown gray info -)
+    # 理由（ツールチップ）と、注意・危険の行の下に出す案内。キーは「ID 値」か ID
+    typeset -A tp=(
+      'wifi none' "This Wi‑Fi has no encryption. People nearby can read unencrypted traffic, and a fake network can look the same."
+      'wifi unknown' "Only unencrypted Wi‑Fi has been checked so far. Other kinds of security show as Unknown."
+      'gateway changed' "The router's hardware address changed during this connection. Another device may be posing as the router."
+      'routes extra' "This Wi‑Fi added routes for some addresses."
+      'routes public' "This Wi‑Fi uses public addresses for its local network."
+      'routes bypass' "Routes from this Wi‑Fi send some traffic outside your VPN."
+      'proxy autodiscovery' "This Mac looks for a proxy on each network, so a network can choose where your web traffic goes."
+      'proxy set' "A proxy is set on this Mac. That's fine if you or your workplace set it."
+      'ipv6 multiple' "More than one IPv6 router is announcing itself on this Wi‑Fi."
+      'ipv6 changed' "The IPv6 router changed during this connection."
+      'firewall stealth' "Stealth mode is on."
+      'firewall on' "Stealth mode is off."
+      'airplay on' "Other devices on this Wi‑Fi may be able to reach AirPlay Receiver."
+      sharing "Other devices on this Wi‑Fi can reach this sharing service."
+      'updates not-checked' "Software Update hasn't checked for updates in over 7 days."
+      'updates auto-off' "Security Responses or system data files aren't installed automatically."
+      'rootcerts added' "Added root certificates can let something read secure connections. That's fine if you or your workplace added them."
+      'vpn partial' "A VPN is connected, but most traffic goes through this Wi‑Fi."
+      'privaddr off' "Shops can tell this is the same Mac across visits. If you turn it on, the shop sees a new device and you accept the terms once again.")
+    typeset -A gd=(
+      'wifi none' 'Not encrypted. Use a VPN, and only HTTPS sites.'
+      'gateway changed' 'Someone may be intercepting this Wi‑Fi. Disconnect, or use a VPN.'
+      'routes bypass' 'Some traffic skips your VPN. Disconnect from this Wi‑Fi.'
+      open 'Apps on this Mac accept connections from this Wi‑Fi. Limit them to this Mac (127.0.0.1).'
+      'updates auto-off' 'Turn on security updates in System Settings › Software Update.'
+      'updates available' 'Install macOS updates.'
+      'firewall off' 'Turn on the firewall in System Settings.'
+      'airplay on' 'Turn off AirPlay Receiver in System Settings.'
+      sharing 'Turn off sharing on public Wi‑Fi.')
+    typeset -A nv=()
+    for x in ${nr[2,-1]}; do nv[${x%% *}]=${x#* }; done
+    sub=(">head${TB}Checked $(strftime '%H:%M' $nm[1])")
+    for g in 'This Network:wifi gateway routes proxy ipv6' 'This Mac:firewall airplay sharing open updates rootcerts vpn' 'Privacy:privaddr'; do
+      sub+=(">head$TB${g%%:*}")
+      for id in ${=g#*:}; do
+        y=(${=nv[$id]-}) n= p=
+        for x in ${y[3,-1]}; do [[ $x == n=<-> ]] && n=${x#n=}; [[ $x == p=[0-9,]## ]] && p=${x#p=}; done
+        [[ -n ${dc[${y[1]-}]-} && -n ${vl[${y[2]-}]-} ]] || continue
+        s=$vl[$y[2]]
+        if [[ $y[2] == (apps|available|added) ]]; then
+          [[ -n $n ]] || continue
+          s="$n $s"; [[ $s == '1 Apps' ]] && s='1 App'
+        fi
+        tip=${tp[$id $y[2]]-}; [[ -z $tip && $y[1] == (notice|risk) ]] && tip=${tp[$id]-}
+        [[ $id == open && -n $p ]] && tip="Ports: ${p//,/, }"
+        sub+=(">$dc[$y[1]]$TB$lb[$id]$TB$s${tip:+$TB$tip}")
+        [[ $y[1] == (notice|risk) ]] || continue
+        [[ $y[1] == risk ]] && (( ++nk )) || (( ++nn ))
+        # 暗号化なしの網でも、VPN を使っていれば案内しない
+        [[ $id == wifi && ${nv[vpn]-} == 'ok on' ]] && continue
+        x=${gd[$id $y[2]]-${gd[$id]-}}; [[ -n $x ]] && sub+=(">-$TB$x")
+      done
+      [[ $g == Privacy:* ]] || sub+='>'
+    done
+    if (( nk )); then nd=red ns="$nk Risk${${nk:#1}:+s}" risk=' risk'
+    elif (( nn )); then nd=yellow ns="$nn Notice${${nn:#1}:+s}"
+    else nd=green ns='No Issues Found'; fi
+  fi
+  rows+=('' "$nd${TB}Network Check$TB$ns" $sub)
+  [[ -n $risk ]] && rows+="-${TB}Possible interception on this Wi‑Fi. See Network Check."
+fi
+
 # 直近の出来事（新しい順に3件）。時刻・種類・ブランド・秒数だけ（MAC・IP は出さない）。USEN はチェーンが分かっている接続先ならチェーン
 typeset -A nc=(); [[ -r $CH ]] && while read -r x y z; do [[ -n ${cname[$y]-} ]] && nc[$x]=$y; done < "$CH"
 strftime -s today %F $now; strftime -r -s md %F $today; strftime -s yday %F $(( md - 1 ))
@@ -167,5 +256,5 @@ for l in ${${(Oa)hits}[1,3]}; do
   rows+="-$TB$d ${l[12,16]}$TB$e"
 done
 
-print -r -- $kind
+print -r -- $kind$risk
 print -rl -- "${rows[@]}"

@@ -68,7 +68,7 @@ This tool saves you the trouble of reconnecting while you work; it is not meant 
 
 ## Install and use
 
-It runs with your logged-in user's permissions. It talks to Apple's connectivity check page and the Wi‑Fi authentication service, and sends no information to the author's server. It does not handle IDs, passwords, or email addresses. You can inspect the [published scripts](cafe-wifi-okawari.sh) and use the [uninstall command](#uninstall) to remove the background job when you no longer need it.
+It runs with your logged-in user's permissions. It talks to Apple's connectivity check page and the Wi‑Fi authentication service, and sends no information to the author's server. It does not handle IDs, passwords, or email addresses. The [network check](#network-check) installed with it sends nothing. You can inspect the [published scripts](cafe-wifi-okawari.sh) and use the [uninstall command](#uninstall) to remove the background job when you no longer need it.
 
 ### 1. Install
 
@@ -142,6 +142,28 @@ Click it to see the current Wi‑Fi's name, whether automatic reconnection is on
 
 "Hide from Menu Bar" quits the icon; it comes back the next time you log in or run the install steps again. The tool itself keeps running either way. If you do not want the icon at all, reinstall following the install steps, adding ` --no-menubar` before you press Enter (this removes only the icon).
 
+### Network check
+
+Every 10 seconds, without sending anything, it looks at the Wi‑Fi you are on and this Mac's settings, and shows the result under "Network Check" in the menu. You open it only when you want to look; a ⚠ appears to the right of the icon only when it sees signs of an attack (e.g. ✓⚠). It never shows a dialog.
+
+| What it looks at | Examples of a notice (yellow) or a risk (red) |
+|---|---|
+| Wi‑Fi encryption | No encryption (most free Wi‑Fi) is a notice. It suggests a VPN and HTTPS-only sites |
+| The router (gateway) | The router's hardware address changes while you are connected and stays changed: a risk (another device may be posing as the router) |
+| Routes | While you use a VPN, routes that send some traffic straight over the Wi‑Fi are a risk. Without a VPN, extra routes are a notice |
+| Proxy, IPv6 routers | Proxy auto-discovery or a proxy setting, and several or changed IPv6 routers, are notices |
+| Firewall, AirPlay Receiver, sharing | A turned-off firewall, or AirPlay Receiver or Screen Sharing turned on, are notices |
+| Apps listening on this Mac | Apps such as Ollama that others on the same Wi‑Fi can reach are a notice (only the port numbers are shown) |
+| macOS updates, added root certificates | Available updates, no check for over 7 days, automatic security responses turned off, or added root certificates are notices |
+| Private Wi‑Fi Address | Shown as On or Off, for information only |
+
+- Green means "nothing wrong was found in what it looked at", not that the network is safe. On unencrypted Wi‑Fi, others may read your traffic even when everything is green
+- It only looks. It does not change settings, block attacks, or probe other devices on the shop's Wi‑Fi. Finding a risk does not stop automatic reconnection
+- It cannot tell when another device was already in the middle before you joined, or when the shop's Wi‑Fi itself is fake
+- The menu and log never show this Mac's MAC or IP address, or the Wi‑Fi name
+- Whether it shows false risks on real shop Wi‑Fi has not been checked yet ([DESIGN.md](DESIGN.md) §3.3 and §7, in Japanese)
+- If you do not want it, reinstall following the install steps, adding ` --no-netcheck` before you press Enter (this removes only the network check; you can also add ` --no-menubar`)
+
 ### Check that it is working
 
 Usually the coffee cup in the menu bar is all you need. If the cup is shown and the dot next to the shop's Wi‑Fi name is green, automatic reconnection is on.
@@ -163,6 +185,8 @@ Version          1.0.0
 Last exit code   0 (412 runs since loaded)
 Menu bar         running
 Current network  gateway 0:0:5e:0:1:1 (doutor), accepted: auto re-authentication on
+Network check    running
+  Notice: wifi none
 Accepted         1 network (brand: doutor)
 Last auth        2026-05-12 10:05:12 (12 min ago), consent recorded on doutor
 Next time-out    around 11:05, in 47 min (if the shop's limit is 60 minutes)
@@ -177,6 +201,7 @@ The main fields mean:
 | Field | Meaning |
 |---|---|
 | `Menu bar` | Whether the menu bar icon is running (`running`, `not running`, or `not installed`) |
+| `Network check` | Whether the network check is running (`running`, `not running`, or `not installed`). The lines below it are notices (`Notice`) and risks (`Risk`) on the current network, in the same words as the log |
 | `Current network` | Whether the network you are on now is one you accepted. The tool identifies a network by its gateway's MAC address. While the tool is watching a USEN network, it says so |
 | `Last auth` | When your own acceptance was recorded, your acceptance on the login page was confirmed, or the tool last re-accepted, on any network |
 | `Next time-out` | An estimate from the last authentication on the current network, shown under the same conditions as in the menu bar (on USEN Wi‑Fi you joined for the first time, after the menu bar has told the chain) |
@@ -195,7 +220,7 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 
 ### How it works
 
-The overall structure is shown below. launchd, which comes with macOS, starts two parts: the main script and the menu bar display.
+The overall structure is shown below. launchd, which comes with macOS, starts three parts: the main script, the network check, and the menu bar display.
 
 ```text
 launchd [macOS built-in]
@@ -216,13 +241,21 @@ Starts and manages the tool
 |   +-- State files and log [created at run time]
 |       Accepted networks, attempt results, etc.
 |
++-- netcheck.sh [added at install]
+|   Network check (sends nothing)
+|   |
+|   +-- macOS network information and settings [macOS built-in]
+|   |   Read only
+|   |
+|   +-- Check results and log [created at run time]
+|
 +-- menubar.js [added at install]
     Stays running, shows the icon and menu
     |
     +-- menubar.sh [added at install]
         Decides which state to show
         |
-        +-- State files and log [created at run time]
+        +-- State files, log, and check results [created at run time]
         |   Read only
         |
         +-- Network information and system log [macOS built-in]
@@ -275,7 +308,7 @@ Dialogs appear in the middle of the screen and close by themselves after 2 minut
 
 ### Other notes
 
-- Free Wi‑Fi is unencrypted: this tool only reconnects; please protect your traffic with HTTPS or a VPN.
+- Free Wi‑Fi is unencrypted: this tool only reconnects; please protect your traffic with HTTPS or a VPN. The [network check](#network-check) only shows warning signs; it does not protect your traffic.
 - Terms of use: the tool has no way to lift server-side time or usage limits, and it does not spoof MAC addresses or open multiple sessions. For how it re-sends the acceptance without showing the terms page, please read [Usage notes and automatic acceptance](USAGE-NOTES.en.md).
 - Unofficial and not affiliated with any of the companies above. It may break if a portal changes. How it relates to the terms and the law is reviewed in [DESIGN.md](DESIGN.md) §4 (Japanese).
 
@@ -285,7 +318,7 @@ Dialogs appear in the middle of the screen and close by themselves after 2 minut
 zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall
 ```
 
-This also removes the menu bar icon, the list of networks you accepted, and the USEN networks being watched. The log at `~/Library/Logs/cafe-wifi-okawari.log` is kept; delete it by hand if you no longer need it.
+This also removes the menu bar icon, the network check, the list of networks you accepted, and the USEN networks being watched. The log at `~/Library/Logs/cafe-wifi-okawari.log` is kept; delete it by hand if you no longer need it.
 
 ## Troubleshooting
 
@@ -328,6 +361,7 @@ tail ~/Library/Logs/cafe-wifi-okawari.log
 | `portal check failed xN` | The tool could not check the USEN page (network error or a response other than 200). It sends nothing |
 | `portal mismatch xN mac=… ip=…` | The login page was for a different device (MAC or IP address not this Mac's), so the tool sent nothing |
 | `not free wi-fi xN` | A Wi2 network that is not a free "accept the terms" Wi‑Fi. The tool does nothing there |
+| `netcheck <item> notice … net=…` / `netcheck <item> risk … net=…` | The network check found a notice or a risk (e.g. `netcheck wifi notice none`). When it clears, the tool writes `netcheck <item> ok …` or `unknown …`. When the router changes, `to=` keeps the address it changed to. Wi‑Fi names and app names are never written |
 | `probe failed xN net=… curl=… http=…` | On a Wi2, recorded, or pending network, the connection state could not be checked (non-zero `curl` means a network error; `http` is an unexpected response). The tool sends nothing |
 
 On repeated failures, the retry interval backs off from 30 seconds up to 30 minutes. Every failure is logged (failed status checks only on the 1st, 2nd, 4th, 8th…), and you get a single dialog (plus one more if it stops after repeated refusals). Moving to another shop resets the backoff.

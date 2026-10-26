@@ -8,6 +8,8 @@ sa.includeStandardAdditions = true
 const self = $.NSURL.fileURLWithPath(ObjC.deepUnwrap($.NSProcessInfo.processInfo.arguments).find(a => a.endsWith('.js'))).path.js
 const SH = self.replace(/\.js$/, '.sh')
 const LOG = $.NSHomeDirectory().js + '/Library/Logs/cafe-wifi-okawari.log'
+// Check Now の要求ファイル（netcheck.sh の LaunchAgent が WatchPaths で見ている。DESIGN.md §3.3）
+const REQ = $.NSHomeDirectory().js + '/Library/Caches/cafe-wifi-okawari.netcheck.now'
 // アイコンの素材（1x・2x の組）。導入先では .js と同じ名前の .png・@2x.png、リポジトリでは assets/icon の素材
 const ICON = [self.replace(/\.js$/, ''), self.replace(/[^/]*$/, 'assets/icon/menuBarTemplate')].find(p => $.NSFileManager.defaultManager.fileExistsAtPath(p + '.png'))
 // アイコンの種類ごとの印。これ以外の値と実行の失敗は off として扱う
@@ -44,30 +46,50 @@ const cols = $.NSDictionary.dictionaryWithObjectsForKeys(
   $([$.NSFont.menuFontOfSize(0), ps, $.NSColor.disabledControlTextColor]),
   $([$.NSFontAttributeName, $.NSParagraphStyleAttributeName, $.NSForegroundColorAttributeName]))
 
+// 1行を m（メニューかサブメニュー）に足す。状態の行は押せない行として足し、その項目を返す（見出し・区切り線は null）
+function add(m, l) {
+  if (!l) { m.addItem($.NSMenuItem.separatorItem); return null }
+  const [kind, text, right, tip] = l.split('\t')
+  if (kind === 'head') { m.addItem($.NSMenuItem.sectionHeaderWithTitle(text)); return null }   // macOS 14 以降
+  const i = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent(right ? text + '\t' + right : text, null, '')
+  if (right) {
+    // alloc の直後では initWithString:attributes: が橋渡しされない（macOS 27）ので、new で作って中身と属性を入れる
+    const s = $.NSMutableAttributedString.new
+    s.replaceCharactersInRangeWithString($.NSMakeRange(0, 0), i.title)
+    s.setAttributesRange(cols, $.NSMakeRange(0, s.length))
+    i.attributedTitle = s
+  }
+  i.image = DOT.hasOwnProperty(kind) ? DOT[kind] : BLANK   // 色以外の種類（-）は印なし
+  if (tip) i.toolTip = tip
+  i.enabled = false   // 状態と案内の行は押せない
+  m.addItem(i)
+  return i
+}
+
 function refresh() {
   let out = ['off']
   try { out = sa.doShellScript("/bin/zsh '" + SH.replace(/'/g, "'\\''") + "'", { alteringLineEndings: false }).replace(/\n$/, '').split('\n') } catch (e) {}
-  const k = MARK.hasOwnProperty(out[0]) ? out[0] : 'off'
+  const [k0, risk] = out[0].split(' ')
+  const k = MARK.hasOwnProperty(k0) ? k0 : 'off'
   item.button.appearsDisabled = k === 'off'
-  item.button.title = MARK[k]
+  item.button.title = risk === 'risk' ? (MARK[k] || ' ') + '⚠' : MARK[k]   // ネットワークの診断の危険（例: ✓⚠）
 
   menu.removeAllItems
+  // > で始まる行は、直前の > のない行のサブメニューの行。サブメニューを持つ行だけを押せる（開ける）項目にする
+  let parent = null, sub = null
+  const subs = []
   for (const l of out.slice(1)) {
-    if (!l) { menu.addItem($.NSMenuItem.separatorItem); continue }
-    const [kind, text, right, tip] = l.split('\t')
-    if (kind === 'head') { menu.addItem($.NSMenuItem.sectionHeaderWithTitle(text)); continue }   // macOS 14 以降
-    const m = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent(right ? text + '\t' + right : text, null, '')
-    if (right) {
-      // alloc の直後では initWithString:attributes: が橋渡しされない（macOS 27）ので、new で作って中身と属性を入れる
-      const s = $.NSMutableAttributedString.new
-      s.replaceCharactersInRangeWithString($.NSMakeRange(0, 0), m.title)
-      s.setAttributesRange(cols, $.NSMakeRange(0, s.length))
-      m.attributedTitle = s
-    }
-    m.image = DOT.hasOwnProperty(kind) ? DOT[kind] : BLANK   // 色以外の種類（-）は印なし
-    if (tip) m.toolTip = tip
-    m.enabled = false   // 状態と案内の行は押せない
-    menu.addItem(m)
+    if (!l.startsWith('>')) { parent = add(menu, l); sub = null; continue }
+    if (!parent) continue
+    if (!sub) { sub = $.NSMenu.alloc.init; sub.autoenablesItems = false; parent.submenu = sub; parent.enabled = true; subs.push(sub) }
+    add(sub, l.slice(1))
+  }
+  // サブメニューの末尾の操作（今はネットワークの診断だけ）。押すと要求ファイルを作り、診断の LaunchAgent がすぐ動く
+  for (const m of subs) {
+    m.addItem($.NSMenuItem.separatorItem)
+    const now = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent('Check Now', 'checkNow:', '')
+    now.target = handler
+    m.addItem(now)
   }
   menu.addItem($.NSMenuItem.separatorItem)
   const open = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent('Open Log', 'openLog:', '')
@@ -87,6 +109,8 @@ ObjC.registerSubclass({
     'tick:': { types: ['void', ['id']], implementation: () => refresh() },
     'menuNeedsUpdate:': { types: ['void', ['id']], implementation: () => refresh() },   // メニューを開く直前
     'openLog:': { types: ['void', ['id']], implementation: () => $.NSWorkspace.sharedWorkspace.openURL($.NSURL.fileURLWithPath(LOG)) },
+    // シェルを呼ばずに空の要求ファイルを作る（中身は読まれない）
+    'checkNow:': { types: ['void', ['id']], implementation: () => $.NSFileManager.defaultManager.createFileAtPathContentsAttributes(REQ, $.NSData.data, $.NSDictionary.dictionary) },
   },
 })
 const handler = $.OkawariMenubar.alloc.init

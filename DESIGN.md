@@ -215,10 +215,11 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | ファイル | 役割 |
 |---|---|
 | `cafe-wifi-okawari.sh` | 検知と再認証（唯一のロジック）。導入先は `~/.local/bin/cafe-wifi-okawari` |
-| `install.sh` | 導入・更新・状態の確認・削除（メッセージは英語のみ）。既定でメニューバーの表示（§3.2）も入れる（`--no-menubar` なら入れず、入っていれば消す）。plist を `$HOME` に合わせて `plutil` で生成する（パスに `&` などがあっても壊れない）。`StartInterval=10`、`WatchPaths=/var/run/resolv.conf`（認証画面で同意して通信できるようになった時刻に書き換わる）、`ProcessType=Background`。本体は `/bin/zsh <本体>` として起動する（§6.1）。導入時に自身を `~/.local/bin/cafe-wifi-okawari-ctl` へ複製し、そこからは `status`・`uninstall` だけを受け付ける（§6.1）。完了表示と `status` に本体の `VERSION` を出す。`bootout` 直後の `bootstrap` の一時失敗は最大10回やり直す。`status` は通信せずに、登録と最後の終了コード・メニューバーの表示の状態・今の接続先（本体の `netid` と同じく経路表と ARP から）が同意済みか・同意済みの件数とブランド・最後の認証の時刻と次の時間切れの目安（§3.2 と同じ条件を満たすときだけ）・ログの最新5行を出す。見張り中の網（24時間以内）は別に表示する（§3.1） |
+| `install.sh` | 導入・更新・状態の確認・削除（メッセージは英語のみ）。既定でメニューバーの表示（§3.2）とネットワークの診断（§3.3）も入れる（`--no-menubar`・`--no-netcheck` ならそれぞれ入れず、入っていれば消す。組み合わせられる）。plist を `$HOME` に合わせて `plutil` で生成する（パスに `&` などがあっても壊れない）。`StartInterval=10`、`WatchPaths=/var/run/resolv.conf`（認証画面で同意して通信できるようになった時刻に書き換わる）、`ProcessType=Background`。本体は `/bin/zsh <本体>` として起動する（§6.1）。導入時に自身を `~/.local/bin/cafe-wifi-okawari-ctl` へ複製し、そこからは `status`・`uninstall` だけを受け付ける（§6.1）。完了表示と `status` に本体の `VERSION` を出す。`bootout` 直後の `bootstrap` の一時失敗は最大10回やり直す。`status` は通信せずに、登録と最後の終了コード・メニューバーの表示の状態・今の接続先（本体の `netid` と同じく経路表と ARP から）が同意済みか・同意済みの件数とブランド・最後の認証の時刻と次の時間切れの目安（§3.2 と同じ条件を満たすときだけ）・ログの最新5行を出す。見張り中の網（24時間以内）は別に表示する（§3.1）。診断の状態（`Network check`）と、今の接続先の結果の注意・危険を ID と値の語で出す（§3.3） |
 | `menubar.sh`・`menubar.js`・`assets/icon/` | メニューバーの表示（判定・表示・アイコンの画像）。導入先と LaunchAgent は §3.2 |
+| `netcheck.sh` | ネットワークの診断（通信しない）。導入先・LaunchAgent・結果のファイルは §3.3 |
 | `.github/workflows/release.yml`・`.gitattributes` | タグの push で版の一致と模擬試験を確かめ、配布物（`cafe-wifi-okawari.tar.gz`・`.zip`）を下書きの Release に添付する。`.github` は配布物に含めない（§6.1） |
-| `test/run.sh` | 模擬の curl・route・arp・ipconfig・ifconfig・defaults・osascript・launchctl・networksetup・scutil による分岐試験。GitHub Actions（macOS）で push ごとに実行 |
+| `test/run.sh` | 模擬の curl・route・arp・ipconfig・ifconfig・defaults・osascript・launchctl・networksetup・scutil（診断は netstat・ndp・socketfilterfw・security・ps も）による分岐試験。GitHub Actions（macOS）で push ごとに実行 |
 | `~/Library/LaunchAgents/local.cafe-wifi-okawari.plist` | LaunchAgent 定義（`install.sh` が生成） |
 | `~/Library/Logs/cafe-wifi-okawari.log` | 同意の記録・同意待ち・認証画面での同意を確かめた行と、再認証の成功・失敗・想定外の応答だけ（通常時は何も書かない） |
 | `~/Library/Caches/cafe-wifi-okawari` | 「連続失敗回数 次回試行時刻 接続先 拒否の回数 知らせたか 拒否したブランド」（1行）。成功時・認証済み時・自動の停止時に削除 |
@@ -229,7 +230,7 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | `~/Library/Application Support/cafe-wifi-okawari/consented` | 利用者が自分で同意した接続先「MAC ブランド」（1行1つ）。USEN は「MAC usen [<規約のハッシュ>]」。ここにある接続先だけ自動で再認証する |
 | `~/Library/Application Support/cafe-wifi-okawari/watched` | （USEN で追加）認証画面での同意をシステムログで確かめた網「MAC 記録した時刻」（1行1つ、新しい50件まで）。24時間で無効（読むときに捨てる）。同意を記録したとき・対象外と確かめたとき・Wi2 の網と分かったときに外す。確かめられなかった（通信失敗など）だけでは外さない |
 
-`install.sh uninstall` は2つの plist・本体・`cafe-wifi-okawari-ctl`・メニューバーの4ファイル（2つのスクリプトとアイコンの 1x・2x）・`~/Library/Caches` の5ファイル・`Application Support/cafe-wifi-okawari`（`watched` を含む）を消し、ログは残す。
+`install.sh uninstall` は3つの plist・本体・`cafe-wifi-okawari-ctl`・メニューバーの4ファイル（2つのスクリプトとアイコンの 1x・2x）・診断のスクリプト・`~/Library/Caches` の8ファイル（診断の結果・基準・要求を含む）・`Application Support/cafe-wifi-okawari`（`watched` を含む）を消し、ログは残す。
 
 ### 3.1 USEN の分岐
 
@@ -477,6 +478,127 @@ head<TAB>Recent
 
 **試験**（`test/run.sh`。結果は §7）: アイコンの5状態と優先順位、印の色（緑・黄・赤・灰。失敗と同意待ちが重なれば赤）、注意の2条件（今の接続先と違えば出ない）、注意の最中に既定経路がなくなる（認証画面待ちになる。Wi‑Fi の IPv4 も `WaitingOnUI` もなければ未接続）、✓ の10分の境目、次の時間切れの有無（店 A で再認証したあと店 B へ移る → 出さない、`consent recorded … usen (captive login)` のあと送信に失敗 → 出さない、そのあと `re-authenticated` → その時刻から60分、行より後に `resolv.conf` が書き換わる → 出さない、30秒以内なら出す、ブランド付きの `captive login seen` → その時刻から60分、ブランドのない行 → チェーンの分からない見張り中なら出さない）、チェーンの分かった見張り中の網（緑の On、見張りを始めた行と前5分以内の `resolv.conf` の更新の早いほうから60分、`status` はチェーンの控えで判断）、優先言語が日本語でもメニューは英語、状態ごとの行の表記と直近の出来事の読み替え（Today・Yesterday の境目、ブランド名の大文字、MAC・IP を含まない）、ログがない・空・状態ファイルが旧形式、USEN のチェーン（§7 の表）、`install.sh` の既定・`--no-menubar`・再導入・uninstall・status。`menubar.js` は GitHub Actions で構文の確認と `--check` での読み込み、実機での目視。
 
+### 3.3 ネットワークの診断
+
+公衆 Wi‑Fi では、通信の盗み見・書き換え（中間者攻撃）や、同じ網の他人からこの Mac への接続が起こりうる。つないでいる網とこの Mac の設定を通信せずに診断し、メニューバーで見られるようにする。2026-10-26 に1段目（通信しない診断）を実装した。通信する診断（HTTP の中身・DNS・HTTPS の照合）は未実装で、入れるまで通信先は増えない。
+
+**しないこと**: 網や Mac の設定を変える（直すのは利用者）。攻撃を防ぐ・遮断する。店の網の他の端末を調べる（ARP やポートの走査をしない）。「安全です」と保証する（緑は「見た範囲で異常は見つからない」の意味）。
+
+**本体と切り離す**: 診断は別のスクリプトと LaunchAgent で、本体（`cafe-wifi-okawari.sh`）は変えず、本体のファイルも診断の結果も互いに読まない。危険を見つけても自動再認証は止めない。診断が落ちても誤っても、再認証には影響しない。
+
+| ファイル（リポジトリ → 導入先） | 役割 |
+|---|---|
+| `netcheck.sh` → `~/.local/bin/cafe-wifi-okawari-netcheck` | 診断（唯一のロジック）。結果ファイル・基準ファイルを書き、注意・危険の変化だけを本体のログに追記する |
+| `~/Library/LaunchAgents/local.cafe-wifi-okawari.netcheck.plist` | `ProgramArguments=/bin/zsh <netcheck>`、`StartInterval=10`、`WatchPaths=[/var/run/resolv.conf, <要求ファイル>]`、`RunAtLoad`、`ProcessType=Background`、`LowPriorityIO`。標準出力・標準エラーはログに向けない（網やプロセスから来た文をログに入れない）。launchd は同じジョブを同時に2つ動かさないので排他はしない |
+| `~/Library/Caches/cafe-wifi-okawari.netcheck` | 結果（下の「結果ファイル」）。netcheck だけが書く |
+| `~/Library/Caches/cafe-wifi-okawari.netcheck.base` | 接続の基準「ゲートウェイの IP・resolv.conf の更新時刻・ゲートウェイの MAC・IPv6 のルーター」と、確かめ中の危険「ID 値 最初に見た時刻」 |
+| `~/Library/Caches/cafe-wifi-okawari.netcheck.now` | Check Now の要求。`menubar.js` が作り、netcheck が終わりに消す。中身は読まない |
+
+**流れ**（10秒ごと・resolv.conf の書き換え・要求ファイルの作成で起動）
+
+1. 今の接続先を本体の `netid` と同じ方法で求める（既定ゲートウェイの MAC。取れなければ IP）。既定経路がなければ、結果は書き換えず更新時刻だけ進めて終わる（メニューバーは自分で `Off` と出す）
+2. 接続の基準: ゲートウェイの IP と resolv.conf の更新時刻の組が前と同じ間は、同じ接続とみなす。リースの更新では resolv.conf は変わらない（§7 の実測）ので基準を捨てない。つなぎ直し・認証画面での同意で resolv.conf が変わったら取り直す（攻撃がその瞬間に始まると見逃す。下の「限界」）
+3. 下の表の項目を診断する。危険の条件は「確かめ中」として基準ファイルに残し、2回以上の診断にわたって5秒より長く続いたときだけ危険にする（一時的な揺れで赤にしない）
+4. 結果ファイルを書く。中身が変わらなければ書き直さず更新時刻だけ進める。注意・危険に変わったとき・戻ったときだけログに1行
+
+**項目**（表記はメニューの英語。段階は `ok`＝緑・`notice`＝黄（注意）・`risk`＝赤（危険）・`unknown`＝灰・`info`＝印なし）。危険は正常な網では起きない事実を見たときだけ、設定や網の性質は注意、確かめられないときは灰にする（緑にも赤にもしない）
+
+| ID（結果・ログ） | 表記 | 方法 | 緑 | 黄 | 赤 | 灰 |
+|---|---|---|---|---|---|---|
+| `wifi` | `Wi‑Fi Security` | `ipconfig getsummary <Wi‑Fi>` の `Security` | — | `None`（`NONE`。暗号化なし） | — | `Unknown`（それ以外の値）・`Not Wi‑Fi` |
+| `gateway` | `Gateway` | 接続の基準のゲートウェイの MAC と今の `arp -n <gw>` を比べる | `OK` | — | `Changed`（同じ接続の途中で変わり、続いた。ARP 偽装の兆候） | `Unknown`（ARP が取れない） |
+| `routes` | `Routes` | ① `netstat -rn -f inet` の Wi‑Fi 側の経路のうち、既定・サブネット・ホスト・マルチキャスト以外のゲートウェイ経路、② この Mac の IPv4 が私用の範囲（10/8・172.16/12・192.168/16・100.64/10・169.254/16）の外か、③ VPN（全経路）の使用中に `1.1.1.1`・`17.253.144.10`・`8.8.8.8` への経路（`route -n get`。通信しない）が Wi‑Fi を通るか | `OK` | `Extra Routes`（①・VPN なし）・`Public Subnet`（②・VPN なし） | `Bypasses VPN`（VPN の使用中に①②③のどれか。[TunnelVision](https://www.cve.org/CVERecord?id=CVE-2024-3661)・[TunnelCrack の LocalNet](https://www.cve.org/CVERecord?id=CVE-2023-36672) の形） | — |
+| `proxy` | `Proxy` | `scutil --proxy` | `Off` | `Auto-Discovery On`・`Set`（手動・PAC・SOCKS。職場の設定のこともある） | — | `Unknown` |
+| `ipv6` | `IPv6 Routers` | `ndp -rn` の Wi‑Fi 側の行（`utun` の行はシステムのもの）。最初に見えたルーターを基準にする | `None`・`OK` | `Multiple`（2つ以上）・`Changed`（途中で変わった） | — | — |
+| `firewall` | `Firewall` | `socketfilterfw --getglobalstate --getstealthmode --getblockall` | `On`（ツールチップにステルスモード） | `Off` | — | `Unknown` |
+| `airplay` | `AirPlay Receiver` | `defaults -currentHost read com.apple.controlcenter AirplayReceiverEnabled`（キーがなければ既定の有効とみなす）と、7000 の待ち受け | `Off` | `On` | — | — |
+| `sharing` | `Sharing` | ループバック以外の待ち受けのうち 22・445・548・3283・5900 | `Off` | 種類（例: `Screen Sharing`） | — | — |
+| `open` | `Open to This Network` | `netstat -anv -p tcp` の `LISTEN` のうちループバック以外で、共有・AirPlay のポートでないもの。持ち主（netstat の `名前:PID` の PID）を `ps -o comm=` で引き、`/System/`・`/usr/libexec/` の下（例: `rapportd`）は数えない。既知の AI・開発用のポート（11434 Ollama・1234 LM Studio・8888 Jupyter・6274/6277 MCP Inspector）は名前で出す | `None`・`Blocked by Firewall`（すべて遮断） | `<n> Apps`・`Ollama` など（ツールチップにポート番号） | — | — |
+| `updates` | `macOS Updates` | `/Library/Preferences/com.apple.SoftwareUpdate` の最後の確認の結果（通信しない） | `Up to Date` | `<n> Available`・`Not Checked Recently`（最後の確認から7日を過ぎた）・`Auto Security Updates Off`（`ConfigDataInstall`・`CriticalUpdateInstall` が 0） | — | `Unknown` |
+| `rootcerts` | `Added Root Certificates` | `security dump-trust-settings`（利用者・`-d` 管理者）の `Number of trusted certs` | `None` | `<n> Added` | — | `Unknown` |
+| `vpn` | `VPN` | 既定経路のインターフェース（`utun`・`ipsec`・`ppp`）と `scutil --nc list` の `(Connected)` | `On` | `Off`（暗号化なしの網のときだけ） | — | `Partial`（つながっているが既定経路は Wi‑Fi）・`Off` |
+| `privaddr` | `Private Wi‑Fi Address` | `ifconfig <Wi‑Fi> ether` と `networksetup -getmacaddress <Wi‑Fi>` が違えば On。値は比べるだけで残さない | （情報。`On`・`Off`・`Unknown`） | | | |
+
+VPN の使用中は、既定経路が VPN のインターフェースを通るので、`wifi`・`routes`・`ipv6`・`privaddr` は下の Wi‑Fi を見る。
+
+実機で確かめたこと（2026-10-26、macOS 27.0.1、sudo なし）と、それに合わせた判断:
+
+- `Security` は暗号化なしの網の `NONE` だけを実測した。`IPConfiguration` の文字列には `WPA2_PSK`・`WPA3_SAE`・`FT_SAE`・`8021X` などがあり、`WEP`・`OWE` はなかった。実網で確かめるまで `NONE` 以外は `Unknown`（灰）にする
+- `netstat -anv -p tcp` は sudo なしで root のプロセスを含む `名前:PID` を出す（`launchd:1` が持つ待ち受けも見える）ので、持ち主の PID は `lsof` を使わずに netstat から取る。名前の欄は16文字で切れ、空白を含むことがあるので、`:<数字>` で終わる最後の欄から PID を取る
+- `ps -o comm=` は実行時の名前（argv[0]）で、`/usr/bin/python3` で起動したものは `/usr/bin/python3`、PATH から起動した `nc` は `nc` になる。`/usr/` の下をすべて除くと、利用者が `0.0.0.0` で動かした `python3 -m http.server` などを見逃すので、除くのは `/System/`・`/usr/libexec/`（`rapportd` は `/usr/libexec/rapportd`）だけにした。argv[0] は書き換えられるので、悪意のあるプログラムの見分けには使えない（下の「限界」）。Homebrew の `/usr/local` も数える
+- AirPlay 受信のキーは `AirplayReceiverEnabled`（無効にしている Mac で `0`、7000 の待ち受けなし）。「AirPlay を許可」の範囲のキーは見つからなかった
+- `socketfilterfw` の「すべて遮断」の文言（`block all non-essential incoming connections`）は実行ファイルの文字列で確かめた（実機では無効の文言だけ）。`security` の `Number of trusted certs = %ld` も同じ
+- iCloud プライベートリレー（`com.apple.networkserviceproxy` の状態の数値）は意味を確かめられず、同じ値に過去の網の SSID が入っているので読まない。暗号化 DNS は構成プロファイルがなく、設定されたときの出方を確かめられない。どちらも項目を出さない（設計の作業用の文書の「分からなければ出さない」による）
+- 共有を有効にしたときの待ち受け・AirPlay 受信の切り替え・`0.0.0.0` で動かした Ollama は、利用者の設定を変えることになるので試していない（launchd が持つ待ち受けが netstat に出ることと、`*.<ポート>` の表記は実機で見た）
+
+**結果ファイル**（0600。一時ファイルから `mv`）
+
+```
+v1 <接続先> <書いた時刻> 0 -
+wifi notice none
+gateway ok ok
+open notice apps n=2 p=3000,8000
+updates notice available n=2
+...
+```
+
+2行目以降は「ID 段階 値 [n=数] [p=ポート,…]」。値は固定の語。1行目の `0 -` は2段目（通信する診断の時刻と状態）のための欄。`menubar.sh` と `install.sh status` は、表にない ID・段階・値の行と、形の違う `n=`・`p=` を読み捨てる。
+
+**ログ**（既存の `~/Library/Logs/cafe-wifi-okawari.log`）: 注意・危険に変わったとき、注意・危険から戻ったときだけ1行。手元の項目（`firewall`・`airplay`・`sharing`・`open`・`updates`・`rootcerts`）は変わったときだけ書き、網の項目（`wifi`・`gateway`・`routes`・`proxy`・`ipv6`・`vpn`）は接続の基準を取り直したら新しい網で1回書く。
+
+```
+2026-05-12 10:42:01 netcheck wifi notice none net=0:0:5e:0:1:1
+2026-05-12 10:42:01 netcheck gateway risk changed net=0:0:5e:0:1:1 to=2:0:0:0:0:9
+2026-05-12 10:43:11 netcheck gateway ok ok net=0:0:5e:0:1:1
+```
+
+`menubar.sh` の直近の出来事と `install.sh status` の最後の認証は行頭の語で選ぶので、`netcheck` の行は出ない（ログの最新5行には出る）。
+
+**メニュー**（`menubar.sh`・`menubar.js`）: 診断の LaunchAgent の plist がなければ、今までと同じ表示（`--no-netcheck`）。あれば接続先の行と直近の出来事の間に、区切り線と要約1行を出す。
+
+```
+● Network Check    1 Risk ▶          ← 要約（印は最も重い段階）
+  Possible interception on this Wi‑Fi. See Network Check.   ← 危険のときだけ
+  ▶ Checked 10:42 / This Network / ● Wi‑Fi Security  None / Not encrypted. Use a VPN, and only HTTPS sites. / …
+    This Mac / … / Privacy / Private Wi‑Fi Address  On / ──── / Check Now
+```
+
+| 要約の右の列 | 条件（上から順に判定） |
+|---|---|
+| `Off`（灰） | 既定経路がない（未接続・認証画面待ち） |
+| `Checking…`（灰） | 結果ファイルがまだない |
+| `Not Running`（灰） | 結果ファイルが60秒より古い（netcheck が止まっている） |
+| `Checking…`（灰） | 要求ファイルがある・結果が今の接続先のものでない |
+| `<n> Risk(s)`（赤） | 危険が1つ以上（注意の数は書かない） |
+| `<n> Notice(s)`（黄） | 危険がなく、注意が1つ以上 |
+| `No Issues Found`（緑） | すべて緑か灰（「Safe」とは書かない） |
+
+- サブメニューは結果が今の接続先のもので60秒以内のときだけ。見出し `Checked HH:MM`（結果ファイルの更新時刻）・`This Network`・`This Mac`・`Privacy` の下に、印と表記と値。注意・危険の行の下に何をすればよいかを押せない行で出し（VPN の使用中は暗号化なしの案内を出さない）、理由はツールチップ。無効の項目でツールチップが出るかは未確認（§3.2）なので、案内の行だけで分かるようにする
+- アイコンは、今の本体の印（`!`・`…`・`✓`・なし）の後ろに「⚠」を足す（例: `✓⚠`）。条件は上の表の危険と同じ（今の接続先の結果だけ。店を出たあとに残らない）。本体の停止中も出す
+- `menubar.sh` の1行目は、危険があればアイコンの種類の後ろに ` risk`（例: `check risk`）。種類の前に `>` の付いた行は、直前の `>` のない行のサブメニューの行（`>` だけなら区切り線）。`menubar.js` はサブメニューを持つ行だけを押せる（開ける）項目にし、末尾に区切り線と `Check Now` を足す。`Check Now` は `NSFileManager` で空の要求ファイルを作る（シェルを呼ばない）。launchd の `WatchPaths` で診断がすぐ動き、起動の間隔は launchd が10秒に抑える
+- `menubar.sh` は通信しないまま（結果ファイルと要求ファイルの有無と plist の有無を読むだけ）
+
+**安全性**（診断を足しても、この Mac の攻撃面を広げない）
+
+- ユーザーの LaunchAgent として動き、sudo・管理者のパスワードを使わず、設定を変えない。待ち受けない。どこへも送らない（curl・dig を使わない）
+- 使うのは macOS 標準のコマンドだけで、すべて絶対パスで呼ぶ（`route`・`arp`・`networksetup`・`ipconfig`・`netstat`・`ndp`・`scutil`・`socketfilterfw`・`defaults`・`security`・`ps`・`ifconfig`）
+- ログと結果ファイルに書くのは、固定の語・数・ポート番号と、形を確かめたゲートウェイの MAC・IPv4 だけ。網やプロセスから来た文（SSID・プロキシの名前・証明書の名前・プログラム名など）は、短くしたり伏せたりしても書かない。ログは現地試験でエージェントも読むので、網から来た文が隠れた指示の経路にならないようにする。値は固定の比較か厳密な形の照合だけに使い、`eval` しない
+- この Mac の MAC・IP と SSID は、ログにも結果ファイルにもメニューにも出さない（プライベート Wi‑Fi アドレスと私用の範囲は比べるだけ）
+- 結果・基準ファイルは umask 077 で作り、一時ファイルから `mv` で置き換える。要求ファイルには「すぐ診断する」以上の意味を持たせない。結果ファイルは同じ利用者のほかのプロセスにも書き換えられる（防がない。下の「限界」）
+- 本体のファイルを書かない。本体のログには1行ずつ追記するだけ
+- `uninstall` で LaunchAgent・スクリプト・3つのファイル（と書きかけ）を消す
+
+**限界**
+
+- 端末から見えない攻撃は分からない: 最初から中間者がいる網（基準を取る前に始まっている。つないだ瞬間のゲートウェイの変化も見逃す）、AP の内部での乗っ取り、偽の網（SSID を読めない・暗号化なしの網は相手を確かめられない）
+- 緑は「見た範囲で異常がない」だけ。暗号化なしの網では、緑が並んでも盗み見はありうる（VPN を勧める）
+- `Open to This Network` は TCP の待ち受けだけを見る（UDP は見ない）。ファイアウォールが個々のアプリを許可しているかまでは分からない。持ち主の見分けは実行時の名前によるので、名前を偽るプログラムは数えないことがある
+- Mac がすでに乗っ取られていれば、結果ファイルも書き換えられうる。診断はマルウェア対策の代わりにならない
+- macOS の更新の件数は最後の確認の結果で、セキュリティの更新かどうかは分けない
+- 既定経路にゲートウェイのない VPN では、本体と同じく接続先が求まらず `Off` になる
+
+**負荷**: 1回約0.2秒（この Mac で直接実行して0.198秒。CPU は user 0.06秒・sys 0.08秒）。10秒ごと。通信しない。導入した LaunchAgent での CPU と RSS は未測定。
+
 ## 4. 安全性
 
 - **秘密情報を扱わない**: 同意するだけなので、ID やパスワードを保存しない。Keychain も設定ファイルも不要。保存するのは、自分で同意した店のルーターの MAC とブランド名（USEN は規約のハッシュも）だけで、外部には送らない
@@ -492,7 +614,7 @@ head<TAB>Recent
 - **利用規約**: 利用時間・回数の制限を解除する機能はない。MAC アドレスの偽装や多重セッションもしない。上限に達したときや利用停止のときは API が拒否すると考え、拒否が3回続いたら自動をやめる（一時的な障害と区別できないので回数で判断する）
 - **接続先の見分け方**: 実測のゲートウェイは VRRP の仮想 MAC で、店やブランドをまたいで同じ値になりうる。そこで Wi2 の転送先 `/freewifi/<ブランド>/` のブランド名と組にして記録する。ブランド名が英数字・`_`・`-` 以外を含めば対象外
 - **初回の同意は利用者自身が行う**: 同意を送るのは、利用者がその店で一度自分で同意したと推定できた接続先だけ。根拠は2つ。(a) 本ツールが捕捉を見た接続先で、その後に通信が戻った。(b) Wi2 の網で、本ツールが何も送っていないのに通信できている（macOS は同意まで網を使わせず、Wi2 の認証は端末の MAC ごと）。入店時の同意は (b)、時間切れで初めて捕捉を見た網は (a) で記録する。ドメイン名が違う Wi2 の網では (b) が働かず、最初の時間切れでもう1回だけ自分で同意することになる
-- 公衆 Wi‑Fi は暗号化されていない。通信内容の保護は範囲外で、HTTPS や VPN で守る
+- 公衆 Wi‑Fi は暗号化されていない。通信内容の保護は範囲外で、HTTPS や VPN で守る。網とこの Mac の設定の兆候は、通信しないネットワークの診断（§3.3）で見せるだけで、防いだり設定を変えたりはしない
 
 **USEN の分岐での安全性**
 
@@ -547,6 +669,7 @@ head<TAB>Recent
 - 復旧までの時間: 気づくまで最大約10秒＋再認証（同意の送信から疎通まで実測2〜3秒）。ガストの実測では通信が止まったのは約6秒。疎通は1秒ごとに確かめ、各通信の上限（5〜10秒）の分だけ延びうる
 - 継続障害時: 失敗のたびに次の試行を 30秒→…→最大30分 と遅らせる（状態は1行のファイルだけ）。待機は接続先ごと。認証 API の呼び出しは最大1日約48回、ログも1日約50行。ダイアログは失敗が続く間に1回（自動の停止でもう1回）。認証済みを確認したら状態を消す
 - **メニューバーの表示**（§3.2）: `menubar.sh` は1回約0.02〜0.03秒（手元で5回）。常駐の `osascript` は RSS 約18〜33MB、CPU は2分で約0.4秒（平均約0.3%。10秒ごとの作り直しを含み、子の zsh は含まない）。どれも LaunchAgent から起動して測った（2026-09-30）。アイコンを `assets/icon` の画像に替えたあと、実際に導入したもので RSS 約28〜45MB、CPU は50秒で約0.13秒（平均約0.3%）。USEN のチェーンを読む回だけ約1〜2秒（2時間分のシステムログ）
+- **ネットワークの診断**（§3.3）: 1回約0.2秒、10秒ごと。通信しない。導入した LaunchAgent での CPU と RSS は未測定
 - **同意済みの網に新しくつないだとき**: 接続ごとに1回だけシステムログを読む（約2秒。60秒分）。Wi2 では、その間（resolv.conf の更新から15秒）ブランドの確認を待つ。Wi2 への要求の回数・内容は変わらない
 - **USEN の分岐**: システムログを読むのは、記録のない網で接続ごとに1回（接続から5分以内）と、同意待ちの網で通信できている間（30秒→…→最大30分 の間隔）。実測は1時間分を読んで約1.6秒・CPU 約0.5秒で、読む範囲は接続の前後数分なので短くなる。自宅でも、つなぐたびに1回は読む。時間切れごとの通信は GET 2本（約2KB・約28KB）と POST 1本で、すべて店内の機器あて。見張り中の網では、同意済みの網と同じく10秒ごとにプローブする
 
@@ -555,6 +678,7 @@ head<TAB>Recent
 ```sh
 zsh install.sh               # 導入・更新（スクリプトを複製し、plist を生成して登録。メニューバーの表示も入れる）
 zsh install.sh --no-menubar  # メニューバーの表示なしで導入・更新（入っていれば消す）
+zsh install.sh --no-netcheck # ネットワークの診断なしで導入・更新（入っていれば消す。--no-menubar と組み合わせられる）
 zsh ~/.local/bin/cafe-wifi-okawari-ctl status     # 動作の確認（英語。通信しない。未登録なら 1 で終わる）
 zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall  # 停止・削除（同意の記録も消す。ログは残す）
 ```
@@ -614,8 +738,10 @@ cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawar
 | 確認項目 | 結果 |
 |---|---|
 | 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`・`menubar.js` の `osacompile -l JavaScript`） | OK |
-| 模擬試験 `zsh test/run.sh`（390項目。うち USEN の分岐と `install.sh status` の見張り表示が121項目、同意済みの Wi2 の網での認証画面の同意が11項目、メニューバーの表示が81項目（USEN のチェーンが24項目、見張り中の網の表示が10項目）、`install.sh` のメニューバーと次の時間切れの目安が23項目） | OK。GitHub Actions でも実行。既存の項目のうち、仕様を変えた6項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない・同意済みの網でも入店時にシステムログを読む・直近の出来事に `captive login seen` を出す・チェーンの分かった見張り中の網を緑の On にする）は書き換えた。Wi2 のつなぎ直しの項目は、同意済みの MAC で15秒待つようになったので、resolv.conf の更新から20秒の状態で確かめる。ときどき失敗した2項目を直した（2026-10-03）: 「2回目の失敗のあとは60秒空ける」は更新時刻を59秒前にしてから本体を起動するので、その間に秒が変わると60秒になって確かめ直していた（55秒前に変えた）。`status` の「ログの最新5行」は `L1` を含まないことを出力全体で確かめていたので、一時フォルダの名前（`mktemp` の乱数）に `L1` が入ると失敗した（字下げしたログの行だけを見るように変えた。一時フォルダを `L1` を含む名前に固定すると必ず失敗することで確かめた） |
+| 模擬試験 `zsh test/run.sh`（486項目。うちネットワークの診断が96項目（`netcheck.sh` が67・メニューバーが16・`install.sh` が14）。以下は診断を足す前の390項目の内訳: USEN の分岐と `install.sh status` の見張り表示が121項目、同意済みの Wi2 の網での認証画面の同意が11項目、メニューバーの表示が81項目（USEN のチェーンが24項目、見張り中の網の表示が10項目）、`install.sh` のメニューバーと次の時間切れの目安が23項目） | OK。GitHub Actions でも実行。診断を足したとき（2026-10-26）は、既存の項目のうち仕様が変わった2か所だけを直した（展開先からの導入の試験で複製するファイルに `netcheck.sh` を足す・削除の試験で外す登録に診断の LaunchAgent を足す。前者は2項目に効く）。それより前に、仕様を変えた6項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない・同意済みの網でも入店時にシステムログを読む・直近の出来事に `captive login seen` を出す・チェーンの分かった見張り中の網を緑の On にする）は書き換えた。Wi2 のつなぎ直しの項目は、同意済みの MAC で15秒待つようになったので、resolv.conf の更新から20秒の状態で確かめる。ときどき失敗した2項目を直した（2026-10-03）: 「2回目の失敗のあとは60秒空ける」は更新時刻を59秒前にしてから本体を起動するので、その間に秒が変わると60秒になって確かめ直していた（55秒前に変えた）。`status` の「ログの最新5行」は `L1` を含まないことを出力全体で確かめていたので、一時フォルダの名前（`mktemp` の乱数）に `L1` が入ると失敗した（字下げしたログの行だけを見るように変えた。一時フォルダを `L1` を含む名前に固定すると必ず失敗することで確かめた） |
 | 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、すべて NG として検出（例: `-b "$jar"` を外す・同意の本文を変えると、どちらも23項目が失敗）。USEN の実装では33通りの変異（例: `--noproxy` を外す・性別を空でなく送る・GET のあとの same() を外す・同意の行の削除を行全体の一致にする・基準時刻の +1 を外す）をすべて検出。メニューバーの実装では37通り（例: 注意の接続先の照合を外す・Wi‑Fi でなく先頭のポートを使う・目安の captive login の除外や resolv.conf の30秒を変える・出来事を4件にする・`--no-menubar` で消さない・`KeepAlive` を付ける）をすべて検出（最初は2通りを見逃したので、試験の行の並びと `status` の30秒の境目を足した）。アイコンの組み込みでは4通り（1x・2x のどちらかを入れない・`--no-menubar` と uninstall で画像を残す）をすべて検出。USEN のチェーンでは12通り（例: 探す範囲をリース開始の10秒前からに戻す・2時間の範囲を広げる・インターフェースの照合を外す・最初の行で判定する・伏せ字の SSID を残す・Wi2 の網でも読む・見つからなかった行を出来事に使う・読んだあとの接続先の確認を外す・共通の一時ファイルに戻す・uninstall で一時ファイルを残す）をすべて検出（最初はインターフェースの照合を外しても通ったので、別のインターフェースの行があとに出る形に試験を直した。一時ファイルの試験も、直前の試験のキャッシュが残っていて壊した版でも通ったので、直前で消すようにした）。同意済みの網での認証画面の同意では12通り（例: 60秒の窓を外す・広げる・Wi2 の再試行でも読む・15秒待ちを外す・同意済みのブランドでなくても書く・USEN の `usen` を付けない・確かめ済みの接続でも読む・メニューバーと `status` で起点の語や照合の形を戻す・出来事の読み替えを外す）をすべて検出。メニューの印と見出し（2026-10-02）では10通り（例: 失敗で赤にしない・同意待ちで赤を黄に上書きする・同意待ちで黄にしない・見張り中を緑にする・名前がないときの `This Wi‑Fi` を外す・`Recent` の見出しを外す・未接続や停止中を灰にしない）をすべて検出。見張り中の網の表示（2026-10-02）では9通り（例: チェーンが分かっても緑にしない・`resolv.conf` の早いほうを使わない・5分の範囲を外す・行のあとの更新も起点にする・60分の判定を外す・`status` でチェーンの控えのキーが `-` でも出す）をすべて検出（最初は行のあとの更新を起点にする変異を2通りとも見逃したので、起点が60分の境目をまたぐ試験を足した）。USEN の同意待ちの書き直しと、入れ直したあとの目安（2026-10-03）では7通り（常に書き直す・進めない・条件を30秒ゆるめる・メニューバーと `status` で `(online)` の扱いを外す・前の行の `resolv.conf` の確認を外す）をすべて検出 |
+| 試験が不具合を検出できるか（ネットワークの診断、2026-10-26） | 21通りの変異をすべて検出（例: 危険の確かめ直しを外す・5秒を0にする・`/usr/bin` の下も macOS のプログラムとして除く・`::1` を数える・ログを変化のたびに書く・接続が変わっても前の結果と比べる・基準に resolv.conf を使わない・すべて遮断を見ない・`NONE` 以外も注意にする・要求ファイルを消さない・変わらないとき更新時刻を進めない・ホスト経路も数える・メニューバーで今の接続先の照合・60秒の判定・表による読み捨て・VPN 中の案内の抑止・plist の有無の確認を外す・`--no-netcheck` や uninstall で結果を残す・`LowPriorityIO` を外す・`status` で古い結果を出す）。実装中に試験が見つけた不具合は3つ（連想配列のキーに空白を入れた代入・netstat の欄が崩れた行での `set -u` の異常終了・ゲートウェイが変わると接続先の識別子も変わるので、戻ったことをログに書かなかった） |
+| ネットワークの診断の実機での実行（2026-10-26、macOS 27.0.1、店の網ではない暗号化なしの網） | OK。一時的な HOME で `netcheck.sh` を実行し、約0.2秒で全項目を書いた（暗号化なし・更新2件・VPN なしの注意3つ、ほかは緑、プライベート Wi‑Fi アドレスは On）。2回目はログを書き足さなかった。続けて `menubar.sh` が要約とサブメニューを出し、`menubar.js --check` がサブメニュー付きで作れた（画面での目視は未実施）。導入した LaunchAgent での動作・CPU・RSS は未確認 |
 | 実際の curl の Cookie の保存と送信 | OK。空の jar で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る（ローカルの HTTPS サーバーと実網） |
 | LaunchAgent からの知らせ | `display notification` は **NG**（macOS 27。終了コード 0 だが表示されず、許可も求められない）。`display alert … giving up after 120` は表示された |
 | アプレット経由の通知（試作） | **NG**。`osacompile` のアプレットを LaunchAgent から `open -g` で起動しても、bundle ID を付けて署名し直しても、usernoted が `Denying message … LegacyConnection` で拒否した（2026-09-30） |
@@ -655,6 +781,7 @@ cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawar
 8. （任意・将来の調査）USEN: 機器の応答からチェーンを見分けられるか。メニューバーはシステムログの伏せ字の SSID で見分けるようにした（§3.2）。コメダの1店舗では伏せ字の SSID が `Ko********Fi` の形で出た（一部の店の `.FREE_Wi-Fi_PASSPORT_J` は未確認）。本体のログで `usen` の代わりにチェーンを出すなら、機器の応答の ① `/captive/` の HTML と `page.js` にチェーン名・ロゴの参照があるか ② `GET /capi/welcome/info` の JSON のうち `sess_time`・`status_code` 以外の項目と、画面が読む `/capi/…` の一覧、も候補（捕捉中に取得だけする。同意は送らない。時間切れごとの通信は GET 1本増える）。転送先・DHCP のドメイン名・ゲートウェイの MAC では見分けられない。店名は記録しない（ログにも文書にも書かない）
 9. 同意済みの網に新しくつないで認証画面で同意したとき（§3.1 の「実装での補足」）: Wi2・USEN とも、15〜25秒後に `captive login seen net=… <ブランド>` が出て、メニューバーに `Accepted on Login Page · <ブランド>` と同意の約60分後の目安が出るか。実際の時間切れが目安の分に来るか。同意のあとに再起動・スリープから復帰しても新しい行が出ないか。いずれも未確認
 10. 初めての USEN の店（見張り中の網）で認証画面で同意したとき（§3.2 の「見張り中の網の表示」）: `captive login seen net=…` のあと、メニューバーが緑の `Tully's (USEN)`・`Auto Reconnect On` と `Next Time-out ~HH:MM` を出すか。目安と実際の時間切れのずれ（起点にした `resolv.conf` の更新が同意の時刻と合うか）。`install.sh status` にも同じ目安が出るか。コメダの1店舗で、メニューバーが緑の `Komeda (USEN)`・`Auto Reconnect On`・`Next Time-out` を出し、目安の起点（`resolv.conf` の更新）は同意と同じ秒、実際の時間切れはその60分6秒後だった。時間切れ前の `install.sh status` は未確認
+11. ネットワークの診断（§3.3）: Wi2・USEN の店（各1店舗以上）で、入店から時間切れ・再認証・退店まで危険が1度も出ないか（誤検知がないか）。`Wi‑Fi Security` は `None`、ほかは緑か灰か。自宅・テザリングで、暗号化ありの網の `Security` の実際の表記（`WPA2_PSK`・`WPA3_SAE` など）、Wi‑Fi 側の経路・IPv6 のルーター・サブネットが誤検知の元にならないか。共有・AirPlay 受信を切り替えたときの待ち受けとキー。導入した LaunchAgent での負荷とメニューの見た目（サブメニュー・Check Now・「⚠」）。店の網で攻撃は試さない（偽の DHCP・ARP 偽装などは他の利用者と店の機器に影響する）。危険の表示を自分の機材だけの網で確かめるかは未定
 
 `test/run.sh` で確かめている USEN の分岐は次のとおり（`run` の `posts` は `xhr/login` と `/capi/welcome` の両方を数え、USEN の項目では `uposts` で宛先も確かめる。模擬の `log show`・`ipconfig getsummary`・`route -n get <IP>`・USEN の機器を使う）。
 
@@ -786,4 +913,5 @@ cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawar
 - 成功時の通知。常駐処理から出せるのはダイアログだけで、集中モードでも止まらず、画面共有・録画にも写る。再認証は約60分ごとに起きるので、通話や録画に割り込ませない。成功はメニューバーの ✓（§3.2）・ログ・`cafe-wifi-okawari-ctl status` で確かめる
 - macOS 標準のポータル画面（Captive Network Assistant）の無効化（全ネットワークに影響する）
 - 自動更新・更新の確認のための通信（§6.1。新しい版は GitHub の Release で知らせる）
+- ネットワークの診断（§3.3）で、設定を変える・攻撃を防ぐ・店の網の他の端末を調べる（ARP やポートの走査）こと。通信する診断（HTTP の中身・DNS・HTTPS の照合）は2段目として未実装
 - 署名・公証した `.pkg` やアプリでの配布（Apple Developer Program の登録が済むまで。済んだら §6.1 のとおり検討する）
