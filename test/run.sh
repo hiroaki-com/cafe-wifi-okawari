@@ -127,16 +127,19 @@ EOS
 # arp: 既定ゲートウェイの MAC は $MAC（ゲートウェイがなければ失敗。$M/switched があれば別の回線 cc:cc:cc:cc:cc:03）
 print '#!/bin/sh\n[ -z "$2" ] && exit 1\n[ -e $M/switched ] && MAC=cc:cc:cc:cc:cc:03\necho "? ($2) at $MAC on en0 ifscope [ethernet]"' > $T/bin/arp
 # ipconfig: DHCP のドメイン名は $DOM（既定は空）、自分の IP は $MYIP（既定 10.0.0.5。en0 だけ）。
-# getsummary のリース開始は $M/lease か $LEASE（エポック秒。既定は resolv.conf の更新時刻、none なら行なし）。$WSEC があれば Security の行
+# getsummary のリース開始は $M/lease か $LEASE（エポック秒。既定は resolv.conf の更新時刻、none なら行なし）。実機と同じ順に、$CID があれば
+# 最上位の ConnectionID、$DHCPDOM があれば DHCP のパケットのドメイン名（網が決める文字列）、$WSEC があれば最後に Security の行
 cat > $T/bin/ipconfig <<'EOS'
 #!/bin/sh
 case $1 in
   getoption) printf "%s\n" "$DOM" ;;
   getifaddr) [ "$2" = en0 ] && echo "${MYIP-10.0.0.5}" ;;
-  getsummary) [ -n "$WSEC" ] && printf '  Security : %s\n' "$WSEC"
+  getsummary) [ -n "$CID" ] && printf '  ConnectionID : %s\n' "$CID"
     [ -e $M/lease ] && LEASE=$(cat $M/lease)
     [ "$LEASE" = none ] ||
-    printf '        LeaseStartTime : %s\n' "$(date -r "${LEASE:-$(stat -f %m $M/resolv)}" '+%m/%d/%Y %H:%M:%S')" ;;
+    printf '        LeaseStartTime : %s\n' "$(date -r "${LEASE:-$(stat -f %m $M/resolv)}" '+%m/%d/%Y %H:%M:%S')"
+    [ -n "$DHCPDOM" ] && printf 'domain_name (string): %s\n' "$DHCPDOM"
+    [ -n "$WSEC" ] && printf '  Security : %s\n' "$WSEC"; exit 0 ;;
 esac
 EOS
 # log show: 呼び出しを $M/logcalls に残す。--start 以後の $WEBSHEET（エポック秒、空白区切り）に websheet: success の行を出す。
@@ -249,11 +252,12 @@ print -r -- "Firewall is ${FW-enabled}. (State = ${FWS-1})"
 print -r -- "Firewall stealth mode is ${STEALTH-on}"
 [[ -n ${BLOCKALL-} ]] && print 'Firewall is set to block all non-essential incoming connections' || print 'Firewall has block all state set to disabled.'
 EOS
-# security dump-trust-settings: 利用者（-d なし）は $CERTS 枚、管理者（-d）は $CERTSD 枚（空ならなし、fail なら失敗）。証明書の名前は $CERTNAME
+# security dump-trust-settings: 利用者（-d なし）は $CERTS 枚、管理者（-d）は $CERTSD 枚（空ならなし、fail なら失敗）。証明書の名前は $CERTNAME。
+# なしは実機と同じく、標準エラーに1文を出して 1 で終わる
 cat > $T/bin/security <<'EOS'
 #!/bin/zsh
 c=${CERTS-}; [[ ${2-} == -d ]] && c=${CERTSD-}
-if [[ -z $c ]]; then print -u2 'SecTrustSettingsCopyCertificates: No Trust Settings were found.'
+if [[ -z $c ]]; then print -u2 'SecTrustSettingsCopyCertificates: No Trust Settings were found.'; exit 1
 elif [[ $c == fail ]]; then print -u2 'SecTrustSettingsCopyCertificates: An internal error occurred.'; exit 1
 else print "Number of trusted certs = $c"; print -r -- "Cert 0: ${CERTNAME-Example Root CA}"; fi
 EOS
@@ -1185,6 +1189,18 @@ ncr MAC=$A DEFIF=utun4 DEVRT=ifc WSEC=NONE
 ok '診断: VPN（既定経路が utun）なら On。下の Wi‑Fi の暗号化は見る' '[[ $(nr vpn) == "ok on" && $(nr wifi) == "notice none" && $(nr routes) == "ok ok" ]]'
 ncr MAC=$A NCLIST='* (Connected)      0A1B2C3D-0000 VPN (com.example) "Work"    [VPN/com.example]\n' WSEC=NONE
 ok '診断: VPN がつながっていても既定経路が Wi‑Fi なら Partial（灰）' '[[ $(nr vpn) == "unknown partial" ]]'
+ncr MAC=$A NCLIST='* (Disconnected)   0A1B2C3D-0000 VPN (com.example) "(Connected)"    [VPN/com.example]\n' WSEC=NONE
+ok '診断: VPN の名前に (Connected) があっても、状態の欄が切断なら Partial にしない' '[[ $(nr vpn) == "notice off" ]]'
+ncr MAC=$A DEVRT=ifc WSEC=NONE
+ok '診断: 既定経路は Wi‑Fi のまま 0/1・128/1 で全部を通す VPN も、公開の宛先への経路で On。ゲートウェイは Wi‑Fi 側を見る' \
+  '[[ $(nr vpn) == "ok on" && $(nr wifi) == "notice none" && $(nr gateway) == "ok ok" && $(nr routes) == "ok ok" && $res == "v1 $A "* ]]'
+ncreset; ncr MAC=$A DEVRT=ifc XROUTE=1.0.0/8,10.0.0.1,UGSc,en0; aged; ncr MAC=$A DEVRT=ifc XROUTE=1.0.0/8,10.0.0.1,UGSc,en0
+ok '診断: その型の VPN でも、Wi‑Fi 側の余分な経路は Bypasses VPN' '[[ $(nr routes) == "risk bypass" ]]'
+# 網が決める文字列（DHCP のドメイン名など）は getsummary で Security より前に出る。同じ形の文字列を入れても結果を変えられない
+ncreset; ncr MAC=$A WSEC=NONE DHCPDOM='shop.example Security : WPA3_SAE'
+ok '診断: DHCP のドメイン名に「Security : WPA3_SAE」を入れても、暗号化なしを隠せない' '[[ $(nr wifi) == "notice none" && $(nr vpn) == "notice off" ]]'
+ncr MAC=$A WSEC=NONE DHCPDOM=$'x\n  Security : WPA2_PSK'
+ok '診断: 改行で最上位の Security の行を装っても、最後の行（本物）を使う' '[[ $(nr wifi) == "notice none" ]]'
 # G（ゲートウェイ）: 危険の確かめ直しと接続の基準
 ncreset; ncr MAC=$A;      ok '診断: 接続の基準にゲートウェイの IP・resolv.conf の更新時刻・MAC を残す' '[[ $(<$NCB) == "10.0.0.1 $(stat -f %m $M/resolv) $A -" ]]'
 ncr MAC=$B;               ok '診断: 接続の途中でゲートウェイの MAC が変わっても、1回目は危険にせずログにも書かない' \
@@ -1200,6 +1216,16 @@ ncreset; ncr MAC=$A; ncr MAC=$B; aged; LEASE=$(( EPOCHSECONDS - 5 )) ncr MAC=$B
 ok '診断: リースの更新（resolv.conf は変わらない）では基準を捨てない' '[[ $(nr gateway) == "risk changed" ]]'
 ncreset; ncr MAC=$A; ncr MAC=$B; aged; joined; ncr MAC=$B
 ok '診断: resolv.conf が書き換われば（つなぎ直し）基準を取り直し、危険にしない' '[[ $(nr gateway) == "ok ok" && $(<$NCB) == "10.0.0.1 "<->" $B -" && ! -e $LG ]]'
+# Wi‑Fi では接続の見分けに ConnectionID（つなぐたびに増える）と起動時刻を使い、resolv.conf の書き換えでは基準を取り直さない
+ncreset; ncr MAC=$A CID=3
+ok '診断: Wi‑Fi の接続の基準は起動時刻と ConnectionID' '[[ $(<$NCB) == "10.0.0.1 c$(sysctl -n kern.boottime | sed -E "s/.*sec = ([0-9]+),.*/\1/").3 $A -" ]]'
+ncr MAC=$B CID=3; aged; joined; ncr MAC=$B CID=3
+ok '診断: 同じ接続のまま resolv.conf を書き換えさせても（RA の DNS サーバー・DHCP の更新）、基準を取り直さず危険' \
+  '[[ $(nr gateway) == "risk changed" && $(nlog) == "netcheck gateway risk changed net=$A to=$B" ]]'
+ncreset; ncr MAC=$A CID=3; ncr MAC=$B CID=4; aged; ncr MAC=$B CID=4
+ok '診断: ConnectionID が変われば（つなぎ直し）基準を取り直し、危険にしない' '[[ $(nr gateway) == "ok ok" && $(<$NCB) == *".4 $B -" && ! -e $LG ]]'
+ncreset; ncr MAC=$A CID=3 DHCPDOM=$'x\n  ConnectionID : 99'; ncr MAC=$B CID=3 DHCPDOM=$'x\n  ConnectionID : 98'; aged; ncr MAC=$B CID=3 DHCPDOM=$'x\n  ConnectionID : 97'
+ok '診断: DHCP の文字列で ConnectionID を装っても、最初の行（本物）を使い、基準を取り直させられない' '[[ $(nr gateway) == "risk changed" && $(<$NCB) == *".3 $A -"* ]]'
 ncreset; ncr MAC=$A; ncr MAC=$B DEFGW=10.0.0.254; aged; ncr MAC=$B DEFGW=10.0.0.254
 ok '診断: ゲートウェイの IP が変われば基準を取り直す' '[[ $(nr gateway) == "ok ok" && $(<$NCB) == "10.0.0.254 "* ]]'
 ncreset; ncr MAC='(incomplete)'
@@ -1224,6 +1250,8 @@ ncreset; ncr MAC=$A PROXY='  ProxyAutoDiscoveryEnable : 1\n'; ok '診断: プロ
 ncr MAC=$A PROXY='  HTTPSEnable : 1\n  HTTPSProxy : proxy.example\n'; ok '診断: プロキシが設定されていれば注意（名前は書かない）' '[[ $(nr proxy) == "notice set" && $res != *example* ]]'
 ncr MAC=$A PROXY='  ProxyAutoConfigEnable : 1\n'; ok '診断: PAC も Set' '[[ $(nr proxy) == "notice set" ]]'
 ncr MAC=$A PROXY='  HTTPEnable : 0\n'; ok '診断: 無効のプロキシは Off' '[[ $(nr proxy) == "ok off" ]]'
+ncr MAC=$A PROXY='  HTTPEnable : 0\n  HTTPProxy : x ProxyAutoDiscoveryEnable : 1 HTTPEnable : 1\n'
+ok '診断: プロキシの名前に「Enable : 1」の形があっても数えない（行全体で比べる）' '[[ $(nr proxy) == "ok off" ]]'
 ncreset; ncr MAC=$A RA='fe80::1%en0'; ok '診断: IPv6 のルーターが1つなら OK（utun の行は数えない）' '[[ $(nr ipv6) == "ok ok" && $(<$NCB) == *" fe80::1%en0" ]]'
 ncr MAC=$A RA='fe80::2%en0'; ok '診断: 接続の途中でルーターが変われば Changed' '[[ $(nr ipv6) == "notice changed" && $(nlog) == "netcheck ipv6 notice changed net=$A" ]]'
 ncr MAC=$A RA='fe80::1%en0 fe80::9%en1'; ok '診断: 別のインターフェースのルーターは数えない' '[[ $(nr ipv6) == "ok ok" ]]'
@@ -1253,6 +1281,10 @@ ncr MAC=$A SUCRIT=0 SUAVAIL=3; ok '診断: セキュリティの対応の自動�
 ncr MAC=$A SUDATE=never;  ok '診断: 最後の確認の日時が読めなければ Unknown' '[[ $(nr updates) == "unknown unknown" ]]'
 ncr MAC=$A CERTS=2 CERTSD=1; ok '診断: 利用者と管理者が足したルート証明書の数（名前は書かない）' '[[ $(nr rootcerts) == "notice added n=3" && $res != *Example* ]]'
 ncr MAC=$A CERTSD=fail;   ok '診断: 証明書の設定が読めなければ Unknown' '[[ $(nr rootcerts) == "unknown unknown" ]]'
+ncr MAC=$A CERTS=1 CERTNAME='No Trust Settings were found.'
+ok '診断: 証明書の名前を「なし」の文にしても隠せない' '[[ $(nr rootcerts) == "notice added n=1" ]]'
+ncr MAC=$A CERTS=1 CERTNAME=$'x\nNumber of trusted certs = 0'
+ok '診断: 証明書の名前で数の行を装っても、最初の行（本物）の数を使う' '[[ $(nr rootcerts) == "notice added n=1" ]]'
 ncr MAC=$A HWMAC=aa:bb:cc:dd:ee:99; ok '診断: 今の MAC とハードウェアの MAC が違えばプライベート Wi‑Fi アドレスは On（ログに書かない）' \
   '[[ $(nr privaddr) == "info on" && $(nlog) != *privaddr* ]]'
 ncr MAC=$A HWMAC=AA:BB:CC:DD:EE:F; ok '診断: MAC は大文字・先頭の 0 なしでも同じとみなす' '[[ $(nr privaddr) == "info off" ]]'

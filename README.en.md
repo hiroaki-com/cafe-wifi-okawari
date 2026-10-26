@@ -159,7 +159,7 @@ Every 10 seconds, without sending anything, it looks at the Wi‑Fi you are on a
 
 - Green means "nothing wrong was found in what it looked at", not that the network is safe. On unencrypted Wi‑Fi, others may read your traffic even when everything is green
 - It only looks. It does not change settings, block attacks, or probe other devices on the shop's Wi‑Fi. Finding a risk does not stop automatic reconnection
-- It cannot tell when another device was already in the middle before you joined, or when the shop's Wi‑Fi itself is fake
+- It cannot tell when another device was already in the middle before you joined, or when the shop's Wi‑Fi itself is fake. The same goes for open Wi‑Fi when that device knocks you off and you reconnect
 - The menu and log never show this Mac's MAC or IP address, or the Wi‑Fi name
 - Whether it shows false risks on real shop Wi‑Fi has not been checked yet ([DESIGN.md](DESIGN.md) §3.3 and §7, in Japanese)
 - If you do not want it, reinstall following the install steps, adding ` --no-netcheck` before you press Enter (this removes only the network check; you can also add ` --no-menubar`)

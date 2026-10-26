@@ -491,13 +491,13 @@ head<TAB>Recent
 | `netcheck.sh` → `~/.local/bin/cafe-wifi-okawari-netcheck` | 診断（唯一のロジック）。結果ファイル・基準ファイルを書き、注意・危険の変化だけを本体のログに追記する |
 | `~/Library/LaunchAgents/local.cafe-wifi-okawari.netcheck.plist` | `ProgramArguments=/bin/zsh <netcheck>`、`StartInterval=10`、`WatchPaths=[/var/run/resolv.conf, <要求ファイル>]`、`RunAtLoad`、`ProcessType=Background`、`LowPriorityIO`。標準出力・標準エラーはログに向けない（網やプロセスから来た文をログに入れない）。launchd は同じジョブを同時に2つ動かさないので排他はしない |
 | `~/Library/Caches/cafe-wifi-okawari.netcheck` | 結果（下の「結果ファイル」）。netcheck だけが書く |
-| `~/Library/Caches/cafe-wifi-okawari.netcheck.base` | 接続の基準「ゲートウェイの IP・resolv.conf の更新時刻・ゲートウェイの MAC・IPv6 のルーター」と、確かめ中の危険「ID 値 最初に見た時刻」 |
+| `~/Library/Caches/cafe-wifi-okawari.netcheck.base` | 接続の基準「ゲートウェイの IP・接続の見分け（Wi‑Fi は `c<起動時刻>.<ConnectionID>`、それ以外は resolv.conf の更新時刻）・ゲートウェイの MAC・IPv6 のルーター」と、確かめ中の危険「ID 値 最初に見た時刻」 |
 | `~/Library/Caches/cafe-wifi-okawari.netcheck.now` | Check Now の要求。`menubar.js` が作り、netcheck が終わりに消す。中身は読まない |
 
 **流れ**（10秒ごと・resolv.conf の書き換え・要求ファイルの作成で起動）
 
 1. 今の接続先を本体の `netid` と同じ方法で求める（既定ゲートウェイの MAC。取れなければ IP）。既定経路がなければ、結果は書き換えず更新時刻だけ進めて終わる（メニューバーは自分で `Off` と出す）
-2. 接続の基準: ゲートウェイの IP と resolv.conf の更新時刻の組が前と同じ間は、同じ接続とみなす。リースの更新では resolv.conf は変わらない（§7 の実測）ので基準を捨てない。つなぎ直し・認証画面での同意で resolv.conf が変わったら取り直す（攻撃がその瞬間に始まると見逃す。下の「限界」）
+2. 接続の基準: ゲートウェイの IP と接続の見分けの組が前と同じ間は、同じ接続とみなす。Wi‑Fi の接続の見分けは、`ipconfig getsummary` の最上位の `ConnectionID`（つなぐたびに増える）と起動時刻（`sysctl kern.boottime`。`ConnectionID` は再起動で1に戻る）。resolv.conf の更新時刻は Wi‑Fi では使わない。IPv6 の RA の DNS サーバー（RDNSS）や DHCP の更新の応答で網の側から書き換えさせられ、そのたびに基準を取り直すと、ゲートウェイの MAC の変化を黙って受け入れてしまうため。Wi‑Fi でない接続（`ConnectionID` がない）は resolv.conf の更新時刻（リースの更新では変わらない。§7 の実測）。つなぎ直したら取り直す（攻撃がその瞬間に始まると見逃す。下の「限界」）
 3. 下の表の項目を診断する。危険の条件は「確かめ中」として基準ファイルに残し、2回以上の診断にわたって5秒より長く続いたときだけ危険にする（一時的な揺れで赤にしない）
 4. 結果ファイルを書く。中身が変わらなければ書き直さず更新時刻だけ進める。注意・危険に変わったとき・戻ったときだけログに1行
 
@@ -505,7 +505,7 @@ head<TAB>Recent
 
 | ID（結果・ログ） | 表記 | 方法 | 緑 | 黄 | 赤 | 灰 |
 |---|---|---|---|---|---|---|
-| `wifi` | `Wi‑Fi Security` | `ipconfig getsummary <Wi‑Fi>` の `Security` | — | `None`（`NONE`。暗号化なし） | — | `Unknown`（それ以外の値）・`Not Wi‑Fi` |
+| `wifi` | `Wi‑Fi Security` | `ipconfig getsummary <Wi‑Fi>` の最上位の `Security`（下の「実機で確かめたこと」の照合） | — | `None`（`NONE`。暗号化なし） | — | `Unknown`（それ以外の値）・`Not Wi‑Fi` |
 | `gateway` | `Gateway` | 接続の基準のゲートウェイの MAC と今の `arp -n <gw>` を比べる | `OK` | — | `Changed`（同じ接続の途中で変わり、続いた。ARP 偽装の兆候） | `Unknown`（ARP が取れない） |
 | `routes` | `Routes` | ① `netstat -rn -f inet` の Wi‑Fi 側の経路のうち、既定・サブネット・ホスト・マルチキャスト以外のゲートウェイ経路、② この Mac の IPv4 が私用の範囲（10/8・172.16/12・192.168/16・100.64/10・169.254/16）の外か、③ VPN（全経路）の使用中に `1.1.1.1`・`17.253.144.10`・`8.8.8.8` への経路（`route -n get`。通信しない）が Wi‑Fi を通るか | `OK` | `Extra Routes`（①・VPN なし）・`Public Subnet`（②・VPN なし） | `Bypasses VPN`（VPN の使用中に①②③のどれか。[TunnelVision](https://www.cve.org/CVERecord?id=CVE-2024-3661)・[TunnelCrack の LocalNet](https://www.cve.org/CVERecord?id=CVE-2023-36672) の形） | — |
 | `proxy` | `Proxy` | `scutil --proxy` | `Off` | `Auto-Discovery On`・`Set`（手動・PAC・SOCKS。職場の設定のこともある） | — | `Unknown` |
@@ -515,15 +515,18 @@ head<TAB>Recent
 | `sharing` | `Sharing` | ループバック以外の待ち受けのうち 22・445・548・3283・5900 | `Off` | 種類（例: `Screen Sharing`） | — | — |
 | `open` | `Open to This Network` | `netstat -anv -p tcp` の `LISTEN` のうちループバック以外で、共有・AirPlay のポートでないもの。持ち主（netstat の `名前:PID` の PID）を `ps -o comm=` で引き、`/System/`・`/usr/libexec/` の下（例: `rapportd`）は数えない。既知の AI・開発用のポート（11434 Ollama・1234 LM Studio・8888 Jupyter・6274/6277 MCP Inspector）は名前で出す | `None`・`Blocked by Firewall`（すべて遮断） | `<n> Apps`・`Ollama` など（ツールチップにポート番号） | — | — |
 | `updates` | `macOS Updates` | `/Library/Preferences/com.apple.SoftwareUpdate` の最後の確認の結果（通信しない） | `Up to Date` | `<n> Available`・`Not Checked Recently`（最後の確認から7日を過ぎた）・`Auto Security Updates Off`（`ConfigDataInstall`・`CriticalUpdateInstall` が 0） | — | `Unknown` |
-| `rootcerts` | `Added Root Certificates` | `security dump-trust-settings`（利用者・`-d` 管理者）の `Number of trusted certs` | `None` | `<n> Added` | — | `Unknown` |
-| `vpn` | `VPN` | 既定経路のインターフェース（`utun`・`ipsec`・`ppp`）と `scutil --nc list` の `(Connected)` | `On` | `Off`（暗号化なしの網のときだけ） | — | `Partial`（つながっているが既定経路は Wi‑Fi）・`Off` |
+| `rootcerts` | `Added Root Certificates` | `security dump-trust-settings`（利用者・`-d` 管理者）が成功したときの `Number of trusted certs = <n>` の行。なしは、終了コード1と決まった1文だけの出力 | `None` | `<n> Added` | — | `Unknown` |
+| `vpn` | `VPN` | 既定経路か `1.1.1.1` への経路（`route -n get`。通信しない）のインターフェース（`utun`・`ipsec`・`ppp`）と、`scutil --nc list` の状態の欄の `(Connected)`（名前は見ない） | `On` | `Off`（暗号化なしの網のときだけ） | — | `Partial`（つながっているが既定経路は Wi‑Fi）・`Off` |
 | `privaddr` | `Private Wi‑Fi Address` | `ifconfig <Wi‑Fi> ether` と `networksetup -getmacaddress <Wi‑Fi>` が違えば On。値は比べるだけで残さない | （情報。`On`・`Off`・`Unknown`） | | | |
 
-VPN の使用中は、既定経路が VPN のインターフェースを通るので、`wifi`・`routes`・`ipv6`・`privaddr` は下の Wi‑Fi を見る。
+VPN の使用中は、既定経路が VPN のインターフェースを通るので、`wifi`・`routes`・`ipv6`・`privaddr` は下の Wi‑Fi を見る。既定経路を Wi‑Fi に残したまま `0/1`・`128/1` の経路で全部を通す VPN（OpenVPN の `def1` など）は、`route -n get default` では Wi‑Fi に見える（既定経路そのものを引く）ので、`1.1.1.1` への経路で VPN と見分ける。このときゲートウェイは Wi‑Fi 側のものを見る。
 
 実機で確かめたこと（2026-10-26、macOS 27.0.1、sudo なし）と、それに合わせた判断:
 
-- `Security` は暗号化なしの網の `NONE` だけを実測した。`IPConfiguration` の文字列には `WPA2_PSK`・`WPA3_SAE`・`FT_SAE`・`8021X` などがあり、`WEP`・`OWE` はなかった。実網で確かめるまで `NONE` 以外は `Unknown`（灰）にする
+- `Security` は暗号化なしの網の `NONE` だけを実測した。`IPConfiguration` の文字列には `WPA2_PSK`・`WPA3_SAE`・`FT_SAE`・`8021X` などがあり、`WEP`・`OWE` はなかった。実網で確かめるまで `NONE` 以外は `Unknown`（灰）にする（あとでシステムログに暗号化ありの網の `Security WPA2_PSK` も見つかった。色の決め方は変えていない）
+- `ipconfig getsummary` の最上位のキーは名前順に出る（`BSSID`・`ConnectionID`・`IPv4`・`IPv6`・`InterfaceType`・`LinkStatusActive`・`NetworkID`・`SSID`・`Security`）。`IPv4` の中に DHCP のパケットがそのまま出て、`domain_name (string): …`・`sname = …` など網が決める文字列を含む。「`Security :` を含む最初の行」を拾うと、偽の網がドメイン名を `shop.example Security : WPA3_SAE` にするだけで暗号化なしを隠せる。そのため、頭の空白2つから行全体で照らし、パケットより前の `ConnectionID` は最初の行、最後の `Security` は最後の行を使い、値は英大文字・数字・`_` に限る。SSID の行は伏せ字（`<redacted>`）で、SSID からは装えない
+- `ConnectionID` は Wi‑Fi につなぐたびに増え（システムログで 27→32）、同じ網のままのスリープ（ダークウェイクを含む一晩）では変わらず、再起動で1に戻った。`IPConfiguration` は RDNSS を処理する（実行ファイルの文字列 `RDNSS expired`）
+- `security dump-trust-settings` は、足した証明書がなければ標準エラーに `SecTrustSettingsCopyCertificates: No Trust Settings were found.` だけを出して終了コード1で終わる。証明書の名前は出力に出るので、名前をこの文にした証明書で「なし」と誤らないよう、数は成功したときの行全体の一致、なしは出力全体の一致で見る。`scutil --proxy` のプロキシの名前、`scutil --nc list` の VPN の名前も、同じ理由で行全体か状態の欄だけで照らす
 - `netstat -anv -p tcp` は sudo なしで root のプロセスを含む `名前:PID` を出す（`launchd:1` が持つ待ち受けも見える）ので、持ち主の PID は `lsof` を使わずに netstat から取る。名前の欄は16文字で切れ、空白を含むことがあるので、`:<数字>` で終わる最後の欄から PID を取る
 - `ps -o comm=` は実行時の名前（argv[0]）で、`/usr/bin/python3` で起動したものは `/usr/bin/python3`、PATH から起動した `nc` は `nc` になる。`/usr/` の下をすべて除くと、利用者が `0.0.0.0` で動かした `python3 -m http.server` などを見逃すので、除くのは `/System/`・`/usr/libexec/`（`rapportd` は `/usr/libexec/rapportd`）だけにした。argv[0] は書き換えられるので、悪意のあるプログラムの見分けには使えない（下の「限界」）。Homebrew の `/usr/local` も数える
 - AirPlay 受信のキーは `AirplayReceiverEnabled`（無効にしている Mac で `0`、7000 の待ち受けなし）。「AirPlay を許可」の範囲のキーは見つからなかった
@@ -582,6 +585,7 @@ updates notice available n=2
 
 - ユーザーの LaunchAgent として動き、sudo・管理者のパスワードを使わず、設定を変えない。待ち受けない。どこへも送らない（curl・dig を使わない）
 - 使うのは macOS 標準のコマンドだけで、すべて絶対パスで呼ぶ（`route`・`arp`・`networksetup`・`ipconfig`・`netstat`・`ndp`・`scutil`・`socketfilterfw`・`defaults`・`security`・`ps`・`ifconfig`）
+- 網やプロセスから来た文に、判定に使う行と同じ形を入れても結果を変えられないよう、出力は行全体・行の位置・決まった欄で照らす（部分一致で探さない）
 - ログと結果ファイルに書くのは、固定の語・数・ポート番号と、形を確かめたゲートウェイの MAC・IPv4 だけ。網やプロセスから来た文（SSID・プロキシの名前・証明書の名前・プログラム名など）は、短くしたり伏せたりしても書かない。ログは現地試験でエージェントも読むので、網から来た文が隠れた指示の経路にならないようにする。値は固定の比較か厳密な形の照合だけに使い、`eval` しない
 - この Mac の MAC・IP と SSID は、ログにも結果ファイルにもメニューにも出さない（プライベート Wi‑Fi アドレスと私用の範囲は比べるだけ）
 - 結果・基準ファイルは umask 077 で作り、一時ファイルから `mv` で置き換える。要求ファイルには「すぐ診断する」以上の意味を持たせない。結果ファイルは同じ利用者のほかのプロセスにも書き換えられる（防がない。下の「限界」）
@@ -590,7 +594,7 @@ updates notice available n=2
 
 **限界**
 
-- 端末から見えない攻撃は分からない: 最初から中間者がいる網（基準を取る前に始まっている。つないだ瞬間のゲートウェイの変化も見逃す）、AP の内部での乗っ取り、偽の網（SSID を読めない・暗号化なしの網は相手を確かめられない）
+- 端末から見えない攻撃は分からない: 最初から中間者がいる網（基準を取る前に始まっている。つないだ瞬間のゲートウェイの変化も見逃す。保護のない Wi‑Fi では、攻撃者が電波で切断してつなぎ直させれば、その接続の基準を取り直すので同じく見逃す）、AP の内部での乗っ取り、偽の網（SSID を読めない・暗号化なしの網は相手を確かめられない）
 - 緑は「見た範囲で異常がない」だけ。暗号化なしの網では、緑が並んでも盗み見はありうる（VPN を勧める）
 - `Open to This Network` は TCP の待ち受けだけを見る（UDP は見ない）。ファイアウォールが個々のアプリを許可しているかまでは分からない。持ち主の見分けは実行時の名前によるので、名前を偽るプログラムは数えないことがある
 - Mac がすでに乗っ取られていれば、結果ファイルも書き換えられうる。診断はマルウェア対策の代わりにならない
@@ -738,9 +742,9 @@ cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawar
 | 確認項目 | 結果 |
 |---|---|
 | 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`・`menubar.js` の `osacompile -l JavaScript`） | OK |
-| 模擬試験 `zsh test/run.sh`（486項目。うちネットワークの診断が96項目（`netcheck.sh` が67・メニューバーが16・`install.sh` が14）。以下は診断を足す前の390項目の内訳: USEN の分岐と `install.sh status` の見張り表示が121項目、同意済みの Wi2 の網での認証画面の同意が11項目、メニューバーの表示が81項目（USEN のチェーンが24項目、見張り中の網の表示が10項目）、`install.sh` のメニューバーと次の時間切れの目安が23項目） | OK。GitHub Actions でも実行。診断を足したとき（2026-10-26）は、既存の項目のうち仕様が変わった2か所だけを直した（展開先からの導入の試験で複製するファイルに `netcheck.sh` を足す・削除の試験で外す登録に診断の LaunchAgent を足す。前者は2項目に効く）。それより前に、仕様を変えた6項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない・同意済みの網でも入店時にシステムログを読む・直近の出来事に `captive login seen` を出す・チェーンの分かった見張り中の網を緑の On にする）は書き換えた。Wi2 のつなぎ直しの項目は、同意済みの MAC で15秒待つようになったので、resolv.conf の更新から20秒の状態で確かめる。ときどき失敗した2項目を直した（2026-10-03）: 「2回目の失敗のあとは60秒空ける」は更新時刻を59秒前にしてから本体を起動するので、その間に秒が変わると60秒になって確かめ直していた（55秒前に変えた）。`status` の「ログの最新5行」は `L1` を含まないことを出力全体で確かめていたので、一時フォルダの名前（`mktemp` の乱数）に `L1` が入ると失敗した（字下げしたログの行だけを見るように変えた。一時フォルダを `L1` を含む名前に固定すると必ず失敗することで確かめた） |
+| 模擬試験 `zsh test/run.sh`（498項目。うちネットワークの診断が108項目（`netcheck.sh` が79・メニューバーが16・`install.sh` が14）。以下は診断を足す前の390項目の内訳: USEN の分岐と `install.sh status` の見張り表示が121項目、同意済みの Wi2 の網での認証画面の同意が11項目、メニューバーの表示が81項目（USEN のチェーンが24項目、見張り中の網の表示が10項目）、`install.sh` のメニューバーと次の時間切れの目安が23項目） | OK。GitHub Actions でも実行。診断を足したとき（2026-10-26）は、既存の項目のうち仕様が変わった2か所だけを直した（展開先からの導入の試験で複製するファイルに `netcheck.sh` を足す・削除の試験で外す登録に診断の LaunchAgent を足す。前者は2項目に効く）。それより前に、仕様を変えた6項目（bootstrap の回数を本体の plist で数える・`status` の目安を今の接続先で求める・60分を過ぎたら `unknown` でなく行を出さない・同意済みの網でも入店時にシステムログを読む・直近の出来事に `captive login seen` を出す・チェーンの分かった見張り中の網を緑の On にする）は書き換えた。Wi2 のつなぎ直しの項目は、同意済みの MAC で15秒待つようになったので、resolv.conf の更新から20秒の状態で確かめる。ときどき失敗した2項目を直した（2026-10-03）: 「2回目の失敗のあとは60秒空ける」は更新時刻を59秒前にしてから本体を起動するので、その間に秒が変わると60秒になって確かめ直していた（55秒前に変えた）。`status` の「ログの最新5行」は `L1` を含まないことを出力全体で確かめていたので、一時フォルダの名前（`mktemp` の乱数）に `L1` が入ると失敗した（字下げしたログの行だけを見るように変えた。一時フォルダを `L1` を含む名前に固定すると必ず失敗することで確かめた） |
 | 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、すべて NG として検出（例: `-b "$jar"` を外す・同意の本文を変えると、どちらも23項目が失敗）。USEN の実装では33通りの変異（例: `--noproxy` を外す・性別を空でなく送る・GET のあとの same() を外す・同意の行の削除を行全体の一致にする・基準時刻の +1 を外す）をすべて検出。メニューバーの実装では37通り（例: 注意の接続先の照合を外す・Wi‑Fi でなく先頭のポートを使う・目安の captive login の除外や resolv.conf の30秒を変える・出来事を4件にする・`--no-menubar` で消さない・`KeepAlive` を付ける）をすべて検出（最初は2通りを見逃したので、試験の行の並びと `status` の30秒の境目を足した）。アイコンの組み込みでは4通り（1x・2x のどちらかを入れない・`--no-menubar` と uninstall で画像を残す）をすべて検出。USEN のチェーンでは12通り（例: 探す範囲をリース開始の10秒前からに戻す・2時間の範囲を広げる・インターフェースの照合を外す・最初の行で判定する・伏せ字の SSID を残す・Wi2 の網でも読む・見つからなかった行を出来事に使う・読んだあとの接続先の確認を外す・共通の一時ファイルに戻す・uninstall で一時ファイルを残す）をすべて検出（最初はインターフェースの照合を外しても通ったので、別のインターフェースの行があとに出る形に試験を直した。一時ファイルの試験も、直前の試験のキャッシュが残っていて壊した版でも通ったので、直前で消すようにした）。同意済みの網での認証画面の同意では12通り（例: 60秒の窓を外す・広げる・Wi2 の再試行でも読む・15秒待ちを外す・同意済みのブランドでなくても書く・USEN の `usen` を付けない・確かめ済みの接続でも読む・メニューバーと `status` で起点の語や照合の形を戻す・出来事の読み替えを外す）をすべて検出。メニューの印と見出し（2026-10-02）では10通り（例: 失敗で赤にしない・同意待ちで赤を黄に上書きする・同意待ちで黄にしない・見張り中を緑にする・名前がないときの `This Wi‑Fi` を外す・`Recent` の見出しを外す・未接続や停止中を灰にしない）をすべて検出。見張り中の網の表示（2026-10-02）では9通り（例: チェーンが分かっても緑にしない・`resolv.conf` の早いほうを使わない・5分の範囲を外す・行のあとの更新も起点にする・60分の判定を外す・`status` でチェーンの控えのキーが `-` でも出す）をすべて検出（最初は行のあとの更新を起点にする変異を2通りとも見逃したので、起点が60分の境目をまたぐ試験を足した）。USEN の同意待ちの書き直しと、入れ直したあとの目安（2026-10-03）では7通り（常に書き直す・進めない・条件を30秒ゆるめる・メニューバーと `status` で `(online)` の扱いを外す・前の行の `resolv.conf` の確認を外す）をすべて検出 |
-| 試験が不具合を検出できるか（ネットワークの診断、2026-10-26） | 21通りの変異をすべて検出（例: 危険の確かめ直しを外す・5秒を0にする・`/usr/bin` の下も macOS のプログラムとして除く・`::1` を数える・ログを変化のたびに書く・接続が変わっても前の結果と比べる・基準に resolv.conf を使わない・すべて遮断を見ない・`NONE` 以外も注意にする・要求ファイルを消さない・変わらないとき更新時刻を進めない・ホスト経路も数える・メニューバーで今の接続先の照合・60秒の判定・表による読み捨て・VPN 中の案内の抑止・plist の有無の確認を外す・`--no-netcheck` や uninstall で結果を残す・`LowPriorityIO` を外す・`status` で古い結果を出す）。実装中に試験が見つけた不具合は3つ（連想配列のキーに空白を入れた代入・netstat の欄が崩れた行での `set -u` の異常終了・ゲートウェイが変わると接続先の識別子も変わるので、戻ったことをログに書かなかった） |
+| 試験が不具合を検出できるか（ネットワークの診断、2026-10-26） | 21通りの変異をすべて検出（例: 危険の確かめ直しを外す・5秒を0にする・`/usr/bin` の下も macOS のプログラムとして除く・`::1` を数える・ログを変化のたびに書く・接続が変わっても前の結果と比べる・基準に resolv.conf を使わない・すべて遮断を見ない・`NONE` 以外も注意にする・要求ファイルを消さない・変わらないとき更新時刻を進めない・ホスト経路も数える・メニューバーで今の接続先の照合・60秒の判定・表による読み捨て・VPN 中の案内の抑止・plist の有無の確認を外す・`--no-netcheck` や uninstall で結果を残す・`LowPriorityIO` を外す・`status` で古い結果を出す）。実装中に試験が見つけた不具合は3つ（連想配列のキーに空白を入れた代入・netstat の欄が崩れた行での `set -u` の異常終了・ゲートウェイが変わると接続先の識別子も変わるので、戻ったことをログに書かなかった）。同日のレビューで、網やプロセスが選べる文字列で結果を変えられる箇所を直したときは、10通りの変異（`Security`・`ConnectionID` の行を最初・最後の逆で選ぶ・基準に resolv.conf の更新時刻だけを使う・`1.1.1.1` への経路で VPN を見ない・プロキシと VPN の状態を部分一致で探す・証明書の「なし」を数より先に見る・最後の数の行を使う）のうち8通りを検出した。残る2通り（`Security` の行の頭の空白の照合を外す・「なし」の文を部分一致にする）は、実機の出力の順では結果が変わらない（最後の行を使う・数を先に見るので）ので、二重の守りとして残す |
 | ネットワークの診断の実機での実行（2026-10-26、macOS 27.0.1、店の網ではない暗号化なしの網） | OK。一時的な HOME で `netcheck.sh` を実行し、約0.2秒で全項目を書いた（暗号化なし・更新2件・VPN なしの注意3つ、ほかは緑、プライベート Wi‑Fi アドレスは On）。2回目はログを書き足さなかった。続けて `menubar.sh` が要約とサブメニューを出し、`menubar.js --check` がサブメニュー付きで作れた（画面での目視は未実施）。導入した LaunchAgent での動作・CPU・RSS は未確認 |
 | 実際の curl の Cookie の保存と送信 | OK。空の jar で始め、302 の `Set-Cookie: session_id=…; Secure; HttpOnly` を保存し、続く POST で送る（ローカルの HTTPS サーバーと実網） |
 | LaunchAgent からの知らせ | `display notification` は **NG**（macOS 27。終了コード 0 だが表示されず、許可も求められない）。`display alert … giving up after 120` は表示された |

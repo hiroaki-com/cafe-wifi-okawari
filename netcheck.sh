@@ -11,9 +11,9 @@ umask 077
 
 log=$HOME/Library/Logs/cafe-wifi-okawari.log
 NC=$HOME/Library/Caches/cafe-wifi-okawari.netcheck   # 結果「v1 接続先 時刻 0 -」と「ID 段階 値 [n=数] [p=ポート,…]」の行
-BS=$NC.base   # 接続の基準「ゲートウェイの IP resolv.conf の更新時刻 ゲートウェイの MAC IPv6 のルーター」と、確かめ中の危険「ID 値 最初に見た時刻」
+BS=$NC.base   # 接続の基準「ゲートウェイの IP 接続の見分け ゲートウェイの MAC IPv6 のルーター」と、確かめ中の危険「ID 値 最初に見た時刻」
 RQ=$NC.now    # Check Now の要求（menubar.js が作る）。中身は読まず、終わりに消す
-RC=/var/run/resolv.conf   # つなぎ直したときと認証画面で同意したときに書き換わる（DESIGN.md §7）。接続の基準の見分けに使う
+RC=/var/run/resolv.conf   # つなぎ直したときと認証画面で同意したときに書き換わる（DESIGN.md §7）。Wi‑Fi でない接続の見分けに使う
 CONFIRM=5     # 危険の条件が2回以上の診断にわたって、この秒数より長く続いたときだけ危険にする（一時的な揺れで赤にしない）
 now=$EPOCHSECONDS
 
@@ -45,12 +45,23 @@ if [[ -z $net ]]; then
 fi
 
 wifi=$(/usr/sbin/networksetup -listallhardwareports 2>/dev/null | /usr/bin/awk '$0 == "Hardware Port: Wi-Fi" { getline; print $2; exit }')
-# VPN（全経路）は既定経路が VPN のインターフェースを通る。そのときの網は下の Wi‑Fi
+# VPN（全経路）は既定経路が VPN のインターフェースを通る。そのときの網は下の Wi‑Fi。
+# 既定経路を残したまま 0/1・128/1 の経路で全部を通す VPN（OpenVPN の def1 など）は、公開の宛先への経路で見る
 vpn=0 lan=$ifc
-[[ $ifc == (utun|ipsec|ppp)<-> ]] && vpn=1 lan=$wifi
+if [[ $ifc == (utun|ipsec|ppp)<-> ]]; then vpn=1 lan=$wifi
+else rt 1.1.1.1; [[ $ri == (utun|ipsec|ppp)<-> ]] && vpn=1; fi
 
-# 接続の基準（ゲートウェイの IP と resolv.conf の更新時刻の組が同じ間）。リースの更新では resolv.conf は変わらないので捨てない
-zstat -A m +mtime $RC 2>/dev/null || m=(0)
+# Wi‑Fi の状態。最上位のキーは名前順で、ConnectionID は DHCP のパケット（ドメイン名など網が決める文字列を含む）より前、
+# Security は最後に出る（実機）。網の文字列に紛れた同じ形の行を拾わないよう、頭の空白2つから行全体で比べ、前のキーは最初の行、最後のキーは最後の行を使う
+gs=(); [[ -n $lan && $lan == "$wifi" ]] && gs=(${(f)"$(/usr/sbin/ipconfig getsummary $wifi 2>/dev/null)"})
+cid=${${${(M)gs:#  ConnectionID : <->}[1]-}##* }
+
+# 接続の基準（ゲートウェイの IP と接続の見分けの組が同じ間）。Wi‑Fi はつなぐたびに増える ConnectionID（スリープの間は同じ網なら変わらず、
+# 再起動で1に戻るので起動時刻と組にする。実機）。resolv.conf の更新時刻は IPv6 の RA の DNS サーバーや DHCP の更新で網の側から変えられ、
+# 基準を取り直させられるので、Wi‑Fi では使わない。Wi‑Fi でなければ resolv.conf の更新時刻（リースの更新では変わらない）
+bt=${${"$(/usr/sbin/sysctl -n kern.boottime 2>/dev/null)"#*sec = }%%,*}
+if [[ -n $cid && $bt == <-> ]]; then m=(c$bt.$cid)
+else zstat -A m +mtime $RC 2>/dev/null || m=(0); fi
 b=(); [[ -r $BS ]] && { b=(${(f)"$(<$BS)"}) }
 bl=(${=b[1]-}) old=1
 typeset -A sus=()   # 確かめ中の危険「ID:値」→ 最初に見た時刻
@@ -92,7 +103,7 @@ sh=(${(u)sh}) op=(${(onu)op}) pids=(${(u)pids})
 rows=()
 # This Network
 if [[ -n $lan && $lan == "$wifi" ]]; then
-  s=${${(M)${(f)"$(/usr/sbin/ipconfig getsummary $wifi 2>/dev/null)"}:#*Security :*}[1]##* }
+  s=${${${(M)gs:#  Security : [A-Z0-9_]##}[-1]-}##* }
   # 実機で確かめたのは暗号化なしの NONE だけ。ほかの値は確かめるまで Unknown（DESIGN.md §3.3）
   [[ $s == NONE ]] && rows+='wifi notice none' || rows+='wifi unknown unknown'
 else
@@ -119,10 +130,11 @@ elif (( $#ex )); then rows+="routes notice extra n=$#ex"
 elif (( pub )); then rows+='routes notice public'
 else rows+='routes ok ok'; fi
 
-x=$(/usr/sbin/scutil --proxy 2>/dev/null)
-if [[ -z $x ]]; then rows+='proxy unknown unknown'
-elif [[ $x == *'ProxyAutoDiscoveryEnable : 1'* ]]; then rows+='proxy notice autodiscovery'
-elif [[ $x == *(ProxyAutoConfig|HTTP|HTTPS|SOCKS)'Enable : 1'* ]]; then rows+='proxy notice set'
+# 行全体で比べる（プロキシの名前などの値に同じ形の文字列があっても拾わない）
+x=(${(f)"$(/usr/sbin/scutil --proxy 2>/dev/null)"})
+if (( ! $#x )); then rows+='proxy unknown unknown'
+elif [[ -n ${(M)x:#  ProxyAutoDiscoveryEnable : 1} ]]; then rows+='proxy notice autodiscovery'
+elif [[ -n ${(M)x:#  (ProxyAutoConfig|HTTP|HTTPS|SOCKS)Enable : 1} ]]; then rows+='proxy notice set'
 else rows+='proxy ok off'; fi
 
 # IPv6 のルーター（Wi‑Fi 側の行だけ。utun の行はシステムのもの）。最初に見えたルーターを基準にする
@@ -164,17 +176,20 @@ elif (( now - t > 7 * 86400 )); then rows+='updates notice not-checked'
 else rows+='updates ok uptodate'; fi
 
 # 利用者・管理者が足したルート証明書の数（証明書の名前は読まない）
+# 足した証明書がなければ、決まった1文だけを標準エラーに出して 1 で終わる（実機）。証明書の名前に同じ文や数の行を入れても
+# 数を変えられないよう、数は成功したときの行全体の一致で、「なし」は出力全体の一致で見る
 c=0
 for o in '' -d; do
-  x=$(/usr/bin/security dump-trust-settings $o 2>&1)
-  if [[ $x == *'No Trust Settings were found.'* ]]; then :
-  elif [[ $x == *'Number of trusted certs = '<->* ]]; then (( c += ${${x#*Number of trusted certs = }%%[^0-9]*} ))
+  x=$(/usr/bin/security dump-trust-settings $o 2>&1) r=$?
+  y=${${(M)${(f)x}:#Number of trusted certs = <->}[1]-}
+  if (( ! r )) && [[ -n $y ]]; then (( c += ${y##* } ))
+  elif (( r )) && [[ $x == 'SecTrustSettingsCopyCertificates: No Trust Settings were found.' ]]; then :
   else c=-1; break; fi
 done
 (( c < 0 )) && rows+='rootcerts unknown unknown' || { (( c )) && rows+="rootcerts notice added n=$c" || rows+='rootcerts ok none' }
 
 if (( vpn )); then rows+='vpn ok on'
-elif [[ $(/usr/sbin/scutil --nc list 2>/dev/null) == *'(Connected)'* ]]; then rows+='vpn unknown partial'
+elif [[ -n ${(M)${(f)"$(/usr/sbin/scutil --nc list 2>/dev/null)"}:#[* ] \(Connected\) *} ]]; then rows+='vpn unknown partial'   # 状態の欄だけ見る（名前は見ない）
 elif [[ $rows[1] == 'wifi notice none' ]]; then rows+='vpn notice off'
 else rows+='vpn unknown off'; fi
 
