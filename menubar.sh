@@ -1,6 +1,6 @@
 #!/bin/zsh
 # メニューバーに出す状態を決める（DESIGN.md §3.2）。判定はすべてここで行い、menubar.js は表示するだけ。
-# 出力: 1行目はアイコンの種類（off・warn・wait・check・on）。ネットワークの診断で危険があれば、空白と risk を足す（⚠）。
+# 出力: 1行目はアイコンの種類（off・warn・wait・check・on）。ネットワークの診断で危険があるか、危険の記録が残っていれば、空白と risk を足す（⚠）。
 # 2行目以降はメニューの行で、タブで区切った「種類 表示 [右の列] [ツールチップ]」。種類は head（見出し）・green・yellow・red・
 # gray（左の印の色）・-（印なし）。空行は区切り線。種類の前に > が付いた行は、直前の > のない行のサブメニューの行（> だけなら区切り線）。
 # 通信しない。本体の記録ファイルとログ、診断の結果ファイルは読むだけ。表示は英語のみ。
@@ -150,8 +150,9 @@ fi
 
 # ネットワークの診断（§3.3）。診断の LaunchAgent が入っていなければ何も出さない（--no-netcheck は今のまま）。本体の停止中も出す。
 # 読むのは netcheck.sh の結果ファイルと Check Now の要求ファイルだけ。表にない ID・段階・値の行は読み捨てる。
-# 「⚠」（1行目の risk）は、結果が今の接続先のもので、危険の行があるときだけ
+# 「⚠」（1行目の risk）は、結果が今の接続先のもので危険の行があるときと、危険の記録（.alert。利用者が Dismiss で消す）があるとき
 risk=
+strftime -s today %F $now; strftime -r -s md %F $today; strftime -s yday %F $(( md - 1 ))
 if [[ -e $HOME/Library/LaunchAgents/$label.netcheck.plist ]]; then
   [[ $kind == off ]] && netid   # 停止中は今の接続先を求めていない
   NC=$ST.netcheck nr=() sub=() nk=0 nn=0 nd=gray
@@ -162,10 +163,10 @@ if [[ -e $HOME/Library/LaunchAgents/$label.netcheck.plist ]]; then
   elif (( now - nm[1] > 60 )); then ns='Not Running'
   elif [[ -e $NC.now || $nr[1] != "v1 $net "* ]]; then ns='Checking…'
   else
-    typeset -A lb=(wifi 'Wi‑Fi Security' gateway Gateway routes Routes proxy Proxy ipv6 'IPv6 Routers' firewall Firewall
+    typeset -A lb=(wifi 'Wi‑Fi Security' gateway Gateway dns 'DNS Servers' routes Routes proxy Proxy ipv6 'IPv6 Routers' firewall Firewall
       airplay 'AirPlay Receiver' sharing Sharing open 'Open to This Network' updates 'macOS Updates'
       rootcerts 'Added Root Certificates' vpn VPN privaddr 'Private Wi‑Fi Address')
-    typeset -A vl=(ok OK none None off Off on On stealth On unknown Unknown not-wifi 'Not Wi‑Fi' changed Changed
+    typeset -A vl=(ok OK none None off Off on On stealth On unknown Unknown not-wifi 'Not Wi‑Fi' changed Changed new New
       extra 'Extra Routes' public 'Public Subnet' bypass 'Bypasses VPN' autodiscovery 'Auto-Discovery On' set Set
       multiple Multiple partial Partial uptodate 'Up to Date' not-checked 'Not Checked Recently'
       auto-off 'Auto Security Updates Off' remote-login 'Remote Login' file-sharing 'File Sharing'
@@ -176,7 +177,8 @@ if [[ -e $HOME/Library/LaunchAgents/$label.netcheck.plist ]]; then
     typeset -A tp=(
       'wifi none' "This Wi‑Fi has no encryption. People nearby can read unencrypted traffic, and a fake network can look the same."
       'wifi unknown' "Only unencrypted Wi‑Fi has been checked so far. Other kinds of security show as Unknown."
-      'gateway changed' "The router's hardware address changed during this connection. Another device may be posing as the router."
+      'gateway changed' "The router's hardware address changed during this connection or right after reconnecting. Another device may be posing as the router."
+      'dns changed' "The DNS servers this Wi‑Fi hands out changed during this connection. Another device may be answering in place of the network."
       'routes extra' "This Wi‑Fi added routes for some addresses."
       'routes public' "This Wi‑Fi uses public addresses for its local network."
       'routes bypass' "Routes from this Wi‑Fi send some traffic outside your VPN."
@@ -184,6 +186,7 @@ if [[ -e $HOME/Library/LaunchAgents/$label.netcheck.plist ]]; then
       'proxy set' "A proxy is set on this Mac. That's fine if you or your workplace set it."
       'ipv6 multiple' "More than one IPv6 router is announcing itself on this Wi‑Fi."
       'ipv6 changed' "The IPv6 router changed during this connection."
+      'ipv6 new' "An IPv6 router appeared on this Wi‑Fi after it had none. A device may be offering itself as the router."
       'firewall stealth' "Stealth mode is on."
       'firewall on' "Stealth mode is off."
       'airplay on' "Other devices on this Wi‑Fi may be able to reach AirPlay Receiver."
@@ -196,6 +199,7 @@ if [[ -e $HOME/Library/LaunchAgents/$label.netcheck.plist ]]; then
     typeset -A gd=(
       'wifi none' 'Not encrypted. Use a VPN, and only HTTPS sites.'
       'gateway changed' 'Someone may be intercepting this Wi‑Fi. Disconnect, or use a VPN.'
+      'dns changed' 'Someone may be redirecting websites. Disconnect, or use a VPN.'
       'routes bypass' 'Some traffic skips your VPN. Disconnect from this Wi‑Fi.'
       open 'Apps on this Mac accept connections from this Wi‑Fi. Limit them to this Mac (127.0.0.1).'
       'updates auto-off' 'Turn on security updates in System Settings › Software Update.'
@@ -206,7 +210,7 @@ if [[ -e $HOME/Library/LaunchAgents/$label.netcheck.plist ]]; then
     typeset -A nv=()
     for x in ${nr[2,-1]}; do nv[${x%% *}]=${x#* }; done
     sub=(">head${TB}Checked $(strftime '%H:%M' $nm[1])")
-    for g in 'This Network:wifi gateway routes proxy ipv6' 'This Mac:firewall airplay sharing open updates rootcerts vpn' 'Privacy:privaddr'; do
+    for g in 'This Network:wifi gateway dns routes proxy ipv6' 'This Mac:firewall airplay sharing open updates rootcerts vpn' 'Privacy:privaddr'; do
       sub+=(">head$TB${g%%:*}")
       for id in ${=g#*:}; do
         y=(${=nv[$id]-}) n= p=
@@ -234,11 +238,23 @@ if [[ -e $HOME/Library/LaunchAgents/$label.netcheck.plist ]]; then
   fi
   rows+=('' "$nd${TB}Network Check$TB$ns" $sub)
   [[ -n $risk ]] && rows+="-${TB}Possible interception on this Wi‑Fi. See Network Check."
+  # 危険の記録（新しいものから3件）。攻撃者が偽装をやめても、つなぎ直させても、店を出ても、利用者が Dismiss で消すまで出す
+  typeset -A an=('gateway changed' 'Gateway Changed' 'dns changed' 'DNS Servers Changed' 'routes bypass' 'Routes Bypassed VPN')
+  al=(); [[ -r $NC.alert ]] && { al=(${(M)${(f)"$(<$NC.alert)"}:#<-> (gateway changed|dns changed|routes bypass)}) }
+  if (( $#al )); then
+    risk=' risk'
+    rows+="red${TB}Risk Detected Earlier"
+    for x in ${${(Oa)al}[1,3]}; do
+      y=(${=x}) d=$(strftime %F $y[1])
+      [[ $d == $today ]] && d=Today || { [[ $d == $yday ]] && d=Yesterday || d=${d[6,10]} }
+      rows+="-$TB$d $(strftime %H:%M $y[1])$TB$an[$y[2] $y[3]]"
+    done
+    rows+="-${TB}If you signed in to anything then, change those passwords."
+  fi
 fi
 
 # 直近の出来事（新しい順に3件）。時刻・種類・ブランド・秒数だけ（MAC・IP は出さない）。USEN はチェーンが分かっている接続先ならチェーン
 typeset -A nc=(); [[ -r $CH ]] && while read -r x y z; do [[ -n ${cname[$y]-} ]] && nc[$x]=$y; done < "$CH"
-strftime -s today %F $now; strftime -r -s md %F $today; strftime -s yday %F $(( md - 1 ))
 (( $#hits )) && rows+=('' "head${TB}Recent")
 for l in ${${(Oa)hits}[1,3]}; do
   w=(${=l[21,-1]}) d=${l[1,10]}

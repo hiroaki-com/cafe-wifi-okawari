@@ -11,10 +11,15 @@ umask 077
 
 log=$HOME/Library/Logs/cafe-wifi-okawari.log
 NC=$HOME/Library/Caches/cafe-wifi-okawari.netcheck   # 結果「v1 接続先 時刻 0 -」と「ID 段階 値 [n=数] [p=ポート,…]」の行
-BS=$NC.base   # 接続の基準「ゲートウェイの IP 接続の見分け ゲートウェイの MAC IPv6 のルーター」と、確かめ中の危険「ID 値 最初に見た時刻」
+BS=$NC.base   # 接続の基準「ゲートウェイの IP 接続の見分け ゲートウェイの MAC IPv6 のルーター サブネット DNS サーバー 取った時刻」と、
+              # 確かめ中の危険「ID 値 最初に見た時刻 最後に見た時刻」。更新時刻は、最後に接続していた時刻（毎回進める）
+AL=$NC.alert  # 危険になった記録「時刻 ID 値」（新しい20件）。利用者がメニューの Dismiss で消すまで ⚠ を出す
 RQ=$NC.now    # Check Now の要求（menubar.js が作る）。中身は読まず、終わりに消す
 RC=/var/run/resolv.conf   # つなぎ直したときと認証画面で同意したときに書き換わる（DESIGN.md §7）。Wi‑Fi でない接続の見分けに使う
-CONFIRM=5     # 危険の条件が2回以上の診断にわたって、この秒数より長く続いたときだけ危険にする（一時的な揺れで赤にしない）
+CONFIRM=5     # 危険の条件を2回以上の診断で、この秒数より離れて見たときに危険にする（1回目は注意。一時的な揺れで赤にしない）
+KEEP=300      # 確かめ中の危険は、最後に見てからこの秒数は覚えておく（診断の合間だけ偽装を続けても、続けて見えなくても数える）
+REJOIN=120    # 同じサブネットへこの秒数のうちにつなぎ直したら、前の接続の基準を引き継ぐ（切断させて基準を取り直させる攻撃）
+GRACE=30      # 基準を取ってからこの秒数のうちに見えた IPv6 のルーター・DHCP の値は基準に足す（つないだ直後の遅れ）
 now=$EPOCHSECONDS
 
 # 宛先 $1 への経路のゲートウェイを rg に（直結なら空）、インターフェースを ri に入れる。通信はしない（本体と同じ）
@@ -56,26 +61,45 @@ else rt 1.1.1.1; [[ $ri == (utun|ipsec|ppp)<-> ]] && vpn=1; fi
 gs=(); [[ -n $lan && $lan == "$wifi" ]] && gs=(${(f)"$(/usr/sbin/ipconfig getsummary $wifi 2>/dev/null)"})
 cid=${${${(M)gs:#  ConnectionID : <->}[1]-}##* }
 
-# 接続の基準（ゲートウェイの IP と接続の見分けの組が同じ間）。Wi‑Fi はつなぐたびに増える ConnectionID（スリープの間は同じ網なら変わらず、
-# 再起動で1に戻るので起動時刻と組にする。実機）。resolv.conf の更新時刻は IPv6 の RA の DNS サーバーや DHCP の更新で網の側から変えられ、
-# 基準を取り直させられるので、Wi‑Fi では使わない。Wi‑Fi でなければ resolv.conf の更新時刻（リースの更新では変わらない）
+# 接続の基準（接続の見分けが同じ間。ゲートウェイの IP が変わっても取り直さない）。Wi‑Fi はつなぐたびに増える ConnectionID（スリープの間は
+# 同じ網なら変わらず、再起動で1に戻るので起動時刻と組にする。実機）。resolv.conf の更新時刻は IPv6 の RA の DNS サーバーや DHCP の更新で
+# 網の側から変えられ、基準を取り直させられるので、Wi‑Fi では使わない。Wi‑Fi でなければ resolv.conf の更新時刻（リースの更新では変わらない）
 bt=${${"$(/usr/sbin/sysctl -n kern.boottime 2>/dev/null)"#*sec = }%%,*}
 if [[ -n $cid && $bt == <-> ]]; then m=(c$bt.$cid)
 else zstat -A m +mtime $RC 2>/dev/null || m=(0); fi
+# DHCP の応答のサブネットマスクと DNS サーバー（形を確かめた IPv4 だけ）。ドメイン名など網が決める文字列に同じ形の行を入れられるので、
+# 行全体で照合し、ちょうど1行のときだけ使う
+pk=(); [[ -n $lan ]] && pk=(${(f)"$(/usr/sbin/ipconfig getpacket $lan 2>/dev/null)"})
+x=(${(M)pk:#subnet_mask \(ip\): <0-255>.<0-255>.<0-255>.<0-255>}) sn=-
+if (( $#x == 1 )); then
+  y=(${(s:.:)${x##* }}) z=(${(s:.:)gw})
+  sn="$(( z[1] & y[1] )).$(( z[2] & y[2] )).$(( z[3] & y[3] )).$(( z[4] & y[4] ))/${x##* }"
+fi
+x=(${(M)pk:#domain_name_server \(ip_mult\): \{(<0-255>.<0-255>.<0-255>.<0-255>(, |))##\}}) dns=-
+(( $#x == 1 )) && dns=${${${x#*\{}%\}}//, /,}
 b=(); [[ -r $BS ]] && { b=(${(f)"$(<$BS)"}) }
 bl=(${=b[1]-}) old=1
-typeset -A sus=()   # 確かめ中の危険「ID:値」→ 最初に見た時刻
-if (( $#bl == 4 )) && [[ $bl[1] == "$gw" && $bl[2] == "$m[1]" ]] && { [[ $bl[3] == - ]] || hex $bl[3] >/dev/null }; then
-  for x in ${b[2,-1]}; do y=(${=x}); (( $#y == 3 )) && [[ $y[3] == <-> ]] && sus[$y[1]:$y[2]]=$y[3]; done
+zstat -A bm +mtime $BS 2>/dev/null || bm=(0)
+typeset -A sus=() sul=()   # 確かめ中の危険「ID:値」→ 最初に見た時刻・最後に見た時刻
+if (( $#bl == 7 )) && [[ $bl[7] == <-> ]] && { [[ $bl[3] == - ]] || hex $bl[3] >/dev/null } &&
+   { [[ $bl[2] == "$m[1]" ]] || { [[ $sn != - && $bl[5] == "$sn" ]] && (( now - bm[1] <= REJOIN )) } }; then
+  # 同じ接続か、同じサブネットへすぐつなぎ直した（切断させてから偽装する攻撃）。ゲートウェイの MAC・ルーター・DNS は前の基準と比べる
+  bl[1]=$gw bl[2]=$m[1]
+  for x in ${b[2,-1]}; do
+    y=(${=x}); (( $#y == 4 )) && [[ $y[3] == <-> && $y[4] == <-> ]] && (( now - y[4] <= KEEP )) && sus[$y[1]:$y[2]]=$y[3] sul[$y[1]:$y[2]]=$y[4]
+  done
 else
-  bl=($gw $m[1] - -) old=0
+  bl=($gw $m[1] - - $sn $dns $now) old=0
 fi
 [[ $bl[3] == - && -n $mac ]] && bl[3]=$mac
+[[ $bl[5] == - ]] && bl[5]=$sn
+[[ $bl[6] == - ]] && (( now - bl[7] <= GRACE )) && bl[6]=$dns
 cur=()
-# 危険の条件 $1=ID $2=値 を見た。前の診断から続いていて CONFIRM 秒を過ぎていれば成功（危険）
+# 危険の条件 $1=ID $2=値 を見た。前に見てから KEEP 秒のうちで、最初に見てから CONFIRM 秒を過ぎていれば成功（危険）
 seen() {
   local t=${sus[$1:$2]-$now}
-  cur+="$1 $2 $t"
+  cur+="$1 $2 $t $now"
+  unset "sus[$1:$2]"
   (( now - t >= CONFIRM ))
 }
 
@@ -113,7 +137,13 @@ fi
 if [[ -z $mac ]]; then rows+='gateway unknown unknown'
 elif [[ $(hex $mac) == "$(hex $bl[3])" ]]; then rows+='gateway ok ok'
 elif seen gateway changed; then rows+='gateway risk changed'
-else rows+='gateway ok ok'; fi
+else rows+='gateway notice changed'; fi
+
+# DHCP で配られた DNS サーバー（同じ接続の途中で変われば、偽の DHCP が名前の問い合わせを奪っているおそれ）
+if [[ $dns == - || $bl[6] == - ]]; then rows+='dns unknown unknown'
+elif [[ $dns == "$bl[6]" ]]; then rows+='dns ok ok'
+elif seen dns changed; then rows+='dns risk changed'
+else rows+='dns notice changed'; fi
 
 # Wi‑Fi 側の、既定・サブネット・ホスト・マルチキャスト以外のゲートウェイ経路（DHCP の option 121 などで足されたもの）
 ex=(${(f)"$(/usr/sbin/netstat -rn -f inet 2>/dev/null | /usr/bin/awk -v i="$lan" '$4 == i && $1 != "default" && $3 ~ /G/ && $3 !~ /H/')"})
@@ -125,7 +155,9 @@ if (( vpn )); then
   # VPN の使用中に、Wi‑Fi 側の経路・サブネットか、決まった公開の宛先への経路が Wi‑Fi を通れば、VPN の外へ出る（TunnelVision・TunnelCrack）
   by=$(( $#ex || pub ))
   for d in 1.1.1.1 17.253.144.10 8.8.8.8; do rt $d; [[ -n $lan && $ri == "$lan" ]] && by=1; done
-  (( by )) && seen routes bypass && rows+='routes risk bypass' || rows+='routes ok ok'
+  if (( ! by )); then rows+='routes ok ok'
+  elif seen routes bypass; then rows+='routes risk bypass'
+  else rows+='routes notice bypass'; fi
 elif (( $#ex )); then rows+="routes notice extra n=$#ex"
 elif (( pub )); then rows+='routes notice public'
 else rows+='routes ok ok'; fi
@@ -137,12 +169,14 @@ elif [[ -n ${(M)x:#  ProxyAutoDiscoveryEnable : 1} ]]; then rows+='proxy notice 
 elif [[ -n ${(M)x:#  (ProxyAutoConfig|HTTP|HTTPS|SOCKS)Enable : 1} ]]; then rows+='proxy notice set'
 else rows+='proxy ok off'; fi
 
-# IPv6 のルーター（Wi‑Fi 側の行だけ。utun の行はシステムのもの）。最初に見えたルーターを基準にする
+# IPv6 のルーター（Wi‑Fi 側の行だけ。utun の行はシステムのもの）。基準を取ってから GRACE 秒のうちに見えたルーターを基準にする。
+# それより後に、ルーターのなかった網に現れたものは New（IPv4 だけの網に偽の RA で DNS を配る攻撃。mitm6）
 ra=(${${(M)${(f)"$(/usr/sbin/ndp -rn 2>/dev/null)"}:#* if=$lan,*}%% *})
 ra=(${(o)${(M)ra:#[[:xdigit:]:]##(%[[:alnum:]]##|)}})
 r6=${(j:,:)ra}; [[ -n $r6 ]] || r6=-
-[[ $bl[4] == - ]] && bl[4]=$r6
+[[ $bl[4] == - ]] && (( now - bl[7] <= GRACE )) && bl[4]=$r6
 if (( ! $#ra )); then rows+='ipv6 ok none'
+elif [[ $bl[4] == - ]]; then rows+='ipv6 notice new'
 elif [[ $r6 != $bl[4] ]]; then rows+='ipv6 notice changed'
 elif (( $#ra > 1 )); then rows+="ipv6 notice multiple n=$#ra"
 else rows+='ipv6 ok ok'; fi
@@ -205,17 +239,25 @@ fi
 p=(); [[ -r $NC ]] && { p=(${(f)"$(<$NC)"}) }
 typeset -A prev=()
 for x in ${p[2,-1]}; do y=(${=x}); prev[$y[1]]=${x#* }; done
-(( old )) || for x in wifi gateway routes proxy ipv6 vpn privaddr; do unset "prev[$x]"; done
+(( old )) || for x in wifi gateway dns routes proxy ipv6 vpn privaddr; do unset "prev[$x]"; done
+al=()
 for x in $rows; do
   y=(${=x}) q=${prev[$y[1]]-ok}
   [[ ${x#* } == "$q" ]] && continue
   [[ $y[2] == (notice|risk) || ${q%% *} == (notice|risk) ]] || continue
-  if [[ $x == 'gateway risk changed' ]]; then
+  if [[ $x == 'gateway '(notice|risk)' changed' ]]; then
     print -r -- "$(strftime '%F %T' $now) netcheck $x net=$bl[3] to=$mac" >> $log
   else
     print -r -- "$(strftime '%F %T' $now) netcheck $x net=$net" >> $log
   fi
+  [[ $y[2] == risk ]] && al+="$now $y[1] $y[3]"
 done 2>/dev/null
+# 危険になったら記録に足す（消すのは利用者だけ。接続が変わっても、攻撃者が偽装をやめても残る）
+if (( $#al )); then
+  x=(); [[ -r $AL ]] && { x=(${(f)"$(<$AL)"}) }
+  x+=($al)
+  print -rl -- ${x[$(( $#x > 20 ? $#x - 19 : 1 )),-1]} > $AL.$$ && mv -f $AL.$$ $AL || rm -f $AL.$$
+fi
 
 # 結果と基準は、中身が変わったときだけ一時ファイルから置き換える（変わらなければ更新時刻だけ進める。メニューバーは60秒より古ければ Not Running）
 if [[ ${p[1]-} == "v1 $net "* && ${(F)p[2,-1]} == "${(F)rows}" ]]; then
@@ -223,7 +265,10 @@ if [[ ${p[1]-} == "v1 $net "* && ${(F)p[2,-1]} == "${(F)rows}" ]]; then
 else
   print -rl -- "v1 $net $now 0 -" $rows > $NC.$$ && mv -f $NC.$$ $NC || rm -f $NC.$$
 fi
+# 今回見なかった確かめ中の危険も、最後に見てから KEEP 秒は残す。基準は中身が同じでも更新時刻を進める（最後に接続していた時刻。REJOIN）
+for x in ${(ko)sus}; do cur+="${x/:/ } $sus[$x] $sul[$x]"; done
 x=("$bl" $cur)
-[[ ${(F)x} == "${(F)b}" ]] || { print -rl -- $x > $BS.$$ && mv -f $BS.$$ $BS || rm -f $BS.$$ }
+if [[ ${(F)x} == "${(F)b}" ]]; then /usr/bin/touch $BS
+else print -rl -- $x > $BS.$$ && mv -f $BS.$$ $BS || rm -f $BS.$$; fi
 rm -f $RQ
 exit 0

@@ -144,14 +144,15 @@ Click it to see the current Wi‑Fi's name, whether automatic reconnection is on
 
 ### Network check
 
-Every 10 seconds, without sending anything, it looks at the Wi‑Fi you are on and this Mac's settings, and shows the result under "Network Check" in the menu. You open it only when you want to look; a ⚠ appears to the right of the icon only when it sees signs of an attack (e.g. ✓⚠). It never shows a dialog.
+Every 10 seconds, without sending anything, it looks at the Wi‑Fi you are on and this Mac's settings, and shows the result under "Network Check" in the menu. You open it only when you want to look; a ⚠ appears to the right of the icon only when it sees signs of an attack (e.g. ✓⚠). It never shows a dialog. The ⚠ stays even after the signs go away or you move to another Wi‑Fi, and "Risk Detected Earlier" in the menu shows when and what. After you have checked, clear it with "Dismiss Network Warning".
 
 | What it looks at | Examples of a notice (yellow) or a risk (red) |
 |---|---|
 | Wi‑Fi encryption | No encryption (most free Wi‑Fi) is a notice. It suggests a VPN and HTTPS-only sites |
-| The router (gateway) | The router's hardware address changes while you are connected and stays changed: a risk (another device may be posing as the router) |
+| The router (gateway) | The router's hardware address changes while you are connected, or right after you are knocked off and reconnect: a notice, and a risk when seen again (another device may be posing as the router) |
+| DNS servers | The DNS servers the Wi‑Fi hands out change while you are connected: a notice, and a risk when seen again (another device may be taking over website name lookups) |
 | Routes | While you use a VPN, routes that send some traffic straight over the Wi‑Fi are a risk. Without a VPN, extra routes are a notice |
-| Proxy, IPv6 routers | Proxy auto-discovery or a proxy setting, and several or changed IPv6 routers, are notices |
+| Proxy, IPv6 routers | Proxy auto-discovery or a proxy setting, and several or changed IPv6 routers, or one that appears on a Wi‑Fi that had none, are notices |
 | Firewall, AirPlay Receiver, sharing | A turned-off firewall, or AirPlay Receiver or Screen Sharing turned on, are notices |
 | Apps listening on this Mac | Apps such as Ollama that others on the same Wi‑Fi can reach are a notice (only the port numbers are shown) |
 | macOS updates, added root certificates | Available updates, no check for over 7 days, automatic security responses turned off, or added root certificates are notices |
@@ -159,7 +160,7 @@ Every 10 seconds, without sending anything, it looks at the Wi‑Fi you are on a
 
 - Green means "nothing wrong was found in what it looked at", not that the network is safe. On unencrypted Wi‑Fi, others may read your traffic even when everything is green
 - It only looks. It does not change settings, block attacks, or probe other devices on the shop's Wi‑Fi. Finding a risk does not stop automatic reconnection
-- It cannot tell when another device was already in the middle before you joined, or when the shop's Wi‑Fi itself is fake. The same goes for open Wi‑Fi when that device knocks you off and you reconnect
+- It cannot tell when another device was already in the middle before you joined, when the shop's Wi‑Fi itself is fake, or when a device uses the router's own hardware address. A skilled attacker can avoid it, for example by cutting in for less than the check interval (only a notice) or by waiting before making you reconnect. It does not yet check website name lookups or the contents of HTTPS. If you assume an attack, use a VPN
 - The menu and log never show this Mac's MAC or IP address, or the Wi‑Fi name
 - Whether it shows false risks on real shop Wi‑Fi has not been checked yet ([DESIGN.md](DESIGN.md) §3.3 and §7, in Japanese)
 - If you do not want it, reinstall following the install steps, adding ` --no-netcheck` before you press Enter (this removes only the network check; you can also add ` --no-menubar`)
@@ -361,7 +362,7 @@ tail ~/Library/Logs/cafe-wifi-okawari.log
 | `portal check failed xN` | The tool could not check the USEN page (network error or a response other than 200). It sends nothing |
 | `portal mismatch xN mac=… ip=…` | The login page was for a different device (MAC or IP address not this Mac's), so the tool sent nothing |
 | `not free wi-fi xN` | A Wi2 network that is not a free "accept the terms" Wi‑Fi. The tool does nothing there |
-| `netcheck <item> notice … net=…` / `netcheck <item> risk … net=…` | The network check found a notice or a risk (e.g. `netcheck wifi notice none`). When it clears, the tool writes `netcheck <item> ok …` or `unknown …`. When the router changes, `to=` keeps the address it changed to. Wi‑Fi names and app names are never written |
+| `netcheck <item> notice … net=…` / `netcheck <item> risk … net=…` | The network check found a notice or a risk (e.g. `netcheck wifi notice none`). When it clears, the tool writes `netcheck <item> ok …` or `unknown …`. When the router changes, `to=` keeps the address it changed to. Risks are also kept in the menu's record (`~/Library/Caches/cafe-wifi-okawari.netcheck.alert`, time and item only). Wi‑Fi names and app names are never written |
 | `probe failed xN net=… curl=… http=…` | On a Wi2, recorded, or pending network, the connection state could not be checked (non-zero `curl` means a network error; `http` is an unexpected response). The tool sends nothing |
 
 On repeated failures, the retry interval backs off from 30 seconds up to 30 minutes. Every failure is logged (failed status checks only on the 1st, 2nd, 4th, 8th…), and you get a single dialog (plus one more if it stops after repeated refusals). Moving to another shop resets the backoff.

@@ -10,6 +10,8 @@ const SH = self.replace(/\.js$/, '.sh')
 const LOG = $.NSHomeDirectory().js + '/Library/Logs/cafe-wifi-okawari.log'
 // Check Now の要求ファイル（netcheck.sh の LaunchAgent が WatchPaths で見ている。DESIGN.md §3.3）
 const REQ = $.NSHomeDirectory().js + '/Library/Caches/cafe-wifi-okawari.netcheck.now'
+// 危険の記録（netcheck.sh が足す）。あれば Dismiss Network Warning を出し、押すと消す（⚠ はそれまで残る）
+const ALERT = $.NSHomeDirectory().js + '/Library/Caches/cafe-wifi-okawari.netcheck.alert'
 // アイコンの素材（1x・2x の組）。導入先では .js と同じ名前の .png・@2x.png、リポジトリでは assets/icon の素材
 const ICON = [self.replace(/\.js$/, ''), self.replace(/[^/]*$/, 'assets/icon/menuBarTemplate')].find(p => $.NSFileManager.defaultManager.fileExistsAtPath(p + '.png'))
 // アイコンの種類ごとの印。これ以外の値と実行の失敗は off として扱う
@@ -92,6 +94,11 @@ function refresh() {
     m.addItem(now)
   }
   menu.addItem($.NSMenuItem.separatorItem)
+  if ($.NSFileManager.defaultManager.fileExistsAtPath(ALERT)) {
+    const dis = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent('Dismiss Network Warning', 'dismiss:', '')
+    dis.target = handler
+    menu.addItem(dis)
+  }
   const open = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent('Open Log', 'openLog:', '')
   open.target = handler
   open.enabled = $.NSFileManager.defaultManager.fileExistsAtPath(LOG)
@@ -110,6 +117,7 @@ ObjC.registerSubclass({
     'menuNeedsUpdate:': { types: ['void', ['id']], implementation: () => refresh() },   // メニューを開く直前
     'openLog:': { types: ['void', ['id']], implementation: () => $.NSWorkspace.sharedWorkspace.openURL($.NSURL.fileURLWithPath(LOG)) },
     // シェルを呼ばずに空の要求ファイルを作る（中身は読まれない）
+    'dismiss:': { types: ['void', ['id']], implementation: () => { $.NSFileManager.defaultManager.removeItemAtPathError(ALERT, null); refresh() } },
     'checkNow:': { types: ['void', ['id']], implementation: () => $.NSFileManager.defaultManager.createFileAtPathContentsAttributes(REQ, $.NSData.data, $.NSDictionary.dictionary) },
   },
 })

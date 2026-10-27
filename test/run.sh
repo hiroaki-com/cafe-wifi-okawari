@@ -128,11 +128,16 @@ EOS
 print '#!/bin/sh\n[ -z "$2" ] && exit 1\n[ -e $M/switched ] && MAC=cc:cc:cc:cc:cc:03\necho "? ($2) at $MAC on en0 ifscope [ethernet]"' > $T/bin/arp
 # ipconfig: DHCP のドメイン名は $DOM（既定は空）、自分の IP は $MYIP（既定 10.0.0.5。en0 だけ）。
 # getsummary のリース開始は $M/lease か $LEASE（エポック秒。既定は resolv.conf の更新時刻、none なら行なし）。実機と同じ順に、$CID があれば
-# 最上位の ConnectionID、$DHCPDOM があれば DHCP のパケットのドメイン名（網が決める文字列）、$WSEC があれば最後に Security の行
+# 最上位の ConnectionID、$DHCPDOM があれば DHCP のパケットのドメイン名（網が決める文字列）、$WSEC があれば最後に Security の行。
+# getpacket は en0 だけで、$DHCPDOM（前に出す）・サブネットマスク $MASK（既定 255.255.255.0）・DNS サーバー $DNS（既定 10.0.0.1。none なら行なし）
 cat > $T/bin/ipconfig <<'EOS'
 #!/bin/sh
 case $1 in
   getoption) printf "%s\n" "$DOM" ;;
+  getpacket) [ "$2" = en0 ] || exit 1
+    [ -n "$DHCPDOM" ] && printf 'domain_name (string): %s\n' "$DHCPDOM"
+    printf 'subnet_mask (ip): %s\n' "${MASK-255.255.255.0}"
+    [ "$DNS" = none ] || printf 'domain_name_server (ip_mult): {%s}\n' "${DNS-10.0.0.1}"; exit 0 ;;
   getifaddr) [ "$2" = en0 ] && echo "${MYIP-10.0.0.5}" ;;
   getsummary) [ -n "$CID" ] && printf '  ConnectionID : %s\n' "$CID"
     [ -e $M/lease ] && LEASE=$(cat $M/lease)
@@ -1169,9 +1174,13 @@ ncr() { env "$@" zsh $T/nc.sh > $M/out 2>&1; rc=$? out=$(<$M/out); res=; [[ -e $
 nr() { print -r -- ${${(M)${(f)res}:#$1 *}#$1 } }
 ncreset() { mbreset; rm -f $NCF $NCF.*(N) $NCP $M/pwned }
 nlog() { [[ -e $LG ]] && print -r -- "${(F)${(@)${(f)"$(<$LG)"}#????????????????????}}" }   # ログの時刻を除いた行
-# 確かめ中の危険を CONFIRM 秒より前に見たことにする（2回目の診断が数秒あとに来た状態）
-aged() { sed -i '' -E 's/^([a-z]+ [a-z-]+) [0-9]+$/\1 1/' $NCB }
-NCOK="gateway ok ok${NL}routes ok ok${NL}proxy ok off${NL}ipv6 ok none${NL}firewall ok stealth${NL}airplay ok off${NL}sharing ok off${NL}open ok none${NL}updates ok uptodate${NL}rootcerts ok none${NL}vpn unknown off${NL}privaddr info off"
+# 確かめ中の危険を CONFIRM 秒より前に見たことにする（2回目の診断が数秒あとに来た状態）。forgot は最後に見たのも KEEP 秒より前にする
+aged() { sed -i '' -E 's/^([a-z]+ [a-z-]+) [0-9]+ ([0-9]+)$/\1 1 \2/' $NCB }
+forgot() { sed -i '' -E 's/^([a-z]+ [a-z-]+) [0-9]+ [0-9]+$/\1 1 1/' $NCB }
+# 基準を取ってから GRACE 秒より後にする
+settled() { sed -i '' -E '1s/ [0-9]+$/ 1/' $NCB }
+NCB0="10.0.0.0/255.255.255.0 10.0.0.1 "   # 基準のサブネットと DNS サーバー（模擬の既定）
+NCOK="gateway ok ok${NL}dns ok ok${NL}routes ok ok${NL}proxy ok off${NL}ipv6 ok none${NL}firewall ok stealth${NL}airplay ok off${NL}sharing ok off${NL}open ok none${NL}updates ok uptodate${NL}rootcerts ok none${NL}vpn unknown off${NL}privaddr info off"
 ncreset
 ncr MAC=$A;               ok '診断: 異常がなければ、接続先・時刻と全項目を固定の語で書き、ログには何も書かない' \
   '(( rc == 0 )) && [[ -z $out && $res == "v1 $A "<->" 0 -${NL}wifi unknown unknown${NL}$NCOK" && ! -e $LG ]]'
@@ -1202,32 +1211,62 @@ ok '診断: DHCP のドメイン名に「Security : WPA3_SAE」を入れても�
 ncr MAC=$A WSEC=NONE DHCPDOM=$'x\n  Security : WPA2_PSK'
 ok '診断: 改行で最上位の Security の行を装っても、最後の行（本物）を使う' '[[ $(nr wifi) == "notice none" ]]'
 # G（ゲートウェイ）: 危険の確かめ直しと接続の基準
-ncreset; ncr MAC=$A;      ok '診断: 接続の基準にゲートウェイの IP・resolv.conf の更新時刻・MAC を残す' '[[ $(<$NCB) == "10.0.0.1 $(stat -f %m $M/resolv) $A -" ]]'
-ncr MAC=$B;               ok '診断: 接続の途中でゲートウェイの MAC が変わっても、1回目は危険にせずログにも書かない' \
-  '[[ $(nr gateway) == "ok ok" && ! -e $LG && $(sed -n 2p $NCB) == "gateway changed "<-> ]]'
-ncr MAC=$B;               ok '診断: 数秒以内の2回目でもまだ危険にしない' '[[ $(nr gateway) == "ok ok" && ! -e $LG ]]'
+ncreset; ncr MAC=$A
+ok '診断: 接続の基準にゲートウェイの IP・resolv.conf の更新時刻・MAC・IPv6 のルーター・サブネット・DNS サーバー・取った時刻を残す' \
+  '[[ $(<$NCB) == "10.0.0.1 $(stat -f %m $M/resolv) $A - $NCB0"<-> ]]'
+ncr MAC=$B;               ok '診断: 接続の途中でゲートウェイの MAC が変われば、1回目は注意（黄）。ログに基準の MAC と今の MAC。危険の記録はまだ作らない' \
+  '[[ $(nr gateway) == "notice changed" && $(nlog) == "netcheck gateway notice changed net=$A to=$B" && $(sed -n 2p $NCB) == "gateway changed "<->" "<-> && ! -e $NCF.alert ]]'
+ncr MAC=$B;               ok '診断: 数秒以内の2回目でもまだ危険にしない' '[[ $(nr gateway) == "notice changed" && $(wc -l < $LG) -eq 1 ]]'
 aged; ncr MAC=$B;         ok '診断: 続けて変わったままなら危険。ログに基準の MAC と今の MAC を残し、結果の接続先は今の MAC' \
-  '[[ $(nr gateway) == "risk changed" && $res == "v1 $B "* && $(nlog) == "netcheck gateway risk changed net=$A to=$B" ]]'
-ncr MAC=$A;               ok '診断: 基準の MAC に戻れば OK に戻し、ログに1行。確かめ中の危険も消す' \
-  '[[ $(nr gateway) == "ok ok" && $(nlog) == *"${NL}netcheck gateway ok ok net=$A" && $(wc -l < $NCB) -eq 1 ]]'
-ncr MAC=$B; ncr MAC=$A; aged; ncr MAC=$B
-ok '診断: 1回だけ変わってすぐ戻ったなら、次に変わったときも1回目から数え直す' '[[ $(nr gateway) == "ok ok" ]]'
+  '[[ $(nr gateway) == "risk changed" && $res == "v1 $B "* && $(nlog) == *"${NL}netcheck gateway risk changed net=$A to=$B" ]]'
+ok '診断: 危険になれば危険の記録に時刻・ID・値だけを足す（0600。MAC・IP は書かない）' \
+  '[[ $(<$NCF.alert) == <->" gateway changed" && $(stat -f %Lp $NCF.alert) == 600 ]]'
+ncr MAC=$A;               ok '診断: 基準の MAC に戻れば OK に戻し、ログに1行。危険の記録と確かめ中の危険は残す' \
+  '[[ $(nr gateway) == "ok ok" && $(nlog) == *"${NL}netcheck gateway ok ok net=$A" && $(wc -l < $NCB) -eq 2 && -s $NCF.alert ]]'
+ncreset; ncr MAC=$A; ncr MAC=$B; ncr MAC=$A; aged; ncr MAC=$A; ncr MAC=$B
+ok '診断: 診断の合間だけ偽装しても（変わる・戻るを繰り返す）、5分のうちに2回見れば危険' '[[ $(nr gateway) == "risk changed" ]]'
+ncreset; ncr MAC=$A; ncr MAC=$B; ncr MAC=$A; forgot; ncr MAC=$B
+ok '診断: 前に見てから5分を過ぎていれば、1回目から数え直す（注意）' '[[ $(nr gateway) == "notice changed" ]]'
+ncreset; ncr MAC=$A; for i in {1..25}; do print -r -- "$i routes bypass"; done > $NCF.alert; ncr MAC=$B; aged; ncr MAC=$B
+ok '診断: 危険の記録は新しい20件だけ残す' '(( $(wc -l < $NCF.alert) == 20 )) && [[ $(sed -n 1p $NCF.alert) == "7 routes bypass" && $(sed -n 20p $NCF.alert) == <->" gateway changed" ]]'
 ncreset; ncr MAC=$A; ncr MAC=$B; aged; LEASE=$(( EPOCHSECONDS - 5 )) ncr MAC=$B
 ok '診断: リースの更新（resolv.conf は変わらない）では基準を捨てない' '[[ $(nr gateway) == "risk changed" ]]'
-ncreset; ncr MAC=$A; ncr MAC=$B; aged; joined; ncr MAC=$B
-ok '診断: resolv.conf が書き換われば（つなぎ直し）基準を取り直し、危険にしない' '[[ $(nr gateway) == "ok ok" && $(<$NCB) == "10.0.0.1 "<->" $B -" && ! -e $LG ]]'
+ncreset; ncr MAC=$A; joined; ncr MAC=$B
+ok '診断: つなぎ直しても（resolv.conf の書き換え）、同じサブネットへ2分のうちなら前の基準と比べる（切断させてから偽装する攻撃）' \
+  '[[ $(nr gateway) == "notice changed" && $(<$NCB) == "10.0.0.1 "<->" $A "* ]]'
+ncreset; ncr MAC=$A; ago 200 $NCB; joined; ncr MAC=$B
+ok '診断: 2分より後のつなぎ直しは基準を取り直し、危険にしない' '[[ $(nr gateway) == "ok ok" && $(<$NCB) == "10.0.0.1 "<->" $B - "* && ! -e $LG ]]'
+ncreset; ncr MAC=$A; joined; ncr MAC=$B DEFGW=192.168.1.1
+ok '診断: 別のサブネットへのつなぎ直しは、すぐでも基準を取り直す（別の網）' '[[ $(nr gateway) == "ok ok" && $(<$NCB) == "192.168.1.1 "<->" $B - 192.168.1.0/"* ]]'
+ncreset; ncr MAC=$A; ago 200 $NCB; ncr MAC=$A; joined; ncr MAC=$B
+ok '診断: 接続している間は、基準が変わらなくても更新時刻（最後に接続していた時刻）を進める' '[[ $(nr gateway) == "notice changed" ]]'
+ncreset; ncr MAC=$A; ago 200 $NCB; ncr MAC=$A NOROUTE=1; joined; ncr MAC=$B
+ok '診断: 既定経路のない間は、基準の更新時刻を進めない' '[[ $(nr gateway) == "ok ok" ]]'
 # Wi‑Fi では接続の見分けに ConnectionID（つなぐたびに増える）と起動時刻を使い、resolv.conf の書き換えでは基準を取り直さない
 ncreset; ncr MAC=$A CID=3
-ok '診断: Wi‑Fi の接続の基準は起動時刻と ConnectionID' '[[ $(<$NCB) == "10.0.0.1 c$(sysctl -n kern.boottime | sed -E "s/.*sec = ([0-9]+),.*/\1/").3 $A -" ]]'
+ok '診断: Wi‑Fi の接続の基準は起動時刻と ConnectionID' '[[ $(<$NCB) == "10.0.0.1 c$(sysctl -n kern.boottime | sed -E "s/.*sec = ([0-9]+),.*/\1/").3 $A - $NCB0"<-> ]]'
 ncr MAC=$B CID=3; aged; joined; ncr MAC=$B CID=3
 ok '診断: 同じ接続のまま resolv.conf を書き換えさせても（RA の DNS サーバー・DHCP の更新）、基準を取り直さず危険' \
-  '[[ $(nr gateway) == "risk changed" && $(nlog) == "netcheck gateway risk changed net=$A to=$B" ]]'
+  '[[ $(nr gateway) == "risk changed" && $(nlog) == *"${NL}netcheck gateway risk changed net=$A to=$B" ]]'
+ncreset; ncr MAC=$A CID=3; ago 200 $NCB; ncr MAC=$B CID=4; aged; ncr MAC=$B CID=4
+ok '診断: ConnectionID が変われば（つなぎ直し）、2分より後なら基準を取り直し、危険にしない' '[[ $(nr gateway) == "ok ok" && $(<$NCB) == *".4 $B - "* && ! -e $LG ]]'
 ncreset; ncr MAC=$A CID=3; ncr MAC=$B CID=4; aged; ncr MAC=$B CID=4
-ok '診断: ConnectionID が変われば（つなぎ直し）基準を取り直し、危険にしない' '[[ $(nr gateway) == "ok ok" && $(<$NCB) == *".4 $B -" && ! -e $LG ]]'
+ok '診断: 切断させてすぐつなぎ直させても（ConnectionID が増える）、前の基準と比べて危険' '[[ $(nr gateway) == "risk changed" && $(<$NCB) == *".4 $A - "* ]]'
 ncreset; ncr MAC=$A CID=3 DHCPDOM=$'x\n  ConnectionID : 99'; ncr MAC=$B CID=3 DHCPDOM=$'x\n  ConnectionID : 98'; aged; ncr MAC=$B CID=3 DHCPDOM=$'x\n  ConnectionID : 97'
 ok '診断: DHCP の文字列で ConnectionID を装っても、最初の行（本物）を使い、基準を取り直させられない' '[[ $(nr gateway) == "risk changed" && $(<$NCB) == *".3 $A -"* ]]'
-ncreset; ncr MAC=$A; ncr MAC=$B DEFGW=10.0.0.254; aged; ncr MAC=$B DEFGW=10.0.0.254
-ok '診断: ゲートウェイの IP が変われば基準を取り直す' '[[ $(nr gateway) == "ok ok" && $(<$NCB) == "10.0.0.254 "* ]]'
+ncreset; ncr MAC=$A CID=3; ago 200 $NCB; ncr MAC=$B CID=3 DEFGW=192.168.1.1; aged; ncr MAC=$B CID=3 DEFGW=192.168.1.1
+ok '診断: 同じ接続のままゲートウェイの IP がサブネットごと変わっても（偽の DHCP）、基準を取り直さず危険' '[[ $(nr gateway) == "risk changed" && $(<$NCB) == "192.168.1.1 "*" $A "* ]]'
+ncreset; ncr MAC=$A CID=3; ncr MAC=$A CID=3 DEFGW=10.0.0.254
+ok '診断: ゲートウェイの IP だけ変わり MAC が同じなら OK' '[[ $(nr gateway) == "ok ok" ]]'
+# D（DHCP の DNS サーバー）
+ncreset; ncr MAC=$A DNS='10.0.0.1, 10.0.0.2'; ok '診断: DHCP の DNS サーバーを基準に残す（区切りは ,）' '[[ $(nr dns) == "ok ok" && $(<$NCB) == *" 10.0.0.1,10.0.0.2 "<-> ]]'
+ncr MAC=$A DNS=192.0.2.53; ok '診断: 同じ接続の途中で DNS サーバーが変われば、1回目は注意' '[[ $(nr dns) == "notice changed" && $(nlog) == "netcheck dns notice changed net=$A" ]]'
+aged; ncr MAC=$A DNS=192.0.2.53; ok '診断: 続けば危険（危険の記録にも足す）' '[[ $(nr dns) == "risk changed" && $(<$NCF.alert) == <->" dns changed" ]]'
+ncreset; ncr MAC=$A DNS=none; ok '診断: DHCP の DNS サーバーがなければ Unknown' '[[ $(nr dns) == "unknown unknown" ]]'
+ncr MAC=$A; ok '診断: 基準を取ってすぐ（30秒のうち）に見えた DNS サーバーは基準にする' '[[ $(nr dns) == "ok ok" ]]'
+ncreset; ncr MAC=$A DHCPDOM=$'x\ndomain_name_server (ip_mult): {192.0.2.53}'
+ok '診断: DHCP のドメイン名で DNS サーバーの行を装えば、2行になるので使わない（Unknown）' '[[ $(nr dns) == "unknown unknown" && $res != *192.0.2* && $(<$NCB) != *192.0.2* ]]'
+ncreset; ncr MAC=$A DHCPDOM=$'x\nsubnet_mask (ip): 0.0.0.0'; ok '診断: サブネットマスクの行を装っても使わない' '[[ $(<$NCB) == "10.0.0.1 "<->" $A - - "* ]]'
 ncreset; ncr MAC='(incomplete)'
 ok '診断: ARP が不完全なら Unknown（接続先はゲートウェイの IP）' '[[ $(nr gateway) == "unknown unknown" && $res == "v1 10.0.0.1 "* ]]'
 # R（経路）
@@ -1239,8 +1278,8 @@ for x in 10.1.2.3 172.16.0.9 172.31.255.1 192.168.0.4 100.64.0.2 100.127.0.1 169
 ok '診断: 私用の範囲（10/8・172.16/12・192.168/16・100.64/10・169.254/16）の境目' '[[ $(nr routes) == "ok ok" ]]'
 ncr MAC=$A MYIP=172.32.0.1; ok '診断: 172.32 は私用の範囲の外' '[[ $(nr routes) == "notice public" ]]'
 ncreset; ncr MAC=$A DEFIF=utun4
-ok '診断: VPN の使用中に公開の宛先への経路が Wi‑Fi を通っても、1回目は危険にしない' '[[ $(nr routes) == "ok ok" && ! -e $LG ]]'
-aged; ncr MAC=$A DEFIF=utun4; ok '診断: 続けば Bypasses VPN（危険）' '[[ $(nr routes) == "risk bypass" && $(nlog) == "netcheck routes risk bypass net=$A" ]]'
+ok '診断: VPN の使用中に公開の宛先への経路が Wi‑Fi を通れば、1回目は注意' '[[ $(nr routes) == "notice bypass" && $(nlog) == "netcheck routes notice bypass net=$A" ]]'
+aged; ncr MAC=$A DEFIF=utun4; ok '診断: 続けば Bypasses VPN（危険）' '[[ $(nr routes) == "risk bypass" && $(nlog) == *"${NL}netcheck routes risk bypass net=$A" ]]'
 ncreset; ncr MAC=$A DEFIF=utun4 DEVRT=ifc XROUTE=1.0.0/8,10.0.0.1,UGSc,en0; aged; ncr MAC=$A DEFIF=utun4 DEVRT=ifc XROUTE=1.0.0/8,10.0.0.1,UGSc,en0
 ok '診断: VPN の使用中に Wi‑Fi 側の余分な経路（DHCP の option 121 など）があれば Bypasses VPN' '[[ $(nr routes) == "risk bypass" ]]'
 ncreset; ncr MAC=$A DEFIF=utun4 DEVRT=ifc MYIP=203.0.113.5; aged; ncr MAC=$A DEFIF=utun4 DEVRT=ifc MYIP=203.0.113.5
@@ -1252,11 +1291,15 @@ ncr MAC=$A PROXY='  ProxyAutoConfigEnable : 1\n'; ok '診断: PAC も Set' '[[ $
 ncr MAC=$A PROXY='  HTTPEnable : 0\n'; ok '診断: 無効のプロキシは Off' '[[ $(nr proxy) == "ok off" ]]'
 ncr MAC=$A PROXY='  HTTPEnable : 0\n  HTTPProxy : x ProxyAutoDiscoveryEnable : 1 HTTPEnable : 1\n'
 ok '診断: プロキシの名前に「Enable : 1」の形があっても数えない（行全体で比べる）' '[[ $(nr proxy) == "ok off" ]]'
-ncreset; ncr MAC=$A RA='fe80::1%en0'; ok '診断: IPv6 のルーターが1つなら OK（utun の行は数えない）' '[[ $(nr ipv6) == "ok ok" && $(<$NCB) == *" fe80::1%en0" ]]'
+ncreset; ncr MAC=$A RA='fe80::1%en0'; ok '診断: IPv6 のルーターが1つなら OK（utun の行は数えない）' '[[ $(nr ipv6) == "ok ok" && $(<$NCB) == *" fe80::1%en0 "* ]]'
 ncr MAC=$A RA='fe80::2%en0'; ok '診断: 接続の途中でルーターが変われば Changed' '[[ $(nr ipv6) == "notice changed" && $(nlog) == "netcheck ipv6 notice changed net=$A" ]]'
 ncr MAC=$A RA='fe80::1%en0 fe80::9%en1'; ok '診断: 別のインターフェースのルーターは数えない' '[[ $(nr ipv6) == "ok ok" ]]'
 ncreset; ncr MAC=$A RA='fe80::1%en0 fe80::2%en0'; ok '診断: 2つ以上なら Multiple' '[[ $(nr ipv6) == "notice multiple n=2" ]]'
-ncreset; ncr MAC=$A; ncr MAC=$A RA='fe80::1%en0'; ok '診断: 基準を取ったときにルーターがなく、あとから見えたものは基準にする' '[[ $(nr ipv6) == "ok ok" ]]'
+ncreset; ncr MAC=$A; ncr MAC=$A RA='fe80::1%en0'; ok '診断: 基準を取ったときにルーターがなく、30秒のうちに見えたものは基準にする' '[[ $(nr ipv6) == "ok ok" ]]'
+ncreset; ncr MAC=$A; settled; ncr MAC=$A RA='fe80::1%en0'
+ok '診断: ルーターのなかった網に30秒より後に現れれば New（偽の RA。mitm6）' '[[ $(nr ipv6) == "notice new" && $(nlog) == "netcheck ipv6 notice new net=$A" ]]'
+ncreset; ncr MAC=$A; settled; joined; ncr MAC=$A RA='fe80::1%en0'
+ok '診断: すぐつなぎ直させても、ルーターのない基準を引き継ぐ' '[[ $(nr ipv6) == "notice new" ]]'
 # This Mac
 ncreset; ncr MAC=$A FW=disabled FWS=0; ok '診断: ファイアウォールが無効なら注意' '[[ $(nr firewall) == "notice off" ]]'
 ncr MAC=$A STEALTH=off;   ok '診断: ステルスモードなしの有効は On' '[[ $(nr firewall) == "ok on" ]]'
@@ -1289,7 +1332,7 @@ ncr MAC=$A HWMAC=aa:bb:cc:dd:ee:99; ok '診断: 今の MAC とハードウェア
   '[[ $(nr privaddr) == "info on" && $(nlog) != *privaddr* ]]'
 ncr MAC=$A HWMAC=AA:BB:CC:DD:EE:F; ok '診断: MAC は大文字・先頭の 0 なしでも同じとみなす' '[[ $(nr privaddr) == "info off" ]]'
 # 手元の項目のログは変わったときだけ（接続が変わっても書き直さない）。網の項目は新しい接続で1回
-ncreset; ncr MAC=$A SUAVAIL=2 WSEC=NONE; joined; ncr MAC=$B SUAVAIL=2 WSEC=NONE
+ncreset; ncr MAC=$A SUAVAIL=2 WSEC=NONE; ago 200 $NCB; joined; ncr MAC=$B SUAVAIL=2 WSEC=NONE
 ok '診断: 接続が変われば網の注意をもう1回書くが、Mac の注意は書き直さない' \
   '[[ $(nlog) == "netcheck wifi notice none net=$A${NL}netcheck updates notice available n=2 net=$A${NL}netcheck vpn notice off net=$A${NL}netcheck wifi notice none net=$B${NL}netcheck vpn notice off net=$B" ]]'
 # 既定経路がない・Check Now の要求
@@ -1322,7 +1365,7 @@ mb MAC=$A;                ok 'メニューバー: 診断の LaunchAgent がな�
 mkdir -p ${NCP:h}; touch $NCP
 ncr MAC=$A WSEC=NONE SUAVAIL=2 HWMAC=aa:bb:cc:dd:ee:99
 mb MAC=$A;                ok 'メニューバー: 診断の要約1行とサブメニュー（見出し・印・案内・ツールチップ。危険がなければ ⚠ なし）' \
-  '[[ $icon == on && $rows == "$R${NL}green${TB}Doutor${NL}-${TB}$ON${NS}yellow${TB}Network Check${TB}3 Notices${NL}>head${TB}Checked $(strftime %H:%M $(stat -f %m $NCF))${NL}>head${TB}This Network${NL}>yellow${TB}Wi‑Fi Security${TB}None${TB}This Wi‑Fi has no encryption. People nearby can read unencrypted traffic, and a fake network can look the same.${NL}>-${TB}Not encrypted. Use a VPN, and only HTTPS sites.${NL}>green${TB}Gateway${TB}OK${NL}>green${TB}Routes${TB}OK${NL}>green${TB}Proxy${TB}Off${NL}>green${TB}IPv6 Routers${TB}None${NL}>${NL}>head${TB}This Mac${NL}>green${TB}Firewall${TB}On${TB}Stealth mode is on.${NL}>green${TB}AirPlay Receiver${TB}Off${NL}>green${TB}Sharing${TB}Off${NL}>green${TB}Open to This Network${TB}None${NL}>yellow${TB}macOS Updates${TB}2 Available${NL}>-${TB}Install macOS updates.${NL}>green${TB}Added Root Certificates${TB}None${NL}>yellow${TB}VPN${TB}Off${NL}>${NL}>head${TB}Privacy${NL}>-${TB}Private Wi‑Fi Address${TB}On" ]]'
+  '[[ $icon == on && $rows == "$R${NL}green${TB}Doutor${NL}-${TB}$ON${NS}yellow${TB}Network Check${TB}3 Notices${NL}>head${TB}Checked $(strftime %H:%M $(stat -f %m $NCF))${NL}>head${TB}This Network${NL}>yellow${TB}Wi‑Fi Security${TB}None${TB}This Wi‑Fi has no encryption. People nearby can read unencrypted traffic, and a fake network can look the same.${NL}>-${TB}Not encrypted. Use a VPN, and only HTTPS sites.${NL}>green${TB}Gateway${TB}OK${NL}>green${TB}DNS Servers${TB}OK${NL}>green${TB}Routes${TB}OK${NL}>green${TB}Proxy${TB}Off${NL}>green${TB}IPv6 Routers${TB}None${NL}>${NL}>head${TB}This Mac${NL}>green${TB}Firewall${TB}On${TB}Stealth mode is on.${NL}>green${TB}AirPlay Receiver${TB}Off${NL}>green${TB}Sharing${TB}Off${NL}>green${TB}Open to This Network${TB}None${NL}>yellow${TB}macOS Updates${TB}2 Available${NL}>-${TB}Install macOS updates.${NL}>green${TB}Added Root Certificates${TB}None${NL}>yellow${TB}VPN${TB}Off${NL}>${NL}>head${TB}Privacy${NL}>-${TB}Private Wi‑Fi Address${TB}On" ]]'
 nw 'wifi notice none' 'gateway risk changed' 'vpn ok on'
 mb MAC=$A;                ok 'メニューバー: 今の接続先で危険があれば ⚠（risk）、要約は赤、要約の下に案内。VPN の使用中は暗号化なしの案内を出さない' \
   '[[ $icon == "on risk" && $rows == *"${NS}red${TB}Network Check${TB}1 Risk${NL}"*">red${TB}Gateway${TB}Changed${TB}"*"${NL}>-${TB}Someone may be intercepting this Wi‑Fi. Disconnect, or use a VPN.${NL}"*"${NL}-${TB}Possible interception on this Wi‑Fi. See Network Check." && $rows != *"Not encrypted"* ]]'
@@ -1353,6 +1396,15 @@ mb MAC=$A;                ok 'メニューバー: 形の違う追加の値は使
 mb MAC=$A LANGS=en-US;    o1=$out; mb MAC=$A
 ok 'メニューバー: 診断も優先言語に関係なく英語' '[[ $out == "$o1" ]]'
 ok 'メニューバー: 診断の行に MAC・IP を出さない' '[[ $out != *aa:aa* && $out != *10.0.0* ]]'
+# 危険の記録（.alert）。今の結果に危険がなくても、別の接続先でも、Dismiss で消すまで ⚠ と時刻・項目を出す
+nw 'wifi ok ok'
+{ print -r -- "$(( EPOCHSECONDS - 120 )) gateway changed"; print -r -- "$(( EPOCHSECONDS - 60 )) dns changed"; print 'x routes bypass'
+  print -r -- "$EPOCHSECONDS bogus evil"; print -r -- "$EPOCHSECONDS gateway changed\$(touch $M/pwned)" } > $NCF.alert
+mb MAC=$A;                ok 'メニューバー: 危険の記録があれば、今の結果に危険がなくても ⚠ と記録（新しい順・形の違う行は読み捨てる）' \
+  '[[ $icon == "on risk" && $rows == *"${NS}green${TB}Network Check${TB}No Issues Found${NL}"*"${NL}red${TB}Risk Detected Earlier${NL}-${TB}Today $(strftime %H:%M $(( EPOCHSECONDS - 60 )))${TB}DNS Servers Changed${NL}-${TB}Today $(strftime %H:%M $(( EPOCHSECONDS - 120 )))${TB}Gateway Changed${NL}-${TB}If you signed in to anything then, change those passwords."* &&
+     $rows != *(evil|bogus|pwned|Bypass)* && ! -e $M/pwned ]]'
+mb MAC=$B;                ok 'メニューバー: 別の接続先（店を出たあと・つなぎ直させたあと）でも危険の記録は出す' '[[ $icon == "on risk" && $rows == *"${TB}Checking…${NL}red${TB}Risk Detected Earlier${NL}"* ]]'
+rm -f $NCF.alert; mb MAC=$A; ok 'メニューバー: 危険の記録を消せば ⚠ も消える' '[[ $icon == on && $rows != *Earlier* ]]'
 rm -f $NCP $NCF
 
 # --- install.sh ----------------------------------------------------------------
