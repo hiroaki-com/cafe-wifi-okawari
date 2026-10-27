@@ -60,6 +60,7 @@ case ${1-} in
     elif [[ $(launchctl print gui/$UID/$mlabel 2>/dev/null | awk -F' = ' '$1 ~ /^[ \t]*state$/ { print $2; exit }') == running ]]; then row 'Menu bar' running
     else row 'Menu bar' 'not running'; fi
 
+    # 今の接続先（menubar.sh の netid と同じ書き方。netcheck.sh も結果の1行目に同じ書き方で書く）
     r=$(route -n get default 2>/dev/null) || r=
     gw=${${(M)${(f)r}:#*gateway:*}##* } net=
     if [[ -n $gw ]]; then
@@ -80,9 +81,12 @@ case ${1-} in
     fi
     # ネットワークの診断。注意・危険の行は、結果が今の接続先のもので、60秒以内に書かれたときだけ（ID と値の語だけを出す）
     if [[ ! -e $nplist ]]; then row 'Network check' 'not installed'
-    elif launchctl print gui/$UID/$nlabel >/dev/null 2>&1; then row 'Network check' running
+    elif nl=$(launchctl print gui/$UID/$nlabel 2>/dev/null); then
+      # 10秒ごとに起動して終わるジョブなので、登録されていて、最後の終了コードが0（まだ終わっていなければ空か never exited）なら running
+      ec=$(print -r -- "$nl" | awk -F' = ' '$1 ~ /^[ \t]*last exit code$/ { print $2; exit }')
+      [[ $ec == (0|'(never exited)'|) ]] && row 'Network check' running || row 'Network check' "failing (last exit code $ec)"
     else row 'Network check' 'not running'; fi
-    if [[ -n $net && -e $nplist && $(head -n 1 $nc 2>/dev/null) == "v1 $net "* ]] && (( now - $(stat -f %m $nc) <= 60 )); then
+    if [[ -e $nplist && $(head -n 1 $nc 2>/dev/null) == "v1 ${net:--} "* ]] && (( now - $(stat -f %m $nc) <= 60 )); then
       awk 'NR > 1 && $2 ~ /^(risk|notice)$/ && $1 $3 ~ /^[a-z0-9-]+$/ {
         n = ""; for (i = 4; i <= NF; i++) if ($i ~ /^n=[0-9]+$/) n = " (" substr($i, 3) ")"
         print "  " ($2 == "risk" ? "Risk" : "Notice") ": " $1 " " $3 n }' $nc

@@ -27,7 +27,7 @@ at() { strftime -r -s t '%Y-%m-%d %H:%M:%S' "${1[1,19]}" 2>/dev/null }
 # ブランド名の表記を nm に入れる（先頭だけ大文字。usen は USEN）。英字・数字・-・_ 以外を含めば空（MAC・IP などを出さない）
 bn() { nm=; [[ $1 == [A-Za-z0-9_-]## ]] || return; [[ $1 == usen ]] && nm=USEN || nm=${(U)1[1]}${1[2,-1]} }
 # 今の接続先（install.sh status・本体の netid と同じく、既定ゲートウェイの MAC。取れなければ IP）を net、
-# 既定経路のインターフェースを ifc に入れる
+# 既定経路のインターフェースを ifc に入れる。netcheck.sh は結果の1行目に同じ書き方の接続先を書く（今の網の結果かの照合）
 netid() {
   local r; r=$(route -n get default 2>/dev/null) || r=
   gw=${${(M)${(f)r}:#*gateway:*}##* } ifc=${${(M)${(f)r}:#*interface:*}##* } net=
@@ -157,11 +157,11 @@ if [[ -e $HOME/Library/LaunchAgents/$label.netcheck.plist ]]; then
   [[ $kind == off ]] && netid   # 停止中は今の接続先を求めていない
   NC=$ST.netcheck nr=() sub=() nk=0 nn=0 nd=gray
   [[ -r $NC ]] && { nr=(${(f)"$(<$NC)"}) }
-  zstat -A nm +mtime $NC 2>/dev/null || nm=(0)
-  if [[ -z $net ]]; then ns=Off
-  elif (( ! $#nr )); then ns='Checking…'
-  elif (( now - nm[1] > 60 )); then ns='Not Running'
-  elif [[ -e $NC.now || $nr[1] != "v1 $net "* ]]; then ns='Checking…'
+  # 結果がまだなければ、診断を入れた時刻（plist）から数える。1行目の接続先は、診断する網がなければ off、既定経路にゲートウェイがなければ -
+  zstat -A nm +mtime $NC 2>/dev/null || zstat -A nm +mtime $HOME/Library/LaunchAgents/$label.netcheck.plist 2>/dev/null || nm=(0)
+  if (( now - nm[1] > 60 )); then ns='Not Running'
+  elif [[ -e $NC.now ]]; then ns='Checking…'
+  elif [[ ${nr[1]-} != "v1 ${net:--} "* || $#nr -lt 2 ]]; then [[ -z $net || ${nr[1]-} == 'v1 off '* ]] && ns=Off || ns='Checking…'
   else
     typeset -A lb=(wifi 'Wi‑Fi Security' gateway Gateway dns 'DNS Servers' routes Routes proxy Proxy ipv6 'IPv6 Routers' firewall Firewall
       airplay 'AirPlay Receiver' sharing Sharing open 'Open to This Network' updates 'macOS Updates'

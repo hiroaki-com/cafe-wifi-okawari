@@ -11,20 +11,22 @@ umask 077
 
 log=$HOME/Library/Logs/cafe-wifi-okawari.log
 NC=$HOME/Library/Caches/cafe-wifi-okawari.netcheck   # 結果「v1 接続先 時刻 0 -」と「ID 段階 値 [n=数] [p=ポート,…]」の行
-BS=$NC.base   # 接続の基準「ゲートウェイの IP 接続の見分け ゲートウェイの MAC IPv6 のルーター サブネット DNS サーバー 取った時刻」と、
+BS=$NC.base   # 接続の基準「ゲートウェイの IP 接続の見分け ゲートウェイの MAC IPv6 のルーター サブネット DNS サーバー 取った時刻 Wi‑Fi の暗号化」と、
               # 確かめ中の危険「ID 値 最初に見た時刻 最後に見た時刻」。更新時刻は、最後に接続していた時刻（毎回進める）
 AL=$NC.alert  # 危険になった記録「時刻 ID 値」（新しい20件）。利用者がメニューの Dismiss で消すまで ⚠ を出す
 RQ=$NC.now    # Check Now の要求（menubar.js が作る）。中身は読まず、終わりに消す
+MC=$NC.mac    # This Mac の変わりにくい項目の控え「blockall 0|1」と4項目の行。更新時刻は最後に読んだ時刻
 RC=/var/run/resolv.conf   # つなぎ直したときと認証画面で同意したときに書き換わる（DESIGN.md §7）。Wi‑Fi でない接続の見分けに使う
 CONFIRM=5     # 危険の条件を2回以上の診断で、この秒数より離れて見たときに危険にする（1回目は注意。一時的な揺れで赤にしない）
 KEEP=300      # 確かめ中の危険は、最後に見てからこの秒数は覚えておく（診断の合間だけ偽装を続けても、続けて見えなくても数える）
-REJOIN=120    # 同じサブネットへこの秒数のうちにつなぎ直したら、前の接続の基準を引き継ぐ（切断させて基準を取り直させる攻撃）
+REJOIN=120    # 暗号化なしの Wi‑Fi で同じサブネットへこの秒数のうちにつなぎ直したら、前の接続の基準を引き継ぐ（切断させて基準を取り直させる攻撃）
 GRACE=30      # 基準を取ってからこの秒数のうちに見えた IPv6 のルーター・DHCP の値は基準に足す（つないだ直後の遅れ）
+SLOW=300      # This Mac の変わりにくい項目は、この秒数ごとと、つなぎ直したとき・Check Now のときだけ読む
 now=$EPOCHSECONDS
 
-# 宛先 $1 への経路のゲートウェイを rg に（直結なら空）、インターフェースを ri に入れる。通信はしない（本体と同じ）
+# 宛先 $@（route get の引数）への経路のゲートウェイを rg に（直結なら空）、インターフェースを ri に入れる。通信はしない（本体と同じ）
 rt() {
-  local r=$(/sbin/route -n get "$1" 2>/dev/null)
+  local r=$(/sbin/route -n get "$@" 2>/dev/null)
   rg=${${(M)${(f)r}:#*gateway:*}##* } ri=${${(M)${(f)r}:#*interface:*}##* }
 }
 # MAC を区切りなしの小文字12桁にする。MAC の形でなければ失敗（本体と同じ）
@@ -35,31 +37,44 @@ hex() {
   print -r -- $h
 }
 
-# 今の接続先（本体の netid と同じく、既定ゲートウェイの MAC。取れなければ IP）
-rt default; gw=$rg ifc=$ri mac= net=
+# 結果の1行目の接続先。メニューバー・install.sh status の netid と同じ書き方にする（既定経路のゲートウェイの MAC、MAC の形でなければ
+# ゲートウェイの文字列。なければ -）。メニューバーはこれを自分で読んだ接続先と比べて、今の網の結果か見分ける。経路表と ARP の出力の1語
+rt default; ifc=$ri id=-
+if [[ -n $rg ]]; then
+  id=$(/usr/sbin/arp -n "$rg" 2>/dev/null | /usr/bin/awk '{ print $4 }')
+  [[ $id == *:*:* ]] || id=$rg
+fi
+wifi=$(/usr/sbin/networksetup -listallhardwareports 2>/dev/null | /usr/bin/awk '$0 == "Hardware Port: Wi-Fi" { getline; print $2; exit }')
+# VPN（全経路）は既定経路が VPN のインターフェースを通る。そのときの網は下の Wi‑Fi で、ゲートウェイは Wi‑Fi に限った既定経路から読む
+vpn=0 lan=$ifc
+if [[ $ifc == (utun|ipsec|ppp)<-> ]]; then
+  vpn=1 lan=$wifi rg=
+  [[ -n $wifi ]] && rt -ifscope $wifi default
+fi
+# 診断する網のゲートウェイ（形を確かめた IPv4 と MAC）。ログの net= は本体と同じく MAC、取れなければ IP
+gw=$rg mac= net=
 [[ $gw == <0-255>.<0-255>.<0-255>.<0-255> ]] || gw=
 if [[ -n $gw ]]; then
   mac=$(/usr/sbin/arp -n "$gw" 2>/dev/null | /usr/bin/awk '{ print $4 }')
   hex $mac >/dev/null || mac=
   net=${mac:-$gw}
 fi
+pr=(); [[ -r $NC ]] && { pr=(${(f)"$(<$NC)"}) }   # 前の結果
 if [[ -z $net ]]; then
-  # 既定経路がない（未接続・認証画面待ち）。メニューバーは自分で Off と出すので、結果は書き換えず、動いていることだけ残す
-  [[ -e $NC ]] && /usr/bin/touch $NC
+  # 診断する網がない（未接続・認証画面待ち・ゲートウェイが IPv4 でない）。1行目の接続先を off にして、メニューバーに Off と出させる。
+  # 前の結果の行は残す（つないだあと、注意・危険に変わったかをこれと比べてログに書く）
+  if [[ ${pr[1]-} == 'v1 off '* ]]; then /usr/bin/touch $NC
+  else print -rl -- "v1 off $now 0 -" ${pr[2,-1]} > $NC.$$ && mv -f $NC.$$ $NC || rm -f $NC.$$; fi
   rm -f $RQ; exit 0
 fi
-
-wifi=$(/usr/sbin/networksetup -listallhardwareports 2>/dev/null | /usr/bin/awk '$0 == "Hardware Port: Wi-Fi" { getline; print $2; exit }')
-# VPN（全経路）は既定経路が VPN のインターフェースを通る。そのときの網は下の Wi‑Fi。
 # 既定経路を残したまま 0/1・128/1 の経路で全部を通す VPN（OpenVPN の def1 など）は、公開の宛先への経路で見る
-vpn=0 lan=$ifc
-if [[ $ifc == (utun|ipsec|ppp)<-> ]]; then vpn=1 lan=$wifi
-else rt 1.1.1.1; [[ $ri == (utun|ipsec|ppp)<-> ]] && vpn=1; fi
+(( vpn )) || { rt 1.1.1.1; [[ $ri == (utun|ipsec|ppp)<-> ]] && vpn=1 }
 
 # Wi‑Fi の状態。最上位のキーは名前順で、ConnectionID は DHCP のパケット（ドメイン名など網が決める文字列を含む）より前、
 # Security は最後に出る（実機）。網の文字列に紛れた同じ形の行を拾わないよう、頭の空白2つから行全体で比べ、前のキーは最初の行、最後のキーは最後の行を使う
 gs=(); [[ -n $lan && $lan == "$wifi" ]] && gs=(${(f)"$(/usr/sbin/ipconfig getsummary $wifi 2>/dev/null)"})
 cid=${${${(M)gs:#  ConnectionID : <->}[1]-}##* }
+s=${${${(M)gs:#  Security : [A-Z0-9_]##}[-1]-}##* }
 
 # 接続の基準（接続の見分けが同じ間。ゲートウェイの IP が変わっても取り直さない）。Wi‑Fi はつなぐたびに増える ConnectionID（スリープの間は
 # 同じ網なら変わらず、再起動で1に戻るので起動時刻と組にする。実機）。resolv.conf の更新時刻は IPv6 の RA の DNS サーバーや DHCP の更新で
@@ -77,19 +92,23 @@ if (( $#x == 1 )); then
 fi
 x=(${(M)pk:#domain_name_server \(ip_mult\): \{(<0-255>.<0-255>.<0-255>.<0-255>(, |))##\}}) dns=-
 (( $#x == 1 )) && dns=${${${x#*\{}%\}}//, /,}
+# 経路を配るオプション（121・33・249。TunnelVision の手口）。行の頭だけで見る（網の文字列に同じ形の行を入れても、疑いが増えるだけ）
+x=(${(M)pk:#(classless_static_route|static_route|Option_249) \(*}) dr=$#x
 b=(); [[ -r $BS ]] && { b=(${(f)"$(<$BS)"}) }
 bl=(${=b[1]-}) old=1
 zstat -A bm +mtime $BS 2>/dev/null || bm=(0)
 typeset -A sus=() sul=()   # 確かめ中の危険「ID:値」→ 最初に見た時刻・最後に見た時刻
-if (( $#bl == 7 )) && [[ $bl[7] == <-> ]] && { [[ $bl[3] == - ]] || hex $bl[3] >/dev/null } &&
-   { [[ $bl[2] == "$m[1]" ]] || { [[ $sn != - && $bl[5] == "$sn" ]] && (( now - bm[1] <= REJOIN )) } }; then
+# つなぎ直しで基準を引き継ぐのは、暗号化なしの Wi‑Fi どうしだけ（切断させやすく、鍵なしで偽装できる網。SSID・BSSID は macOS が伏せるので、
+# 暗号化ありのテザリング・中継器など、同じサブネットの別の網を取り違えないよう、ほかは取り直す）
+if (( $#bl == 8 )) && [[ $bl[7] == <-> ]] && { [[ $bl[3] == - ]] || hex $bl[3] >/dev/null } &&
+   { [[ $bl[2] == "$m[1]" ]] || { [[ $s == NONE && $bl[8] == NONE && $sn != - && $bl[5] == "$sn" ]] && (( now - bm[1] <= REJOIN )) } }; then
   # 同じ接続か、同じサブネットへすぐつなぎ直した（切断させてから偽装する攻撃）。ゲートウェイの MAC・ルーター・DNS は前の基準と比べる
-  bl[1]=$gw bl[2]=$m[1]
+  bl[1]=$gw bl[2]=$m[1] bl[8]=${s:--}
   for x in ${b[2,-1]}; do
     y=(${=x}); (( $#y == 4 )) && [[ $y[3] == <-> && $y[4] == <-> ]] && (( now - y[4] <= KEEP )) && sus[$y[1]:$y[2]]=$y[3] sul[$y[1]:$y[2]]=$y[4]
   done
 else
-  bl=($gw $m[1] - - $sn $dns $now) old=0
+  bl=($gw $m[1] - - $sn $dns $now ${s:--}) old=0
 fi
 [[ $bl[3] == - && -n $mac ]] && bl[3]=$mac
 [[ $bl[5] == - ]] && bl[5]=$sn
@@ -127,7 +146,6 @@ sh=(${(u)sh}) op=(${(onu)op}) pids=(${(u)pids})
 rows=()
 # This Network
 if [[ -n $lan && $lan == "$wifi" ]]; then
-  s=${${${(M)gs:#  Security : [A-Z0-9_]##}[-1]-}##* }
   # 実機で確かめたのは暗号化なしの NONE だけ。ほかの値は確かめるまで Unknown（DESIGN.md §3.3）
   [[ $s == NONE ]] && rows+='wifi notice none' || rows+='wifi unknown unknown'
 else
@@ -152,9 +170,11 @@ ip=$(/usr/sbin/ipconfig getifaddr "$lan" 2>/dev/null) pub=0
 [[ $ip == <0-255>.<0-255>.<0-255>.<0-255> &&
    $ip != (10.*|192.168.*|169.254.*|172.(1[6-9]|2[0-9]|3[01]).*|100.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7]).*) ]] && pub=1
 if (( vpn )); then
-  # VPN の使用中に、Wi‑Fi 側の経路・サブネットか、決まった公開の宛先への経路が Wi‑Fi を通れば、VPN の外へ出る（TunnelVision・TunnelCrack）
-  by=$(( $#ex || pub ))
-  for d in 1.1.1.1 17.253.144.10 8.8.8.8; do rt $d; [[ -n $lan && $ri == "$lan" ]] && by=1; done
+  # VPN の使用中に、網が配った経路（DHCP の経路のオプションがあるときの Wi‑Fi 側の経路）・公開の範囲のサブネット・決まった公開の宛先へ
+  # 直結の経路があれば、VPN の外へ出る（TunnelVision・TunnelCrack）。網が経路を配っていなければ、Wi‑Fi 側のゲートウェイ経路は
+  # VPN の除外の設定（利用者のもの）なので数えない
+  by=$(( pub || dr && $#ex ))
+  for d in 1.1.1.1 17.253.144.10 8.8.8.8; do rt $d; [[ -n $lan && $ri == "$lan" ]] && { [[ -z $rg ]] || (( dr )) } && by=1; done
   if (( ! by )); then rows+='routes ok ok'
   elif seen routes bypass; then rows+='routes risk bypass'
   else rows+='routes notice bypass'; fi
@@ -182,11 +202,54 @@ elif (( $#ra > 1 )); then rows+="ipv6 notice multiple n=$#ra"
 else rows+='ipv6 ok ok'; fi
 
 # This Mac
-x=$(/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate --getstealthmode --getblockall 2>/dev/null)
-blockall=0; [[ $x == *'block all non-essential'* ]] && blockall=1
-if [[ $x == *'(State = 0)'* ]]; then rows+='firewall notice off'
-elif [[ $x == *'(State = '[12]')'* ]]; then [[ $x == *'stealth mode is on'* ]] && rows+='firewall ok stealth' || rows+='firewall ok on'
-else rows+='firewall unknown unknown'; fi
+# 変わりにくい項目（ファイアウォール・macOS の更新・ルート証明書・プライベート Wi‑Fi アドレス）は SLOW 秒ごとと、接続の基準を取り直したとき・
+# Check Now のときだけ読み、その間は控えの行を使う（DESIGN.md §3.3 の負荷）。控えは形を確かめて使う
+mc=(); [[ -r $MC ]] && { mc=(${(f)"$(<$MC)"}) }
+zstat -A mm +mtime $MC 2>/dev/null || mm=(0)
+if (( old && now - mm[1] < SLOW && mm[1] <= now )) && [[ ! -e $RQ && $#mc -eq 5 && $mc[1] == 'blockall '[01] &&
+   ${(j: :)${mc[2,5]%% *}} == 'firewall updates rootcerts privaddr' && -z ${mc[2,5]:#[a-z]## [a-z]## [a-z-]##( n=<->|)} ]]; then
+  blockall=${mc[1]#* } fw=$mc[2] up=$mc[3] rc=$mc[4] pa=$mc[5]
+else
+  x=$(/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate --getstealthmode --getblockall 2>/dev/null)
+  blockall=0; [[ $x == *'block all non-essential'* ]] && blockall=1
+  if [[ $x == *'(State = 0)'* ]]; then fw='firewall notice off'
+  elif [[ $x == *'(State = '[12]')'* ]]; then [[ $x == *'stealth mode is on'* ]] && fw='firewall ok stealth' || fw='firewall ok on'
+  else fw='firewall unknown unknown'; fi
+
+  # macOS の更新（ソフトウェア・アップデートの最後の確認の結果。通信しない）
+  x=$(/usr/bin/defaults read /Library/Preferences/com.apple.SoftwareUpdate 2>/dev/null)
+  k() { print -r -- ${${${(M)${(f)x}:#[[:space:]]#$1 = *}[1]#*= }%;} }
+  u=$(k LastRecommendedUpdatesAvailable) d=$(k LastSuccessfulDate)
+  TZ=UTC strftime -r -s t '%Y-%m-%d %H:%M:%S' "${${d#\"}[1,19]}" 2>/dev/null || t=   # 「"2026-10-26 04:56:33 +0000"」（UTC）
+  if [[ $(k ConfigDataInstall) == 0 || $(k CriticalUpdateInstall) == 0 ]]; then up='updates notice auto-off'
+  elif [[ $u == <1-> ]]; then up="updates notice available n=$u"
+  elif [[ -z $t || $u != <-> ]]; then up='updates unknown unknown'
+  elif (( now - t > 7 * 86400 )); then up='updates notice not-checked'
+  else up='updates ok uptodate'; fi
+
+  # 利用者・管理者が足したルート証明書の数（証明書の名前は読まない）
+  # 足した証明書がなければ、決まった1文だけを標準エラーに出して 1 で終わる（実機）。証明書の名前に同じ文や数の行を入れても
+  # 数を変えられないよう、数は成功したときの行全体の一致で、「なし」は出力全体の一致で見る
+  c=0
+  for o in '' -d; do
+    x=$(/usr/bin/security dump-trust-settings $o 2>&1) r=$?
+    y=${${(M)${(f)x}:#Number of trusted certs = <->}[1]-}
+    if (( ! r )) && [[ -n $y ]]; then (( c += ${y##* } ))
+    elif (( r )) && [[ $x == 'SecTrustSettingsCopyCertificates: No Trust Settings were found.' ]]; then :
+    else c=-1; break; fi
+  done
+  (( c < 0 )) && rc='rootcerts unknown unknown' || { (( c )) && rc="rootcerts notice added n=$c" || rc='rootcerts ok none' }
+
+  # Privacy（色の印を付けない情報）。プライベート Wi‑Fi アドレスは、今の MAC とハードウェアの MAC を比べるだけ（値は残さない）
+  if [[ -n $lan && $lan == "$wifi" ]] && e1=$(hex "$(/sbin/ifconfig $wifi ether 2>/dev/null | /usr/bin/awk '$1 == "ether" { print $2; exit }')") &&
+     e2=$(hex "$(/usr/sbin/networksetup -getmacaddress $wifi 2>/dev/null | /usr/bin/awk '{ print $3; exit }')"); then
+    [[ $e1 == "$e2" ]] && pa='privaddr info off' || pa='privaddr info on'
+  else
+    pa='privaddr info unknown'
+  fi
+  print -rl -- "blockall $blockall" $fw $up $rc $pa > $MC.$$ && mv -f $MC.$$ $MC || rm -f $MC.$$
+fi
+rows+=$fw
 
 # AirPlay 受信。キーがなければ既定（有効）。待ち受け（7000）があれば有効
 [[ $(/usr/bin/defaults -currentHost read com.apple.controlcenter AirplayReceiverEnabled 2>/dev/null) == 0 ]] && (( ! air )) &&
@@ -198,47 +261,18 @@ if (( ! $#op )); then rows+='open ok none'
 elif (( blockall )); then rows+="open ok blocked n=$#pids p=${(j:,:)op}"
 else rows+="open notice ${kn:-apps} n=$#pids p=${(j:,:)op}"; fi
 
-# macOS の更新（ソフトウェア・アップデートの最後の確認の結果。通信しない）
-x=$(/usr/bin/defaults read /Library/Preferences/com.apple.SoftwareUpdate 2>/dev/null)
-k() { print -r -- ${${${(M)${(f)x}:#[[:space:]]#$1 = *}[1]#*= }%;} }
-u=$(k LastRecommendedUpdatesAvailable) d=$(k LastSuccessfulDate)
-TZ=UTC strftime -r -s t '%Y-%m-%d %H:%M:%S' "${${d#\"}[1,19]}" 2>/dev/null || t=   # 「"2026-10-26 04:56:33 +0000"」（UTC）
-if [[ $(k ConfigDataInstall) == 0 || $(k CriticalUpdateInstall) == 0 ]]; then rows+='updates notice auto-off'
-elif [[ $u == <1-> ]]; then rows+="updates notice available n=$u"
-elif [[ -z $t || $u != <-> ]]; then rows+='updates unknown unknown'
-elif (( now - t > 7 * 86400 )); then rows+='updates notice not-checked'
-else rows+='updates ok uptodate'; fi
-
-# 利用者・管理者が足したルート証明書の数（証明書の名前は読まない）
-# 足した証明書がなければ、決まった1文だけを標準エラーに出して 1 で終わる（実機）。証明書の名前に同じ文や数の行を入れても
-# 数を変えられないよう、数は成功したときの行全体の一致で、「なし」は出力全体の一致で見る
-c=0
-for o in '' -d; do
-  x=$(/usr/bin/security dump-trust-settings $o 2>&1) r=$?
-  y=${${(M)${(f)x}:#Number of trusted certs = <->}[1]-}
-  if (( ! r )) && [[ -n $y ]]; then (( c += ${y##* } ))
-  elif (( r )) && [[ $x == 'SecTrustSettingsCopyCertificates: No Trust Settings were found.' ]]; then :
-  else c=-1; break; fi
-done
-(( c < 0 )) && rows+='rootcerts unknown unknown' || { (( c )) && rows+="rootcerts notice added n=$c" || rows+='rootcerts ok none' }
+rows+=($up $rc)
 
 if (( vpn )); then rows+='vpn ok on'
 elif [[ -n ${(M)${(f)"$(/usr/sbin/scutil --nc list 2>/dev/null)"}:#[* ] \(Connected\) *} ]]; then rows+='vpn unknown partial'   # 状態の欄だけ見る（名前は見ない）
 elif [[ $rows[1] == 'wifi notice none' ]]; then rows+='vpn notice off'
 else rows+='vpn unknown off'; fi
 
-# Privacy（色の印を付けない情報）。プライベート Wi‑Fi アドレスは、今の MAC とハードウェアの MAC を比べるだけ（値は残さない）
-if [[ -n $lan && $lan == "$wifi" ]] && e1=$(hex "$(/sbin/ifconfig $wifi ether 2>/dev/null | /usr/bin/awk '$1 == "ether" { print $2; exit }')") &&
-   e2=$(hex "$(/usr/sbin/networksetup -getmacaddress $wifi 2>/dev/null | /usr/bin/awk '{ print $3; exit }')"); then
-  [[ $e1 == "$e2" ]] && rows+='privaddr info off' || rows+='privaddr info on'
-else
-  rows+='privaddr info unknown'
-fi
+rows+=$pa
 
 # 注意・危険に変わったとき・注意・危険から戻ったときだけログに1行。網の項目は、接続の基準を取り直したら前の結果と比べない（新しい網で1回書く）
-p=(); [[ -r $NC ]] && { p=(${(f)"$(<$NC)"}) }
 typeset -A prev=()
-for x in ${p[2,-1]}; do y=(${=x}); prev[$y[1]]=${x#* }; done
+for x in ${pr[2,-1]}; do y=(${=x}); prev[$y[1]]=${x#* }; done
 (( old )) || for x in wifi gateway dns routes proxy ipv6 vpn privaddr; do unset "prev[$x]"; done
 al=()
 for x in $rows; do
@@ -260,10 +294,10 @@ if (( $#al )); then
 fi
 
 # 結果と基準は、中身が変わったときだけ一時ファイルから置き換える（変わらなければ更新時刻だけ進める。メニューバーは60秒より古ければ Not Running）
-if [[ ${p[1]-} == "v1 $net "* && ${(F)p[2,-1]} == "${(F)rows}" ]]; then
+if [[ ${pr[1]-} == "v1 $id "* && ${(F)pr[2,-1]} == "${(F)rows}" ]]; then
   /usr/bin/touch $NC
 else
-  print -rl -- "v1 $net $now 0 -" $rows > $NC.$$ && mv -f $NC.$$ $NC || rm -f $NC.$$
+  print -rl -- "v1 $id $now 0 -" $rows > $NC.$$ && mv -f $NC.$$ $NC || rm -f $NC.$$
 fi
 # 今回見なかった確かめ中の危険も、最後に見てから KEEP 秒は残す。基準は中身が同じでも更新時刻を進める（最後に接続していた時刻。REJOIN）
 for x in ${(ko)sus}; do cur+="${x/:/ } $sus[$x] $sul[$x]"; done

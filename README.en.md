@@ -149,9 +149,9 @@ Every 10 seconds, without sending anything, it looks at the Wi‑Fi you are on a
 | What it looks at | Examples of a notice (yellow) or a risk (red) |
 |---|---|
 | Wi‑Fi encryption | No encryption (most free Wi‑Fi) is a notice. It suggests a VPN and HTTPS-only sites |
-| The router (gateway) | The router's hardware address changes while you are connected, or right after you are knocked off and reconnect: a notice, and a risk when seen again (another device may be posing as the router) |
+| The router (gateway) | The router's hardware address changes while you are connected, or right after you are knocked off an unencrypted Wi‑Fi and reconnect: a notice, and a risk when seen again (another device may be posing as the router) |
 | DNS servers | The DNS servers the Wi‑Fi hands out change while you are connected: a notice, and a risk when seen again (another device may be taking over website name lookups) |
-| Routes | While you use a VPN, routes that send some traffic straight over the Wi‑Fi are a risk. Without a VPN, extra routes are a notice |
+| Routes | While you use a VPN, routes that send some traffic straight over the Wi‑Fi, such as routes the Wi‑Fi hands out, are a risk (routes from your VPN's own exclusion settings are not counted). Without a VPN, extra routes are a notice |
 | Proxy, IPv6 routers | Proxy auto-discovery or a proxy setting, and several or changed IPv6 routers, or one that appears on a Wi‑Fi that had none, are notices |
 | Firewall, AirPlay Receiver, sharing | A turned-off firewall, or AirPlay Receiver or Screen Sharing turned on, are notices |
 | Apps listening on this Mac | Apps such as Ollama that others on the same Wi‑Fi can reach are a notice (only the port numbers are shown) |
@@ -162,6 +162,7 @@ Every 10 seconds, without sending anything, it looks at the Wi‑Fi you are on a
 - It only looks. It does not change settings, block attacks, or probe other devices on the shop's Wi‑Fi. Finding a risk does not stop automatic reconnection
 - It cannot tell when another device was already in the middle before you joined, when the shop's Wi‑Fi itself is fake, or when a device uses the router's own hardware address. A skilled attacker can avoid it, for example by cutting in for less than the check interval (only a notice) or by waiting before making you reconnect. It does not yet check website name lookups or the contents of HTTPS. If you assume an attack, use a VPN
 - The menu and log never show this Mac's MAC or IP address, or the Wi‑Fi name
+- The firewall, macOS updates, added root certificates, and Private Wi‑Fi Address are checked every 5 minutes. To see a change right away, click "Check Now"
 - Whether it shows false risks on real shop Wi‑Fi has not been checked yet ([DESIGN.md](DESIGN.md) §3.3 and §7, in Japanese)
 - If you do not want it, reinstall following the install steps, adding ` --no-netcheck` before you press Enter (this removes only the network check; you can also add ` --no-menubar`)
 
@@ -202,7 +203,7 @@ The main fields mean:
 | Field | Meaning |
 |---|---|
 | `Menu bar` | Whether the menu bar icon is running (`running`, `not running`, or `not installed`) |
-| `Network check` | Whether the network check is running (`running`, `not running`, or `not installed`). The lines below it are notices (`Notice`) and risks (`Risk`) on the current network, in the same words as the log |
+| `Network check` | Whether the network check is running (`running`, `not running`, or `not installed`; `failing` with the exit code if its last run failed). The lines below it are notices (`Notice`) and risks (`Risk`) on the current network, in the same words as the log |
 | `Current network` | Whether the network you are on now is one you accepted. The tool identifies a network by its gateway's MAC address. While the tool is watching a USEN network, it says so |
 | `Last auth` | When your own acceptance was recorded, your acceptance on the login page was confirmed, or the tool last re-accepted, on any network |
 | `Next time-out` | An estimate from the last authentication on the current network, shown under the same conditions as in the menu bar (on USEN Wi‑Fi you joined for the first time, after the menu bar has told the chain) |
