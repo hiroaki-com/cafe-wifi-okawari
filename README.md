@@ -183,7 +183,7 @@ zsh ~/.local/bin/cafe-wifi-okawari-ctl status
 Service          loaded (LaunchAgent local.cafe-wifi-okawari)
 Schedule         every 10 s, and whenever the network settings change
 Program          /Users/you/.local/bin/cafe-wifi-okawari
-Version          1.0.0
+Version          1.1.0
 Last exit code   0 (412 runs since loaded)
 Menu bar         running
 Current network  gateway 0:0:5e:0:1:1 (doutor), accepted: auto re-authentication on

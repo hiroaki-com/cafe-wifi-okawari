@@ -710,7 +710,7 @@ zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall  # 停止・削除（同意の�
 
 - mainの「Download ZIP」は入口にしない。版が分からず、実網で確かめる前の変更も配ってしまうため。配るのはタグ（`v1.2.0` の形）を付けたGitHub Releaseだけにし、Releaseは模擬試験の通過と、動作を変えた部分の実網での確認（§7）のあとに作る。リリースノートには実網で確かめた範囲を書く。
 - タグのpushでワークフローが `git archive --prefix=cafe-wifi-okawari/` から `cafe-wifi-okawari.tar.gz` と `cafe-wifi-okawari.zip` を作り、Releaseに添付する。ファイル名と最上位のフォルダ名に版を入れないので、READMEは `https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/<ファイル名>` を版ごとに書き換えずに案内できる。添付ファイルのSHA-256はReleaseの画面に出るので、確かめたい人は `shasum -a 256` で照合できる。
-- 版は本体に1行で持ち（`VERSION=1.0.0`）、タグと一致しなければワークフロー（`.github/workflows/release.yml`）を失敗させる。ワークフローは模擬試験も通してから、下書きのReleaseに添付する。公開は作者がリリースノートに実網で確かめた範囲を書いてから手で行う。`.github` は `export-ignore` で配布物から除く。インストーラーの完了表示・`status`・Issueの版の欄に同じ値を出す。Gitで導入した人も同じ値で報告できる。
+- 版は本体に1行で持ち（`VERSION=1.1.0`）、タグと一致しなければワークフロー（`.github/workflows/release.yml`）を失敗させる。ワークフローは模擬試験も通してから、下書きのReleaseに添付する。公開は作者がリリースノートに実網で確かめた範囲を書いてから手で行う。`.github` は `export-ignore` で配布物から除く。インストーラーの完了表示・`status`・Issueの版の欄に同じ値を出す。Gitで導入した人も同じ値で報告できる。
 
 **取得と導入**
 
