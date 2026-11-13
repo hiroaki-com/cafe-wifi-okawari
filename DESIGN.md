@@ -206,7 +206,8 @@ launchd (LaunchAgent, ユーザー権限, 10秒ごと ＋ resolv.conf が書き�
 | `install.sh` | 導入・更新・状態の確認・削除（メッセージは英語のみ）。既定でメニューバーの表示（§3.2）とネットワークの診断（§3.3）も入れる（`--no-menubar`・`--no-netcheck` ならそれぞれ入れず、入っていれば消す。組み合わせられる）。plist を `$HOME` に合わせて `plutil` で生成する（パスに `&` などがあっても壊れない）。`StartInterval=10`、`WatchPaths=/var/run/resolv.conf`（認証画面で同意して通信できるようになった時刻に書き換わる）、`ProcessType=Background`。本体は `/bin/zsh <本体>` として起動する（§6.1）。導入時に自身を `~/.local/bin/cafe-wifi-okawari-ctl` へ複製し、そこからは `status`・`uninstall` だけを受け付ける（§6.1）。完了表示と `status` に本体の `VERSION` を出す。`bootout` 直後の `bootstrap` の一時失敗は最大10回やり直す。`status` は通信せずに、登録と最後の終了コード・メニューバーの表示の状態・今の接続先（本体の `netid` と同じく経路表と ARP から）が同意済みか・同意済みの件数とブランド・最後の認証の時刻と次の時間切れの目安（§3.2 と同じ条件を満たすときだけ）・ログの最新5行を出す。見張り中の網（24時間以内）は別に表示する（§3.1）。診断の状態（`Network check`。登録されていて最後の終了コードが0なら `running`、0でなければ `failing (last exit code <n>)`）と、今の接続先の結果の注意・危険を ID と値の語で出す（§3.3） |
 | `menubar.sh`・`menubar.js`・`assets/icon/` | メニューバーの表示（判定・表示・アイコンの画像）。導入先と LaunchAgent は §3.2 |
 | `netcheck.sh` | ネットワークの診断（通信しない）。導入先・LaunchAgent・結果のファイルは §3.3 |
-| `.github/workflows/release.yml`・`.gitattributes` | タグの push で版の一致と模擬試験を確かめ、配布物（`cafe-wifi-okawari.tar.gz`・`.zip`）を下書きの Release に添付する。`.github` は配布物に含めない（§6.1） |
+| `.github/workflows/release.yml`・`.gitattributes` | タグの push で版の一致と模擬試験を確かめ、配布物（`cafe-wifi-okawari.tar.gz`）を下書きの Release に添付する。`.github` は配布物に含めない（§6.1） |
+| `pkg/` | 署名・公証した `.pkg` の部品（§6.2）。`build.sh` はタグから `.pkg` を作って照合・署名・公証する（作者の Mac で実行）。`postinstall` は同梱の `install.sh` を本人の権限で実行する。`distribution.xml` と `resources/`（使用許諾・完了画面の日英） |
 | `test/run.sh` | 模擬の curl・route・arp・ipconfig・ifconfig・defaults・osascript・launchctl・networksetup・scutil（診断は netstat・ndp・socketfilterfw・security・ps も）による分岐試験。GitHub Actions（macOS）で push ごとに実行 |
 | `~/Library/LaunchAgents/local.cafe-wifi-okawari.plist` | LaunchAgent 定義（`install.sh` が生成） |
 | `~/Library/Logs/cafe-wifi-okawari.log` | 同意の記録・同意待ち・認証画面での同意を確かめた行と、再認証の成功・失敗・想定外の応答だけ（通常時は何も書かない） |
@@ -354,6 +355,8 @@ Recent                               ← 見出し
 ────
 Open Log
 Hide from Menu Bar
+────
+Uninstall…
 ```
 
 印は AppKit 標準の状態の画像（`NSImageNameStatusAvailable`・`StatusPartiallyAvailable`・`StatusUnavailable`・`StatusNone`）で、色の意味は次の4つ。色だけに頼らないよう、意味は印の下の行にも文字で出す。
@@ -391,7 +394,8 @@ Hide from Menu Bar
 - 日付は、今日なら `Today`、昨日なら `Yesterday`、それより前は `09-28`。時刻は24時間制の `HH:MM`。日時と中身は2列にそろえる
 - ブランド名は先頭だけ大文字（`skylark` → `Skylark`）。`usen` は `USEN`（チェーンが分かっている接続先なら `Tully's`。接続先の行では `Tully's (USEN)`）。同じ MAC で同意済みのブランドが複数あれば `Doutor, Starbucks` と並べる（`install.sh status` と同じ）。本体は英字・数字・`-`・`_` だけのブランド名しか記録しないが、そのほかの文字を含む語は出さない（MAC・IP を出さないため）
 - 停止中は、見出しと `Stopped`・`Run install.sh to Restart` と直近の出来事だけ。接続先・次の時間切れ・案内は出さない（自動再接続が動いていないのに `Auto Reconnect On` と読めるため）
-- 末尾の `Open Log`（ログを既定のアプリで開く。ログがなければ押せない）と `Hide from Menu Bar` は操作なので、`menubar.js` が付ける
+- 末尾の `Open Log`（ログを既定のアプリで開く。ログがなければ押せない）と `Hide from Menu Bar`、区切り線の下の `Uninstall…` は操作なので、`menubar.js` が付ける
+- `Uninstall…` は、削除するもの（自動再接続・アイコン・診断・同意した接続先の記録）と残すログの場所を確認のダイアログ（`NSAlert`）に出し、`Uninstall` を押したときだけ `~/.local/bin/cafe-wifi-okawari-ctl uninstall` を実行する。既定のボタン（Return）は `Cancel`。`-ctl` がなければ（リポジトリから動かしたとき）押せない。`uninstall` はメニューバーの登録を最後に外し、launchd がメニューバーのジョブごと呼び出し元を終わらせる（使い捨ての LaunchAgent で、自分の登録を外すと子のプロセスも解除の時点で終わることを確かめた）。そのため削除はそれより前にすべて済ませる。戻ってきても `-ctl` が消えていれば削除はできている（launchd の外で動かしたときなど）のでメニューバーを終え、`-ctl` が残っていれば削除に失敗しているので、ターミナルでの方法をダイアログで示す
 - 案内の行（!・…）は押せない行として出す。認証画面を開くボタンは付けない（操作を増やさない）
 - 画面共有や録画に写るので、端末とゲートウェイの MAC・IP は出さない（直近の出来事は時刻・種類・ブランド・秒数だけ）。SSID・店舗名は画面共有を理由に除かない（SSID は macOS が位置情報の許可なしには返さないので出していない。USEN のチェーンは下の方法で出す。店舗名は出さない）
 - ログは末尾の 16KB だけ読む（ローテーションしないので、全体を読むと年単位で重くなる）
@@ -605,7 +609,7 @@ updates notice available n=2
 ## 4. 安全性
 
 - **秘密情報を扱わない**: 同意するだけなので、ID やパスワードを保存しない。Keychain も設定ファイルも不要。保存するのは、自分で同意した店のルーターの MAC とブランド名（USEN は規約のハッシュも）だけで、外部には送らない
-- **最小権限**: ユーザーの LaunchAgent として動く。sudo は不要
+- **最小権限**: ユーザーの LaunchAgent として動く。このツールのコードは導入時も常駐中も root で動かない（常駐処理は公衆網の信頼できない応答を読むため）。`install.sh` は uid 0 なら `status`・`uninstall` も含めて何もせずに終わり、`.pkg` の導入スクリプトも同じく断る（§6.2）
 - **通信先を固定**: Wi2 への要求はコードに書いた `service.wi2.ne.jp` にだけ送る。`--proto '=https'`、証明書検証あり（`-k` なし）。curl にリダイレクトを追従させず、本ツールが Location を調べて `/wi2auth/` 内の転送だけを3回までたどる
 - **curl の実行条件を固定**: `/usr/bin/curl -q`（先頭必須）で `~/.curlrc` を読まない。PATH 上の別の curl も使わない。環境変数のプロキシも使わない（`--noproxy '*'`。§3.1）
 - **対象網の判定**: captive.apple.com が `https://service.wi2.ne.jp/wi2auth/redirect?` へ転送し、TLS 検証済みの Wi2 が同意ページかランディングへ 302 を返したときだけ同意を送る。認証済みの状態で Wi2 に問い合わせるのは、DHCP のドメイン名が `wi2.ne.jp` の網だけ。ドメイン名は偽れるが、偽っても Wi2 に1回問い合わせるだけ
@@ -662,6 +666,8 @@ updates notice available n=2
 
 ログ全文・`status` 出力・画面画像・通信の記録は求めない。タイトルも含め、MAC・IP（ゲートウェイを含む）、SSID、店舗名・所在地、来店日時・行動時刻、ユーザー名・個人のファイルパス、認証URL・Cookie・トークンを投稿しないよう案内する。エラーはREADMEのログ一覧の種類と数値の `curl`・`http` コードだけを手で記入する。手元のログ・同意の記録は変更しない。テンプレートは自動の秘匿処理ではないので、投稿前のプレビュー確認を求める。共有用の診断出力コマンドは未実装。
 
+脆弱性は公開のIssueで受けず、GitHub の Private vulnerability reporting で非公開に受ける。窓口と対象の例、`.pkg` の署名・公証の確かめ方は `.github/SECURITY.md`（日英）に置き、README（日英）の報告の節から案内する。対象は最新の Release だけで、返信や修正の期日は約束しない（個人の保守のため）。リポジトリではシークレットの検知と push 時の遮断を有効にしている。
+
 ## 5. パフォーマンス
 
 - 関係のない網では、route・arp・ipconfig を見るだけで通信しない（約0.01秒）。起動は10秒ごと（1日約8,600回）だが、自宅などで Apple のサーバーに問い合わせることはない
@@ -683,34 +689,34 @@ zsh install.sh               # 導入・更新（スクリプトを複製し、p
 zsh install.sh --no-menubar  # メニューバーの表示なしで導入・更新（入っていれば消す）
 zsh install.sh --no-netcheck # ネットワークの診断なしで導入・更新（入っていれば消す。--no-menubar と組み合わせられる）
 zsh ~/.local/bin/cafe-wifi-okawari-ctl status     # 動作の確認（英語。通信しない。未登録なら 1 で終わる）
-zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall  # 停止・削除（同意の記録も消す。ログは残す）
+zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall  # 停止・削除（同意の記録も消す。ログは残す。メニューの Uninstall… も同じ）
 ```
 
 スクリプトは `~/.local/bin` へ複製するので、導入後に取得したフォルダを移動・削除しても動く。`cafe-wifi-okawari-ctl` は `install.sh` の複製で、`status`・`uninstall` は取得したフォルダの `install.sh` でも同じように動く（§6.1）。利用者向けの概要・使い方は README.md（日本語）と README.en.md（英語）、利用上の注意と自動同意の詳細は USAGE-NOTES.md と USAGE-NOTES.en.md。ダイアログは macOS の優先言語（`defaults read -g AppleLanguages` の先頭）が日本語なら日本語、それ以外は英語。
 
 ### 6.1 Gitを使わない導入
 
-[Appleの説明](https://developer.apple.com/documentation/xcode/installing-the-command-line-tools)では、開発ツールのないmacOSで `git` を実行するとCommand Line Toolsの追加インストールを求める。「追加ソフト不要」を取得から満たすため、Gitを必須にしない導入経路をREADMEの第一の手順にし、Gitは選択肢として残す。
+[Appleの説明](https://developer.apple.com/documentation/xcode/installing-the-command-line-tools)では、開発ツールのないmacOSで `git` を実行するとCommand Line Toolsの追加インストールを求める。「追加ソフト不要」を取得から満たすため、Gitを必須にしない導入経路を用意し、Gitは選択肢として残す。READMEの第一の手順は署名・公証した `.pkg`（§6.2）で、この節のターミナルの1行は第二の手順。
 
 方針は、GitHub上の配布物で広く使われる形（タグ付きのRelease・名前を固定した添付ファイル・`releases/latest/download/` の固定URL）にそろえる。ネットワークから取得した内容を直接シェルへ流す方式（`curl … | sh`）、Homebrew等の追加依存、自動更新は導入しない（§8）。
 
 **配布物**
 
 - mainの「Download ZIP」は入口にしない。版が分からず、実網で確かめる前の変更も配ってしまうため。配るのはタグ（`v1.2.0` の形）を付けたGitHub Releaseだけにし、Releaseは模擬試験の通過と、動作を変えた部分の実網での確認（§7）のあとに作る。リリースノートには実網で確かめた範囲を書く。
-- タグのpushでワークフローが `git archive --prefix=cafe-wifi-okawari/` から `cafe-wifi-okawari.tar.gz` と `cafe-wifi-okawari.zip` を作り、Releaseに添付する。ファイル名と最上位のフォルダ名に版を入れないので、READMEは `https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/<ファイル名>` を版ごとに書き換えずに案内できる。添付ファイルのSHA-256はReleaseの画面に出るので、確かめたい人は `shasum -a 256` で照合できる。
-- 版は本体に1行で持ち（`VERSION=1.1.0`）、タグと一致しなければワークフロー（`.github/workflows/release.yml`）を失敗させる。ワークフローは模擬試験も通してから、下書きのReleaseに添付する。公開は作者がリリースノートに実網で確かめた範囲を書いてから手で行う。`.github` は `export-ignore` で配布物から除く。インストーラーの完了表示・`status`・Issueの版の欄に同じ値を出す。Gitで導入した人も同じ値で報告できる。
+- タグのpushでワークフローが `git archive --prefix=cafe-wifi-okawari/` から `cafe-wifi-okawari.tar.gz` を作り、Releaseに添付する。署名・公証した `cafe-wifi-okawari.pkg` は作者の Mac で同じタグから作って足す（§6.2）。ファイル名と最上位のフォルダ名に版を入れないので、READMEは `https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/<ファイル名>` を版ごとに書き換えずに案内できる。添付ファイルのSHA-256はReleaseの画面に出るので、確かめたい人は `shasum -a 256` で照合できる。
+- 版は本体に1行で持ち（`VERSION=1.2.0`）、タグと一致しなければワークフロー（`.github/workflows/release.yml`）を失敗させる。ワークフローは模擬試験も通してから、下書きのReleaseに添付する。公開は作者がリリースノートに実網で確かめた範囲を書いてから手で行う。`.github` は `export-ignore` で配布物から除く。インストーラーの完了表示・`status`・Issueの版の欄に同じ値を出す。Gitで導入した人も同じ値で報告できる。
 
 **取得と導入**
 
-READMEの導入の節は、公開版の1行（方法A・推奨）とGitの1行（方法B・既にGitを使っている人向け、入るのは `main` の最新）を同じ形の小見出しで並べる。方法Aは次の1行。
+READMEの導入の節は、`.pkg`（方法A・推奨。§6.2）、ターミナルで公開版を入れる1行（方法B）、Gitの1行（方法C・既にGitを使っている人向け、入るのは `main` の最新）を同じ形の小見出しで並べる。オプション（`--no-menubar` など）は方法B・Cだけで選べる。方法Bは次の1行。
 
 ```sh
 cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.tar.gz && tar -xzf cafe-wifi-okawari.tar.gz && zsh cafe-wifi-okawari/install.sh
 ```
 
 - いったんファイルに保存してから実行するので、シェルへ直接流す方式には当たらない。curlとtarは標準のコマンドで、`curl` で保存したファイルにはダウンロード属性（`com.apple.quarantine`）が付かず、「ダウンロード」フォルダへのアクセス許可の画面も出ない。一時フォルダへ展開し、既存の `git clone` のフォルダを上書きしない。
-- ブラウザでZIPを取得して展開し、ターミナルで `zsh ` と入力して `install.sh` をドラッグする経路は、READMEでは案内しない。導入はできるが、取得・展開・ドラッグと手順が多く、一般的なMacアプリの「ダウンロードしてダブルクリック」より分かりにくいため。ZIPはReleaseの添付として残し、この経路で取得した人も導入できるようにしておく（「ダウンロード」フォルダへのアクセス許可の画面が出ることと、展開したファイルにダウンロード属性が付くことを前提にする）。
-- ダブルクリックで開く形（`.command`・署名のない `.pkg`・アプレット）は採らない。Developer IDの署名と公証がないと、macOS 15以降はGatekeeperに止められ、システム設定で「このまま開く」を押す必要があり、かえって分かりにくいため。Apple Developer Programの登録後に、署名・公証した `.pkg` を本文の手順にすることを検討する（§8）。
+- ブラウザでアーカイブを取得して展開し、ターミナルで `zsh ` と入力して `install.sh` をドラッグする経路は、READMEでは案内しない。取得・展開・ドラッグと手順が多く、ダブルクリックで開く `.pkg` のほうが分かりやすいため。ZIPは添付しない（ブラウザで取得する人には `.pkg` がある）。tar.gz をブラウザで取得して展開しても導入はできる（「ダウンロード」フォルダへのアクセス許可の画面が出ることと、展開したファイルにダウンロード属性が付くことを前提にする）。
+- 署名のないダブルクリックの形（`.command`・署名のない `.pkg`・アプレット）は採らない。Developer IDの署名と公証がないと、macOS 15以降はGatekeeperに止められ、システム設定で「このまま開く」を押す必要があり、かえって分かりにくいため。ダブルクリックで開く形は、署名・公証した `.pkg` だけにする（§6.2）。
 - どの経路でも `zsh` に読ませて実行し、実行権限に依存しない（インストーラーは `${0:A:h}` から取得元を求める）。展開先の空白・日本語・連番にも対応する。利用条件の案内は取得の手順より前に置く。
 
 **取得元フォルダに依存しない**
@@ -723,9 +729,40 @@ cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawar
 - 導入と同じ手順をもう一度実行する。事前のuninstallは同意の記録を消すため行わない。Gitで導入した人は `git pull && zsh install.sh`。
 - 更新の確認のための通信は持たない。新しい版を知りたい人には、GitHubの「Watch → Custom → Releases」を案内する。
 
-**確かめたこと**: 模擬試験で、空白・日本語・連番を含む展開先と実行権限のないファイルからの導入を確かめた（§7）。手元のMac（macOS 27.0・開発ツールあり）では、ダウンロード属性を手で付けた実行権限なしの複製（フォルダ名に空白と連番）から更新し、導入先にも属性が引き継がれたまま、LaunchAgentが `/bin/zsh` で起動して終了コード0で動き、メニューバーも動いた。取得元フォルダを消したあとも `-ctl status` が動き、`-ctl` からの導入は断った。v1.0.0 では、ワークフローが模擬試験を通して配布物（`.github` なし）を下書きに添付し、公開後に同じMacで固定URLから取得して更新できた。ブラウザ（Safari）で取得してデスクトップに展開したZIPからも導入できた。
+**確かめたこと**: 模擬試験で、空白・日本語・連番を含む展開先と実行権限のないファイルからの導入を確かめた（§7）。手元のMac（macOS 27.0・開発ツールあり）では、ダウンロード属性を手で付けた実行権限なしの複製（フォルダ名に空白と連番）から更新し、導入先にも属性が引き継がれたまま、LaunchAgentが `/bin/zsh` で起動して終了コード0で動き、メニューバーも動いた。取得元フォルダを消したあとも `-ctl status` が動き、`-ctl` からの導入は断った。v1.0.0 では、ワークフローが模擬試験を通して配布物（`.github` なし）を下書きに添付し、公開後に同じMacで固定URLから取得して更新できた。ブラウザ（Safari）で取得してデスクトップに展開したZIP（v1.1.0 まで添付）からも導入できた。
 
 **未検証**: タグと版が食い違ったときにワークフローが失敗すること。開発ツールのないMacで、curl経路・ブラウザ経路とも追加インストールを求められず、ブラウザ経路でもGatekeeperの画面が出ずにLaunchAgentとメニューバーが起動すること。
+
+### 6.2 署名・公証した .pkg
+
+READMEの第一の導入。ダウンロードしてダブルクリックで開く、一般的な Mac のインストーラーと同じ形にする。
+
+**形**
+
+- Developer ID Installer（HKDOCS）で署名し、Apple の公証を受けてチケットをステープルする。インストーラーには署名者として HKDOCS が出る。識別子は `com.hkdocs.cafe-wifi-okawari`（LaunchAgent のラベルは `local.*` のまま）。添付の名前は `cafe-wifi-okawari.pkg`（版を入れない。§6.1）
+- ペイロードのない、導入スクリプトだけの `.pkg`。導入先に直接ファイルを置かず、`postinstall` が同梱の `install.sh` を実行する。ターミナルの導入と同じコードで同じ結果になり、状態の確認・削除も同じ（`-ctl`・メニューの `Uninstall…`）
+- 導入先は「自分だけにインストール」だけ（`enable_currentUserHome`。`enable_localSystem`・`enable_anywhere` は false）。Distribution に JavaScript（`installation-check` など）は書かない
+- 使用許諾の画面に、READMEの「利用前に確認してください」の要点・USAGE-NOTES の全文の URL・導入されるものと root で動かないこと・MIT ライセンスを出し、同意しなければ進めない。完了画面で、最初の1回は自分で同意することと削除の方法を案内する。日本語と英語を macOS の言語で切り替える（`resources/ja.lproj`・`en.lproj`）
+- 対応は macOS 15 以降（`allowed-os-versions`）、Apple Silicon・Intel
+- オプション（`--no-menubar`・`--no-netcheck`）は選べない。更新では導入済みの状態から引き継ぐ: メニューバーの登録がなければ `--no-menubar`、診断の登録がなく導入済みの版が v1.0.x でなければ `--no-netcheck`（診断は v1.1.0 から）
+
+**root で動かない**
+
+- 約束は「このツールのコードは導入時も常駐中も root で動かない」（§4）
+- `postinstall` は uid 0 なら何もせずに失敗で終わる（`sudo installer …` など）。導入先（引数の `$2`）が本人のホームでなくても失敗で終わる。本人のホームは uid のパスワード項目から引く（`id -P` の9番目）。Installer の環境では利用者の一覧が引けず、zsh の `userdirs` は空になるので使わない。`HOME` はその値にし、`PATH` は `/usr/bin:/bin:/usr/sbin:/sbin` に固定する
+- 導入時にネットワークから何も取得しない。導入されるのは、公証を受けた `.pkg` に同梱した中身だけ
+
+**作り方**（作者の Mac で `zsh pkg/build.sh <タグ>`）
+
+- 中身はタグの `git archive` からだけ取る。作業フォルダの変更や追跡しないファイル（`.claude/` の検証記録など）は入らない。同梱するのは `install.sh` が使う7ファイル（本体・`install.sh`・`menubar.sh`・`menubar.js`・`netcheck.sh`・メニューバーのアイコンの 1x・2x）と `postinstall` だけ
+- 作ったあとに展開して照合する: ファイルの一覧が決めたとおりで、どれもタグの中身と同じ。導入スクリプトに `com.apple.provenance` 以外の拡張属性がない（provenance は macOS が作業中のファイルに付けて消せず、`pkgbuild` が AppleDouble で入れる。`ditto -x` で展開して確かめる。`dot_clean` はほかの属性を黙って捨てるので使わない）。Distribution に JavaScript がなく、版がタグと同じで、導入先が本人のホームだけ。署名者が HKDOCS。公証のあとは `stapler validate` と `spctl -a -t install` が `Notarized Developer ID` で通ること
+- 署名鍵は作者のログインキーチェーンにあり、使うたびに確認が出る設定にしている。公証には App Store Connect の API 鍵を環境変数で渡す。鍵はリポジトリにも CI にも置かない
+- `.pkg` の目次と導入スクリプトのアーカイブには、作ったアカウントの短い名前・uid と作った時刻が持ち主・時刻として入る（`pkgbuild`・`productbuild` が書き、署名の内側なので後から消せない）。短い名前だけでほかの情報にはつながらないので許容する。ほかの個人の情報（ホームのパス・メールなど）が入らないことは、展開して確かめた
+- 流れ: タグを push → ワークフローが tar.gz を添付した下書きの Release を作る（§6.1）→ 同じタグから `.pkg` を作って公証し、下書きに添付する → 作者が公開する
+
+**確かめたこと**: 模擬試験で `postinstall` の分岐（root・本人のホームでない導入先・`*` を含むホーム・導入と更新・オプションの引き継ぎ）を確かめた（§7）。手元の Mac（macOS 27.0・開発ツールあり）で、署名した `.pkg` をダブルクリックで開き、使用許諾・導入先の選択（「自分専用にインストール」だけ）・完了の画面が日本語で出て、管理者のパスワードを求められずに導入でき、3つの LaunchAgent とメニューバーが動いた。公証してステープルした `.pkg` にダウンロード属性を付けて開いても、同じように導入できた。メニューの `Uninstall…` で、導入した7ファイル・3つの登録・プロセスが消え、ログだけが残った。
+
+**未検証**: 開発ツールのない macOS 15 での導入。ブラウザで取得した（ダウンロード属性の付いた）公証済みの `.pkg` を、別のユーザーで開いたときの Gatekeeper の表示。
 
 ## 7. 検証
 
@@ -734,8 +771,8 @@ cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawar
 | 確認項目 | 結果 |
 |---|---|
 | 構文（`zsh -n`・`plutil -lint`・ダイアログの `osacompile`・`menubar.js` の `osacompile -l JavaScript`） | OK |
-| 模擬試験 `zsh test/run.sh`（546項目。うちネットワークの診断が157項目） | OK。GitHub Actions でも push ごとに実行 |
-| 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、NG として検出できることを確かめている。見逃した変異があれば、検出できるよう試験を足した。変異の数は、USEN の分岐が33通り、メニューバーが37通り、アイコンの組み込みが4通り、USEN のチェーンが12通り、同意済みの網での認証画面の同意が12通り、メニューの印と見出しが10通り、見張り中の網の表示が9通り、USEN の同意待ちの書き直しと入れ直したあとの目安が7通り、導入の経路が5通りで、どれもすべて検出した |
+| 模擬試験 `zsh test/run.sh`（559項目。うちネットワークの診断が157項目） | OK。GitHub Actions でも push ごとに実行 |
+| 試験が不具合を検出できるか | 修正ごとに該当箇所をわざと壊して実行し、NG として検出できることを確かめている。見逃した変異があれば、検出できるよう試験を足した。変異の数は、USEN の分岐が33通り、メニューバーが37通り、アイコンの組み込みが4通り、USEN のチェーンが12通り、同意済みの網での認証画面の同意が12通り、メニューの印と見出しが10通り、見張り中の網の表示が9通り、USEN の同意待ちの書き直しと入れ直したあとの目安が7通り、導入の経路が5通り、`.pkg` の導入スクリプトと root での実行の拒否が11通りで、どれもすべて検出した |
 | 試験が不具合を検出できるか（ネットワークの診断） | 実装で21通り、攻撃の手順への備えで15通り、レビューの指摘への対応で21通りをすべて検出した。網やプロセスが選べる文字列への備えでは10通りのうち8通りを検出した。残る2通り（`Security` の行の頭の空白の照合を外す・証明書の「なし」の文を部分一致にする）は、実機の出力の順では結果が変わらない（最後の行を使う・数を先に見る）ので、二重の守りとして残す |
 | ネットワークの診断の導入（この Mac、店の網ではない暗号化ありの網） | OK。`zsh install.sh`（既定）で3つの LaunchAgent が登録された。plist は §3.3 の表のとおりで、結果・基準ファイルは 0600。暗号化ありの網は `Unknown`、更新2件だけ注意で、ログには `netcheck updates notice available n=2 net=…` の1行だけを書いた。`status` と `menubar.sh` にも同じ注意が出た。メニュー（要約・サブメニュー・Check Now）は利用者が画面で確かめた。launchd の下での CPU は未確認 |
 | ネットワークの診断の攻撃の手順への備え（Wi2 の網・暗号化なし） | OK。店の網には何も仕掛けず、診断の複製に実網の `arp`・`route`・`ndp`・`netstat`・`ipconfig` の出力を渡し、攻撃で起きる変化を1点ずつ差し込んだ。偽の DHCP でゲートウェイの IP ごと差し替える・切断させてつなぎ直させてから ARP 偽装する・DHCP の DNS サーバーだけを差し替えると `Changed`（危険）、IPv6 のない網に偽の RA を流すと `New`（注意）になった。10秒より短い偽装は注意とログ1行、診断1回おきの偽装は危険になり、危険の記録で ⚠ が残る。差し込みなしでは誤検知なし。実網の `getpacket` からサブネットと DNS サーバー2つを読めた。待ち受けは、店の網から届かない `utun` のリンクローカルのアドレスに置いて確かめ、約10秒で `Open to This Network` が黄になり、止めて約10秒で戻った |
@@ -750,6 +787,7 @@ cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawar
 | メニューバーの印と見出し | OK。緑・黄・赤・灰の印と見出し、印のない行の文字がそろうことをスクリーンショットで確かめた。実際の記録（見張り中の USEN の網）で黄の印・`Recent` の見出し・2列の出来事が出た。押せない行の文字は色を指定しても薄い色のまま（印は薄くならない） |
 | メニューバーのツールチップ（`Next Time-out`） | OK（利用者が実機で確認）。無効の項目でも出る |
 | `menubar.js --check` | OK。手元と GitHub Actions の macOS（本体が未登録なので停止中の表示）で、画面のない CI でも `NSStatusBar` とメニューを作れた |
+| 署名した `.pkg` の導入とメニューの `Uninstall…`（この Mac・今のユーザー） | OK。使用許諾・導入先の選択・完了の画面が日本語で出て、管理者のパスワードなしで導入でき、3つの LaunchAgent とメニューバーが動いた。公証してステープルし、ダウンロード属性を付けた `.pkg` でも同じ。`Uninstall…` で7ファイル・3つの登録・プロセスが消え、ログだけが残った（§6.2） |
 | 入店時の同意の記録 | OK（ドトール・ガスト・カフェ・ド・クリエで `consent recorded … (online)`） |
 | 同意済みの網に新しくつないだときの認証画面の同意（§3.1 の「実装での補足」） | OK（Wi2。ドトール・カフェ・ド・クリエで約40回）。認証画面での同意のあとに `captive login seen net=… <ブランド>` が出て、実際の時間切れはその60〜63分後だった。USEN の同意済みの網では未確認 |
 | 削除して入れ直したあとの次の時間切れの目安（§3.2） | OK（ドトール）。再認証のあと削除して入れ直し、約17分後に `consent recorded … (online)` が出た実際のログで、目安を `(online)` の行（再認証から約77分）ではなく、再認証から60分として出した。実際の時間切れは再認証の約64分後だった |
@@ -911,4 +949,5 @@ cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawar
 - macOS 標準のポータル画面（Captive Network Assistant）の無効化（全ネットワークに影響する）
 - 自動更新・更新の確認のための通信（§6.1。新しい版は GitHub の Release で知らせる）
 - ネットワークの診断（§3.3）で、設定を変える・攻撃を防ぐ・店の網の他の端末を調べる（ARP やポートの走査）こと。通信する診断（HTTP の中身・DNS・HTTPS の照合）は2段目として未実装
-- 署名・公証した `.pkg` やアプリでの配布（Apple Developer Program の登録が済むまで。済んだら §6.1 のとおり検討する）
+- アプリ（`.app`）での配布、Mac App Store での配布。`.pkg` は導入するだけで、常駐処理は今までどおり LaunchAgent のスクリプト（§6.2）
+- `.pkg` でのオプション（`--no-menubar` など）の選択画面。選ぶ人はターミナルで入れる（§6.2）

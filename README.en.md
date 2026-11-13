@@ -19,7 +19,7 @@ A macOS tool that automatically re-accepts the terms and reconnects when a café
 
 - Automatic reconnection — Accept the terms yourself the first time. The tool reconnects in the background at later time-outs.
 - Status in the menu bar — Check the connection status from the coffee cup icon.
-- Built with macOS tools — No extra software or administrator privileges required.
+- Built with macOS tools — No extra software required. The tool's code never runs with administrator (root) privileges, either while installing or while running in the background.
 
 Your connection is briefly interrupted until reconnection completes. Check the [supported networks](#supported-networks) and [conditions of use](#before-you-use-it) before using the tool.
 
@@ -58,7 +58,7 @@ This is an unofficial tool. It is not endorsed or recommended by Wi2, USEN, or a
 - Read and accept the terms yourself the first time. After that, the tool re-sends your acceptance automatically without showing the terms page or its notices. Use it only if you understand this and want automatic re-acceptance.
 - Use it only within what the provider's terms and the shop's rules allow. If it is unclear whether automated use is allowed, use the normal login page until you have confirmed it with the provider. Do not use it to get around usage limits or required steps.
 - There are limits to how it determines acceptance, identifies networks, and detects terms changes. It cannot guarantee a manual first acceptance at every shop.
-- Stop using it if you learn of terms changes, see a usage cap or suspension, are asked to stop, or encounter continued failures. To stop and remove it, run `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall`.
+- Stop using it if you learn of terms changes, see a usage cap or suspension, are asked to stop, or encounter continued failures. To stop and remove it, choose "Uninstall…" from the coffee cup in the menu bar, or run `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall`.
 
 Before installing, please read the full [Usage notes and automatic acceptance](USAGE-NOTES.en.md).
 
@@ -72,17 +72,27 @@ It runs with your logged-in user's permissions. It talks to Apple's connectivity
 
 ### 1. Install
 
-Open Terminal (press ⌘+Space and type "Terminal"), paste one of the lines below, and press Enter.
+Install it in one of the following ways.
 
-#### Option A: Install the published release (recommended)
+#### Option A: Install with the installer (recommended)
 
-It downloads the latest release into a temporary folder and installs it. To update to a new version, run the same line.
+It supports macOS 15 or later.
+
+1. Download [cafe-wifi-okawari.pkg](https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.pkg) and double-click it.
+2. Read the license screen and agree.
+3. For the destination, choose "Install for me only", then click "Install". No administrator password is needed.
+
+It is signed by HKDOCS and notarized by Apple (see [SECURITY.md](.github/SECURITY.md) for how to check). To update to a new version, open the new `.pkg` the same way. If you had turned off the menu bar display or the network check, that choice is kept.
+
+#### Option B: Install in Terminal
+
+Open Terminal (press ⌘+Space and type "Terminal"), paste the line below, and press Enter. It downloads the latest release into a temporary folder and installs it. To update to a new version, run the same line.
 
 ```sh
 cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.tar.gz && tar -xzf cafe-wifi-okawari.tar.gz && zsh cafe-wifi-okawari/install.sh
 ```
 
-#### Option B: Install with Git
+#### Option C: Install with Git
 
 For people who already use Git. It installs the latest `main`, not the published release. To update, run `git pull && zsh install.sh` in that folder.
 
@@ -90,7 +100,7 @@ For people who already use Git. It installs the latest `main`, not the published
 git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git && cd cafe-wifi-okawari && zsh install.sh
 ```
 
-Either way, when you see `Installed:`, you are done. A coffee cup appears in the menu bar, and the tool starts again automatically after you restart your Mac.
+Whichever way you choose, you are done when a coffee cup appears in the menu bar (Terminal shows `Installed:`). The tool starts again automatically after you restart your Mac.
 
 ### 2. Accept the terms yourself once at the shop
 
@@ -131,7 +141,7 @@ The coffee cup in the menu bar (its steam is drawn as Wi‑Fi waves, with an arr
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-check-white.png"><img src="assets/icon/state-check.png" width="33" height="22" alt="Cup ✓"></picture> | Reconnected automatically within the last 10 minutes |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-warn-white.png"><img src="assets/icon/state-warn.png" width="33" height="22" alt="Cup !"></picture> | You need to act on this Wi‑Fi |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="Cup …"></picture> | macOS is waiting for you to accept on the login page |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="Faded cup"></picture> | Stopped. Run `./install.sh` to restart |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="Faded cup"></picture> | Stopped. Go through the install steps again to restart it |
 
 Click it to see the current Wi‑Fi's name, whether automatic reconnection is on, the estimated next time-out, and the last three events (the menu is in English only). The dot next to the name is green when automatic reconnection is on, yellow when it is waiting for the next time-out or for you to accept, red when reconnecting failed, and gray when it is not working (not accepted, offline, or stopped). It shows no MAC or IP addresses, so it is safe to show in screen sharing.
 
@@ -140,7 +150,7 @@ Click it to see the current Wi‑Fi's name, whether automatic reconnection is on
 - On USEN Wi‑Fi it shows the chain when it can tell, such as `Tully's (USEN)`, and `USEN` otherwise. It tells them apart by the partly hidden Wi‑Fi name in the macOS system log and does not store that name. It never shows the shop's branch (checked at real Tully's and Komeda shops).
 - The time-out estimate assumes the shop's limit is 60 minutes and counts from the last authentication on the current network. It is not shown after you rejoined without the login page (waking from sleep, for example). If you uninstall and reinstall the tool, it still counts from the earlier authentication on the same connection. See §3.2 of [DESIGN.md](DESIGN.md) for the exact conditions.
 
-"Hide from Menu Bar" quits the icon; it comes back the next time you log in or run the install steps again. The tool itself keeps running either way. If you do not want the icon at all, reinstall following the install steps, adding ` --no-menubar` before you press Enter (this removes only the icon).
+"Hide from Menu Bar" quits the icon; it comes back the next time you log in or run the install steps again. The tool itself keeps running either way. If you do not want the icon at all, reinstall in Terminal (Option B or C), adding ` --no-menubar` before you press Enter (this removes only the icon; updating with the installer keeps this choice). "Uninstall…" removes the tool ([Uninstall](#uninstall)).
 
 ### Network check
 
@@ -164,7 +174,7 @@ Every 10 seconds, without sending anything, it looks at the Wi‑Fi you are on a
 - The menu and log never show this Mac's MAC or IP address, or the Wi‑Fi name
 - The firewall, macOS updates, added root certificates, and Private Wi‑Fi Address are checked every 5 minutes. To see a change right away, click "Check Now"
 - It was checked for false risks at a Wi2 shop, from arrival through a time-out to leaving. USEN shops have not been checked yet ([DESIGN.md](DESIGN.md) §3.3 and §7, in Japanese)
-- If you do not want it, reinstall following the install steps, adding ` --no-netcheck` before you press Enter (this removes only the network check; you can also add ` --no-menubar`)
+- If you do not want it, reinstall in Terminal (Option B or C), adding ` --no-netcheck` before you press Enter (this removes only the network check; you can also add ` --no-menubar`; updating with the installer keeps this choice)
 
 ### Check that it is working
 
@@ -183,7 +193,7 @@ You will see something like this:
 Service          loaded (LaunchAgent local.cafe-wifi-okawari)
 Schedule         every 10 s, and whenever the network settings change
 Program          /Users/you/.local/bin/cafe-wifi-okawari
-Version          1.1.0
+Version          1.2.0
 Last exit code   0 (412 runs since loaded)
 Menu bar         running
 Current network  gateway 0:0:5e:0:1:1 (doutor), accepted: auto re-authentication on
@@ -218,7 +228,7 @@ What each log line means is listed in [Troubleshooting](#troubleshooting).
 - A dialog asks you to accept the terms yourself once: the session timed out at a shop the tool has not recorded. It sent nothing, so please accept on the login page yourself. To get the login page, reconnect to the Wi‑Fi or open `http://captive.apple.com` in a browser
 - A dialog says it could not reconnect, or that it stopped reconnecting: please check the login page in the same way and accept yourself if needed. The log tells you why ([Troubleshooting](#troubleshooting))
 - You want to update: follow the [install](#1-install) steps again. The networks you accepted are kept. To hear about new versions, use Watch → Custom → Releases on GitHub
-- You want to stop using it: run `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall` ([Uninstall](#uninstall))
+- You want to stop using it: choose "Uninstall…" from the coffee cup in the menu bar ([Uninstall](#uninstall))
 
 ### How it works
 
@@ -268,7 +278,7 @@ Starts and manages the tool
 ```
 
 - It uses the zsh, curl, jq, launchd, and JavaScript for Automation included with macOS. It checks the connection every 10 seconds and re-authenticates when it detects a time-out. You do not need to configure the session length.
-- The installer copies the script to `~/.local/bin/cafe-wifi-okawari` and registers it as a user LaunchAgent. It does not use administrator rights (`sudo`).
+- The installer copies the script to `~/.local/bin/cafe-wifi-okawari` and registers it as a user LaunchAgent. It does not use administrator rights (`sudo` or root). The installer only runs the same bundled install script as you, and downloads nothing while installing.
 - Its log and menu never show this Mac's MAC or IP address.
 - Networks are identified by the router's MAC address together with the brand (e.g. `doutor`). Shops of the same brand may share the same value, so it cannot always tell shops apart.
 - It recognises Wi2 networks from the domain name handed out by the network (`wi2.ne.jp`). On other networks it only checks for a login page at Apple's `captive.apple.com` during the first 5 minutes after joining, as macOS itself does (to find USEN networks). It never sends an acceptance to unrelated networks such as your home Wi‑Fi
@@ -316,6 +326,8 @@ Dialogs appear in the middle of the screen and close by themselves after 2 minut
 
 ## Uninstall
 
+Choose "Uninstall…" from the coffee cup in the menu bar, then click "Uninstall" in the confirmation dialog. In Terminal, run:
+
 ```sh
 zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall
 ```
@@ -331,7 +343,7 @@ zsh ~/.local/bin/cafe-wifi-okawari-ctl status
 ```
 
 - If the login window appears, read the terms and notices and accept yourself. If it does not appear, open `http://captive.apple.com` in a browser.
-- If automatic reconnection stops or failures continue, check the normal login page for usage caps, suspensions, or terms changes. Run `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall` if you need to stop the tool (see [Usage notes](USAGE-NOTES.en.md#when-to-stop-it)).
+- If automatic reconnection stops or failures continue, check the normal login page for usage caps, suspensions, or terms changes. Choose "Uninstall…" from the coffee cup, or run `zsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall`, if you need to stop the tool (see [Usage notes](USAGE-NOTES.en.md#when-to-stop-it)).
 - For more detail, expand the log reference below.
 
 <details>
@@ -377,6 +389,8 @@ Choose a bug report or verification report from the [report templates](https://g
 Issues are public. Do not attach full logs, `cafe-wifi-okawari-ctl status` output, screenshots, or network captures. Status output and logs include network details and times; the menu also shows times. Exclude MAC/IP addresses (including the gateway), SSIDs, shop names/locations, visit dates or activity times, usernames/personal file paths, authentication URLs, cookies, and tokens from the title and body as well.
 
 For errors, manually enter only a category from the log reference above (e.g. `probe failed`) and numeric `curl` / `http` codes. Whole log lines and response bodies are not needed. You can keep your local records unchanged. Check the preview for private information before posting.
+
+Report security problems (vulnerabilities) through [private reporting](https://github.com/hiroaki-com/cafe-wifi-okawari/security/advisories/new), not in issues ([SECURITY.md](.github/SECURITY.md)).
 
 ## Development
 

@@ -1,0 +1,31 @@
+#!/bin/zsh
+# .pkg の導入スクリプト（DESIGN.md §6.2）。Installer が「自分だけに導入」で、導入する本人の権限で実行する。
+# 引数: $1=.pkg のパス $2=導入先（本人のホーム） $3=導入先のボリューム $4=ルート
+# 同梱の install.sh（このファイルと同じフォルダ。公証を受けた中身）を実行するだけで、ネットワークから何も取得しない。
+# root では動かない（sudo installer などで呼ばれたら何もせずに失敗する）。
+set -eu
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+if (( EUID == 0 || UID == 0 )); then
+  print -u2 -r -- "cafe-wifi-okawari: not installing as root. Open the .pkg and choose \"Install for me only\" (no administrator password is needed)"
+  exit 1
+fi
+# 導入先が本人のホームのときだけ進める（ほかの場所・ほかのユーザーには入れない）。
+# 本人のホームは uid のパスワード項目から引く（id -P）。Installer の環境では利用者の一覧が引けず、zsh の userdirs は空になる
+h=$(id -P | cut -d: -f9)
+if [[ -z $h || ${${2-}%/} != $h ]]; then
+  print -u2 -r -- "cafe-wifi-okawari: the install location (${2-none}) is not your home folder ($h); choose \"Install for me only\""
+  exit 1
+fi
+export HOME=$h
+
+# 更新のときは、ターミナルで選んだオプションを引き継ぐ（.pkg では選べないため）。メニューバーの表示は v1.0.0 から、
+# ネットワークの診断は v1.1.0 からあるので、診断の登録がないのが v1.0.x なら、なしを選んだことにはしない
+o=()
+bin=$HOME/.local/bin/cafe-wifi-okawari agents=$HOME/Library/LaunchAgents/local.cafe-wifi-okawari
+if [[ -f $bin && -f $agents.plist ]]; then
+  [[ -e $agents.menubar.plist ]] || o+=(--no-menubar)
+  v=$(sed -n 's/^VERSION=\([0-9][0-9.]*\).*/\1/p' $bin | head -n 1)
+  [[ -e $agents.netcheck.plist || $v == 1.0.* ]] || o+=(--no-netcheck)
+fi
+exec /bin/zsh "${0:A:h}/install.sh" $o

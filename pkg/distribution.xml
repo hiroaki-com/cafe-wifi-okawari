@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- .pkg の構成（DESIGN.md §6.2）。pkg/build.sh が @VERSION@ をタグの版に置き換える。
+     導入先は「自分だけに導入」（本人のホーム）だけ。JavaScript の検査（installation-check など）は使わない -->
+<installer-gui-script minSpecVersion="2">
+  <title>cafe-wifi-okawari</title>
+  <license file="license.html" mime-type="text/html"/>
+  <conclusion file="conclusion.html" mime-type="text/html"/>
+  <options customize="never" require-scripts="false" hostArchitectures="x86_64,arm64"/>
+  <domains enable_anywhere="false" enable_currentUserHome="true" enable_localSystem="false"/>
+  <allowed-os-versions><os-version min="15.0"/></allowed-os-versions>
+  <choices-outline><line choice="main"/></choices-outline>
+  <choice id="main" visible="false"><pkg-ref id="com.hkdocs.cafe-wifi-okawari"/></choice>
+  <pkg-ref id="com.hkdocs.cafe-wifi-okawari" version="@VERSION@" onConclusion="none">component.pkg</pkg-ref>
+</installer-gui-script>

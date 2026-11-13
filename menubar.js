@@ -12,6 +12,8 @@ const LOG = $.NSHomeDirectory().js + '/Library/Logs/cafe-wifi-okawari.log'
 const REQ = $.NSHomeDirectory().js + '/Library/Caches/cafe-wifi-okawari.netcheck.now'
 // 危険の記録（netcheck.sh が足す）。あれば Dismiss Network Warning を出し、押すと消す（⚠ はそれまで残る）
 const ALERT = $.NSHomeDirectory().js + '/Library/Caches/cafe-wifi-okawari.netcheck.alert'
+// Uninstall… で実行する install.sh の複製（導入したときだけある。リポジトリから動かしたときは押せない）
+const CTL = $.NSHomeDirectory().js + '/.local/bin/cafe-wifi-okawari-ctl'
 // アイコンの素材（1x・2x の組）。導入先では .js と同じ名前の .png・@2x.png、リポジトリでは assets/icon の素材
 const ICON = [self.replace(/\.js$/, ''), self.replace(/[^/]*$/, 'assets/icon/menuBarTemplate')].find(p => $.NSFileManager.defaultManager.fileExistsAtPath(p + '.png'))
 // アイコンの種類ごとの印。これ以外の値と実行の失敗は off として扱う
@@ -107,6 +109,40 @@ function refresh() {
   const hide = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent('Hide from Menu Bar', 'terminate:', '')
   hide.target = app
   menu.addItem(hide)
+  menu.addItem($.NSMenuItem.separatorItem)
+  const un = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent('Uninstall…', 'uninstall:', '')
+  un.target = handler
+  un.enabled = $.NSFileManager.defaultManager.fileExistsAtPath(CTL)
+  menu.addItem(un)
+}
+
+// Uninstall… の確認。削除するもの・残すログの場所を示し、既定のボタン（Return）は Cancel にする
+function confirmUninstall() {
+  const a = $.NSAlert.alloc.init
+  a.alertStyle = $.NSAlertStyleWarning
+  a.messageText = 'Uninstall cafe-wifi-okawari?'
+  a.informativeText = 'Automatic re-authentication stops, and the menu bar icon, the network check and the list of accepted networks are removed.' +
+    '\n\nThe log is kept: ~/Library/Logs/cafe-wifi-okawari.log (delete it by hand if you no longer need it).'
+  const un = a.addButtonWithTitle('Uninstall')
+  un.hasDestructiveAction = true
+  un.keyEquivalent = ''
+  a.addButtonWithTitle('Cancel').keyEquivalent = '\r'
+  app.activate
+  return a.runModal === $.NSAlertFirstButtonReturn
+}
+// 削除は install.sh の複製の uninstall に任せる。uninstall はメニューバーの登録を最後に外し、そこでこのプロセスも終わる
+// （launchd がジョブのプロセスをまとめて終わらせる）。戻ってきても -ctl が消えていれば削除はできている（launchd の外で
+// 動かしたときなど）ので、メニューバーを終える。-ctl が残っていれば削除に失敗しているので、ターミナルでの方法を示す
+function uninstall() {
+  if (!confirmUninstall()) return
+  try { sa.doShellScript("/bin/zsh '" + CTL.replace(/'/g, "'\\''") + "' uninstall") } catch (e) {}
+  if (!$.NSFileManager.defaultManager.fileExistsAtPath(CTL)) { app.terminate(null); return }
+  const a = $.NSAlert.alloc.init
+  a.alertStyle = $.NSAlertStyleCritical
+  a.messageText = 'Could not uninstall cafe-wifi-okawari'
+  a.informativeText = 'Run this in Terminal:\nzsh ~/.local/bin/cafe-wifi-okawari-ctl uninstall'
+  app.activate
+  a.runModal
 }
 
 ObjC.registerSubclass({
@@ -119,6 +155,7 @@ ObjC.registerSubclass({
     // シェルを呼ばずに空の要求ファイルを作る（中身は読まれない）
     'dismiss:': { types: ['void', ['id']], implementation: () => { $.NSFileManager.defaultManager.removeItemAtPathError(ALERT, null); refresh() } },
     'checkNow:': { types: ['void', ['id']], implementation: () => $.NSFileManager.defaultManager.createFileAtPathContentsAttributes(REQ, $.NSData.data, $.NSDictionary.dictionary) },
+    'uninstall:': { types: ['void', ['id']], implementation: () => uninstall() },
   },
 })
 const handler = $.OkawariMenubar.alloc.init

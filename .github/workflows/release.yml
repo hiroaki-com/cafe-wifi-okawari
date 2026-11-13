@@ -1,4 +1,5 @@
 # タグ（v1.2.0 の形）の push で配布物を作り、下書きの Release に添付する（DESIGN.md §6.1）。
+# 署名・公証した .pkg は作者の Mac で同じタグから作って下書きに足す（pkg/build.sh。§6.2）。CI に鍵は置かない。
 # 公開は作者が手で行う。リリースノートには実網で確かめた範囲を書いてから公開する。
 name: release
 on:
@@ -21,11 +22,10 @@ jobs:
       - name: 配布物を作る
         run: |
           git archive --format=tar.gz --prefix=cafe-wifi-okawari/ -o cafe-wifi-okawari.tar.gz "$GITHUB_REF_NAME"
-          git archive --format=zip --prefix=cafe-wifi-okawari/ -o cafe-wifi-okawari.zip "$GITHUB_REF_NAME"
-          shasum -a 256 cafe-wifi-okawari.tar.gz cafe-wifi-okawari.zip
+          shasum -a 256 cafe-wifi-okawari.tar.gz
       - name: 下書きの Release に添付する
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" cafe-wifi-okawari.tar.gz cafe-wifi-okawari.zip --draft --title "$GITHUB_REF_NAME" \
+          gh release create "$GITHUB_REF_NAME" cafe-wifi-okawari.tar.gz --draft --title "$GITHUB_REF_NAME" \
             --notes "実網で確かめた範囲 / Verified on real networks: (記入してから公開する / fill in before publishing)"

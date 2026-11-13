@@ -26,6 +26,13 @@ nc=$HOME/Library/Caches/cafe-wifi-okawari.netcheck
 # 本体の版（VERSION=）を読む。$1=本体のパス。読めなければ空
 ver() { sed -n 's/^VERSION=\([0-9][0-9.]*\).*/\1/p' "$1" 2>/dev/null | head -n 1 }
 
+# root（sudo）では何もしない。導入先は実行した人のホームで、root で動かすと /var/root に入り、本人の LaunchAgent にもならない。
+# このツールのコードは導入時も常駐中も root で動かさない（DESIGN.md §4）。.pkg の導入スクリプトも同じ理由で断る（§6.2）
+if (( EUID == 0 )); then
+  print -u2 -r -- "Error: do not run this as root or with sudo. Run it as yourself: it installs only for the user who runs it"
+  exit 1
+fi
+
 menubar=1 netcheck=1
 case ${1-} in
   status)
@@ -143,13 +150,15 @@ case ${1-} in
     exit $(( ! on )) ;;
   uninstall)
     launchctl bootout gui/$UID/$label 2>/dev/null || true
-    launchctl bootout gui/$UID/$mlabel 2>/dev/null || true
     launchctl bootout gui/$UID/$nlabel 2>/dev/null || true
     rm -f $plist $bin $ctl $mplist $mbin{.sh,.js,.png,@2x.png} $nplist $nbin $HOME/Library/Caches/cafe-wifi-okawari{,.pending,.seen,.probe,.chain} \
       $HOME/Library/Caches/cafe-wifi-okawari.chain.*(N) $nc{,.*(N)}
     rm -rf "${kn:h}"   # 同意した接続先の記録
     print -r -- "Uninstalled: removed the LaunchAgents ($label, $mlabel, $nlabel), the programs and the list of accepted networks"
     print -r -- "  Log kept: $log (delete it by hand if you no longer need it)"
+    # メニューバーの登録は最後に外す。メニューの Uninstall… から呼ばれたときは、launchd がメニューバーのジョブごと
+    # このプロセスも終わらせるので、これより後には何も書かない（DESIGN.md §6.2）
+    launchctl bootout gui/$UID/$mlabel 2>/dev/null || true
     exit 0 ;;
 esac
 for a; do

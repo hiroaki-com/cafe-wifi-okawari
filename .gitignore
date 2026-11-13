@@ -10,3 +10,6 @@
 *.pcap
 *.pcapng
 .DS_Store
+
+# Built packages (pkg/build.sh).
+/dist/

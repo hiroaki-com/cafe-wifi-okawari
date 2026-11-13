@@ -1676,9 +1676,57 @@ rm -f $M/launchctl
 touch $NCH{,.base,.now,.4242}   # 診断の結果・基準・要求・書きかけも消えること（下の「ログ以外は残らない」で確かめる）
 HOME=$H PATH=$T/bin:$PATH zsh $ctl uninstall > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '削除: -ctl で削除でき、-ctl 自身も含めログ以外は残らない'          '[[ $out == Uninstalled:* ]] && (( rc == 0 )) && [[ $(cd "$H" && find . -type f) == ./Library/Logs/cafe-wifi-okawari.log ]]'
-ok '削除: 本体とメニューバーの登録を外す' '[[ $(<$M/launchctl) == "bootout gui/$UID/local.cafe-wifi-okawari${NL}bootout gui/$UID/local.cafe-wifi-okawari.menubar${NL}bootout gui/$UID/local.cafe-wifi-okawari.netcheck" ]]'
+ok '削除: 本体・診断・メニューバーの順に登録を外す（メニューの Uninstall… から呼ばれても、メニューバーを外すのは最後）' \
+  '[[ $(<$M/launchctl) == "bootout gui/$UID/local.cafe-wifi-okawari${NL}bootout gui/$UID/local.cafe-wifi-okawari.netcheck${NL}bootout gui/$UID/local.cafe-wifi-okawari.menubar" ]]'
 HOME=$H PATH=$T/bin:$PATH zsh $T/is.sh status > $M/out 2>&1; rc=$? out=$(<$M/out)
 ok '状態: 記録がなければ同意済みなしと表示' '[[ $out == *$'"'"'\nAccepted         none yet\n'"'"'* ]]'
+# --- root では動かない・.pkg の導入スクリプト（pkg/postinstall）------------------------
+# root の代わりに、今のユーザーを root とみなす複製で確かめる
+P="$T/pk home"; mkdir -p "$P"; rm -f $M/launchctl
+sed "s/(( EUID == 0 ))/(( EUID == $EUID ))/" $root/install.sh > $T/root.sh
+HOME=$P PATH=$T/bin:$PATH zsh $T/root.sh > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok 'root: install.sh は root（sudo）では何もせず 1 で終わる' '(( rc == 1 )) && [[ $out == "Error: do not run this as root"* && ! -e $M/launchctl && -z "$(ls -A "$P")" ]]'
+HOME=$P PATH=$T/bin:$PATH zsh $T/root.sh uninstall > $M/out 2>&1; rc=$?
+ok 'root: status・uninstall も root では動かない' '(( rc == 1 )) && [[ ! -e $M/launchctl ]]'
+# Installer の作業フォルダを模して、pkg/build.sh と同じファイルの一覧で導入スクリプトの横に並べる。
+# 模擬のコマンドを使い、本人のホームは模擬の id -P（パスワード項目の9番目）に PKHOME で渡す
+S="$T/PKInstallSandbox/Scripts/com.hkdocs.cafe-wifi-okawari.x"; mkdir -p "$S" $T/pkbin
+files=(${(z)"$(sed -n 's/^files=(\(.*\))$/\1/p' $root/pkg/build.sh)"})
+for f in $files; do mkdir -p "$S/${f:h}"; cp $root/$f "$S/$f"; done
+print -r -- '#!/bin/zsh
+[[ $* == -P ]] || exit 1
+print -r -- "pk:********:$UID:20::0:0:Test User:$PKHOME:/bin/zsh"' > $T/pkbin/id; chmod 755 $T/pkbin/id
+sed "s#^export PATH=#export PATH=$T/pkbin:$T/bin:#" $root/pkg/postinstall > "$S/postinstall"
+ok 'pkg: 模擬の差し替えが効いている' '(( $#files == 7 )) && grep -qF "PATH=$T/pkbin:$T/bin:" "$S/postinstall"'
+# 実物の id -P から本人のホームが引ける（導入先が違うので、何もせずに断る）
+env -i HOME=/var/empty PATH=/usr/bin:/bin /bin/zsh $root/pkg/postinstall /x/cafe-wifi-okawari.pkg /nonexistent / / > $M/out 2>&1; rc=$? out=$(<$M/out)
+ok 'pkg: 本人のホームは id -P から引く（空にならない）' '(( rc == 1 )) && [[ $out == *"(/nonexistent) is not your home folder (/"?*")"* ]]'
+pk() { env -i M=$M PKHOME=$P HOME=/var/empty PATH=/usr/bin:/bin "$@" /bin/zsh "$S/postinstall" /x/cafe-wifi-okawari.pkg "$PKTARGET" / / > $M/out 2>&1; rc=$? out=$(<$M/out) }
+pp="$P/Library/LaunchAgents/local.cafe-wifi-okawari"
+PKTARGET=/; pk
+ok 'pkg: 導入先が本人のホームでなければ何もせず 1 で終わる' '(( rc == 1 )) && [[ $out == *"is not your home folder"* && ! -e $M/launchctl && -z "$(ls -A "$P")" ]]'
+PKTARGET=$T/pkx; pk PKHOME="$T/pk*"
+ok 'pkg: ホームは文字どおりに比べる（* を含むホームでも、ほかの場所には入れない）' '(( rc == 1 )) && [[ $out == *"is not your home folder"* && ! -e $M/launchctl && ! -e $T/pkx ]]'
+PKTARGET=/; pk PKHOME=
+ok 'pkg: 本人のホームが引けなければ、導入先が / でも何もせず 1 で終わる' '(( rc == 1 )) && [[ $out == *"is not your home folder ()"* && ! -e $M/launchctl ]]'
+PKTARGET=$P; pk
+ok 'pkg: 本人のホームなら、HOME をそこにして同梱の install.sh で導入する（メニューバー・診断も）' \
+  '(( rc == 0 )) && [[ $out == "Installed: $P/.local/bin/cafe-wifi-okawari "* && -e $pp.plist && -e $pp.menubar.plist && -e $pp.netcheck.plist ]] &&
+   cmp -s "$P/.local/bin/cafe-wifi-okawari-ctl" $root/install.sh && grep -qxF "bootstrap gui/$UID $pp.plist" $M/launchctl'
+PKTARGET=$P/; pk
+ok 'pkg: 導入先の末尾の / は同じホームとみなし、2回目は更新' '(( rc == 0 )) && [[ $out == Updated:* ]]'
+HOME=$P PATH=$T/bin:$PATH zsh $root/install.sh --no-menubar > /dev/null 2>&1
+PKTARGET=$P; pk
+ok 'pkg: 更新では、ターミナルで選んだ --no-menubar を引き継ぐ' '(( rc == 0 )) && [[ $out == *"(--no-menubar)"* && ! -e $pp.menubar.plist && -e $pp.netcheck.plist ]]'
+HOME=$P PATH=$T/bin:$PATH zsh $root/install.sh --no-netcheck > /dev/null 2>&1
+PKTARGET=$P; pk
+ok 'pkg: 更新では、--no-netcheck も引き継ぐ' '(( rc == 0 )) && [[ $out == *"(--no-netcheck)"* && -e $pp.menubar.plist && ! -e $pp.netcheck.plist ]]'
+sed -i '' 's/^VERSION=[0-9.]*/VERSION=1.0.0/' "$P/.local/bin/cafe-wifi-okawari"
+PKTARGET=$P; pk
+ok 'pkg: 診断のない v1.0.x からの更新では診断を入れる' '(( rc == 0 )) && [[ -e $pp.menubar.plist && -e $pp.netcheck.plist ]]'
+sed "s/(( EUID == 0 || UID == 0 ))/(( EUID == $EUID ))/" "$S/postinstall" > "$S/root"; mv -f "$S/root" "$S/postinstall"
+rm -f $M/launchctl; PKTARGET=$P; pk
+ok 'pkg: root では何もせず 1 で終わる' '(( rc == 1 )) && [[ $out == *"not installing as root"* && ! -e $M/launchctl ]]'
 HOME=$H PATH=$T/bin:$PATH zsh $root/install.sh bogus > $M/out 2>&1; rc=$?
 ok '引数誤りは 2 で終わる'             '(( rc == 2 ))'
 
