@@ -74,7 +74,7 @@ macOS 15 以降（標準の `/usr/bin/jq` を使います）。Apple Silicon・I
 
 ターミナルを開き（⌘+スペースで「ターミナル」と入力）、次のどちらかの1行を貼り付けて Enter を押してください。
 
-方法A: 公開版を入れる（推奨）
+#### 方法A: 公開版を入れる（推奨）
 
 最新の公開版を一時フォルダに取得して導入します。新しい版に更新するときも、同じ1行を実行します。
 
@@ -82,7 +82,7 @@ macOS 15 以降（標準の `/usr/bin/jq` を使います）。Apple Silicon・I
 cd "$(mktemp -d)" && curl -fsSLO https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.tar.gz && tar -xzf cafe-wifi-okawari.tar.gz && zsh cafe-wifi-okawari/install.sh
 ```
 
-方法B: Git で入れる
+#### 方法B: Git で入れる
 
 Git を使っている人向けです。入るのは公開版ではなく `main` の最新です。更新は、そのフォルダで `git pull && zsh install.sh` を実行します。
 
@@ -163,7 +163,7 @@ git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git && cd cafe-wifi-o
 - 最初からほかの機器が割り込んでいる Wi‑Fi や、偽のお店の Wi‑Fi、ルーターと同じ番号を名乗る機器は見分けられません。腕のある攻撃者は、診断の間隔より短い割り込み（注意どまり）や、時間を空けたつなぎ直しなどで避けられます。サイトの名前の問い合わせや HTTPS の中身の差し替えはまだ見ていません。攻撃を前提にするなら VPN を使ってください
 - この Mac の MAC アドレス・IP アドレス、Wi‑Fi の名前は、メニューにもログにも出しません
 - ファイアウォール・macOS の更新・追加したルート証明書・プライベート Wi‑Fi アドレスは5分ごとに見ます。変えてすぐ確かめたいときは「Check Now」を押してください
-- 実店舗の Wi‑Fi で誤って危険と出ないかは、まだ確かめていません（[DESIGN.md](DESIGN.md) の §3.3・§7）
+- 実店舗で誤って危険と出ないかは、Wi2 のお店（入店から時間切れ・退店まで）で確かめました。USEN のお店ではまだ確かめていません（[DESIGN.md](DESIGN.md) の §3.3・§7）
 - 不要なら、導入の手順で Enter を押す前に ` --no-netcheck` を付けて入れ直してください（診断だけを消します。` --no-menubar` と一緒にも使えます）
 
 ### 動いているか確かめる

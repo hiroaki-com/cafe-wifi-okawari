@@ -818,7 +818,7 @@ lint（リント） — 文法の誤りや怪しい書き方を静的に検出�
  - 背景　 : 1978年の C 言語向けツール `lint` から。衣類の毛玉を取る道具のように、動作には影響しないが気になる細かいゴミを取る、という比喩
 
 field test（現地試験） — 実際に使われる環境で、本物を相手に行う試験
- - 本レポ : ドトール・ガストの店内での試験（DESIGN.md §1 と §7）。自宅の Wi‑Fi では検証しない
+ - 本レポ : Wi2・USEN の店内での試験（DESIGN.md §7）。自宅の Wi‑Fi では検証しない
  - 背景　 : キャプティブポータルの振る舞いは店の網でしか再現できない。模擬試験では見えなかった「接続直後は見えない」「時間切れで網を切らない」は、どちらも現地で判明した。現地試験の結果を次の模擬試験の前提に書き戻すことで、2つの試験が噛み合う
 
 regression（リグレッション、退行） — 以前は動いていたものが、変更によって動かなくなること
@@ -868,7 +868,7 @@ SHA — Git でコミットなどを一意に指すハッシュ値の通称
 
 HEAD — 現在チェックアウトしている位置
  - 直訳　 : 頭、先端
- - 本レポ : DESIGN.md §1 の現地試験の表は、試した版を HEAD ではなく SHA で書く
+ - 本レポ : DESIGN.md §1 は、模擬試験だけ通って実網で動かなかった版を HEAD ではなく SHA（`da5d7fd`）で書く
  - 背景　 : 時とともに動くので、記録に残すときは HEAD ではなく SHA で書く。「HEAD で試した」だけでは、後から読む人にはどの版か分からない
 
 branch（ブランチ） — 履歴の分岐線
@@ -884,7 +884,7 @@ push（プッシュ） — 手元のコミットをリモートのリポジト�
 remote / origin（リモート） — 手元のリポジトリが知っている別のリポジトリの場所／その慣例の名前
  - 直訳　 : 遠隔の / 起源
  - 本レポ : `origin` は GitHub の `hiroaki-com/cafe-wifi-okawari`
- - 背景　 : `origin` は `git clone` が付ける既定の名前にすぎず、特別な地位は無い。README の導入手順も `git clone` から始まる
+ - 背景　 : `origin` は `git clone` が付ける既定の名前にすぎず、特別な地位は無い。README の Git での導入（方法B）も `git clone` から始まる
 
 OSS / Open Source Software — ソースコードが公開され、誰でも利用・改変・再配布できるソフトウェア
  - 本レポ : 公開を前提に設計する（ID・パスワードを扱わない、リポジトリに個人の絶対パスを持たない、README を英語と日本語で用意する）
@@ -1083,4 +1083,5 @@ WIP / Work In Progress — まだ途中で、完成品として見ないでほ�
 - 概要・使い方・利用条件の要点・ログの読み方: [README.md](README.md) / [README.en.md](README.en.md)
 - 利用条件の詳細: [USAGE-NOTES.md](USAGE-NOTES.md) / [USAGE-NOTES.en.md](USAGE-NOTES.en.md)
 - 本体・導入: [cafe-wifi-okawari.sh](cafe-wifi-okawari.sh) / [install.sh](install.sh)
+- メニューバー・ネットワークの診断: [menubar.sh](menubar.sh) / [menubar.js](menubar.js) / [netcheck.sh](netcheck.sh)
 - 模擬試験と CI: [test/run.sh](test/run.sh) / [.github/workflows/test.yml](.github/workflows/test.yml)

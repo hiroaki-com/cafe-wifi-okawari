@@ -163,7 +163,7 @@ Every 10 seconds, without sending anything, it looks at the Wi‑Fi you are on a
 - It cannot tell when another device was already in the middle before you joined, when the shop's Wi‑Fi itself is fake, or when a device uses the router's own hardware address. A skilled attacker can avoid it, for example by cutting in for less than the check interval (only a notice) or by waiting before making you reconnect. It does not yet check website name lookups or the contents of HTTPS. If you assume an attack, use a VPN
 - The menu and log never show this Mac's MAC or IP address, or the Wi‑Fi name
 - The firewall, macOS updates, added root certificates, and Private Wi‑Fi Address are checked every 5 minutes. To see a change right away, click "Check Now"
-- Whether it shows false risks on real shop Wi‑Fi has not been checked yet ([DESIGN.md](DESIGN.md) §3.3 and §7, in Japanese)
+- It was checked for false risks at a Wi2 shop, from arrival through a time-out to leaving. USEN shops have not been checked yet ([DESIGN.md](DESIGN.md) §3.3 and §7, in Japanese)
 - If you do not want it, reinstall following the install steps, adding ` --no-netcheck` before you press Enter (this removes only the network check; you can also add ` --no-menubar`)
 
 ### Check that it is working

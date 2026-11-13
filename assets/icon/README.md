@@ -1,6 +1,5 @@
 # 採用アイコン
 
-2026-09-30 採用：「現行アイコン寄り」のカップ ＋ 「① やや太め」の湯気。
 Wi-Fi に見立てた2本の湯気と、外側の線の先端の矢印で「おかわり」を表現する。
 カップ本体・飲み口・小さな持ち手・受け皿の形は確定。
 
@@ -35,14 +34,11 @@ swift assets/icon/states.swift
 `install.sh` が `~/.local/bin/cafe-wifi-okawari-menubar.png`・`cafe-wifi-okawari-menubar@2x.png` へコピーし、
 `menubar.js` が1x・2xを同じ18 × 18 ptのNSImageの表現として読み込み、`template = true` を指定する。
 ファイル名だけでのテンプレート判定には依存しない。状態で画像は替えず、停止中は薄く表示し、印（! … ✓）は右に付く。
-5状態とRetina表示はダークのメニューバーで確認済み。ライトのメニューバーでは未確認。
+5状態とRetina表示はライト・ダークのメニューバーで確認済み。
 
 ## 原本の記録
 
 - 生成：組み込みimagegen。採用案「① やや太め」
-- 旧保存場所：`output/icon-concepts/steam-weight/01-steam-medium.png`（整理済み）
 - 原本SHA-256：`3144c21e9f2351c737f8bcafdaf2d253fb1ef821e46d169240fda9389c2ad01f`
 - 編集指示：カップと受け皿を保持し、Wi-Fi状の2本の湯気の線を約15%太くする。
   外側の先端のみ矢印、内側の先端は丸いまま。15%は生成指示の目安であり実測値ではない。
-
-不採用案、旧比較画像・HTML、過去のプロンプト集、SF Symbols参照画像とその作成スクリプトは削除済み。
