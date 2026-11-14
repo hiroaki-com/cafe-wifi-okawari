@@ -78,6 +78,8 @@ macOS 15 以降（標準の `/usr/bin/jq` を使います）。Apple Silicon・I
 
 macOS 15 以降に対応しています。
 
+<a href="https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.pkg"><img src="https://img.shields.io/badge/%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89-.pkg%20%28macOS%2015%2B%29-0969da" alt="ダウンロード: .pkg（macOS 15+）"></a>
+
 1. [cafe-wifi-okawari.pkg](https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.pkg) をダウンロードし、ダブルクリックで開きます。
 2. 使用許諾の画面で内容を読み、同意します。
 3. インストール先は「自分専用にインストール」を選び、「インストール」を押します。管理者のパスワードは要りません。

@@ -744,6 +744,11 @@ READMEの第一の導入。ダウンロードしてダブルクリックで開�
 - 導入先は「自分だけにインストール」だけ（`enable_currentUserHome`。`enable_localSystem`・`enable_anywhere` は false）。Distribution に JavaScript（`installation-check` など）は書かない
 - 使用許諾の画面に、READMEの「利用前に確認してください」の要点・USAGE-NOTES の全文の URL・導入されるものと root で動かないこと・MIT ライセンスを出し、同意しなければ進めない。完了画面で、最初の1回は自分で同意することと削除の方法を案内する。日本語と英語を macOS の言語で切り替える（`resources/ja.lproj`・`en.lproj`）
 - 対応は macOS 15 以降（`allowed-os-versions`）、Apple Silicon・Intel
+- README の入口は、ロゴのない shields.io のバッジ（「ダウンロード: .pkg (macOS 15+)」）と、同じ URL の文字のリンク。Apple の意匠は使わない（2026-11-14 に一次資料で確認。弁護士による確認ではない）:
+  - App Store のバッジは、App Store で配っているアプリにしか使えない（App Store Marketing Artwork License Agreement 第1項）。改変も禁じられている
+  - Apple のロゴは、書面の商標許諾がなければウェブサイトに使えない（Guidelines for Using Apple Trademarks and Copyrights）。shields.io の `logo=apple`（Simple Icons）も同じで、Simple Icons は商標の権利を与えない
+  - SF Symbols は Apple の機器向けのアプリの開発のためにしか許諾されていない（Xcode and Apple SDKs Agreement 2.10）
+  - 「macOS」は対応環境を示す文字としてだけ使い、製品名より目立たせず、Apple の推奨を示唆しない（同じ指針の互換性の条項）。公証は事実として書くだけにし、Apple が審査・承認・マルウェア検出をしたとは書かない（Apple Developer Program License Agreement 5.3）
 - オプション（`--no-menubar`・`--no-netcheck`）は選べない。更新では導入済みの状態から引き継ぐ: メニューバーの登録がなければ `--no-menubar`、診断の登録がなく導入済みの版が v1.0.x でなければ `--no-netcheck`（診断は v1.1.0 から）
 
 **root で動かない**
@@ -949,5 +954,10 @@ READMEの第一の導入。ダウンロードしてダブルクリックで開�
 - macOS 標準のポータル画面（Captive Network Assistant）の無効化（全ネットワークに影響する）
 - 自動更新・更新の確認のための通信（§6.1。新しい版は GitHub の Release で知らせる）
 - ネットワークの診断（§3.3）で、設定を変える・攻撃を防ぐ・店の網の他の端末を調べる（ARP やポートの走査）こと。通信する診断（HTTP の中身・DNS・HTTPS の照合）は2段目として未実装
-- アプリ（`.app`）での配布、Mac App Store での配布。`.pkg` は導入するだけで、常駐処理は今までどおり LaunchAgent のスクリプト（§6.2）
+- アプリ（`.app`）での配布、Mac App Store での配布。`.pkg` は導入するだけで、常駐処理は今までどおり LaunchAgent のスクリプト（§6.2）。App Store に出さない理由（App Review Guidelines 2026-10-16 版で確認。弁護士による確認ではない）:
+  - 5.2.2 は第三者のサービスを使うアプリに、そのサービスの規約で明示的に許されていること、求められたら許諾を示すことを求める。作者は Wi2・USEN の許諾を得ておらず、第9条17号に該当しないとも断定できない（§4）
+  - 正規のストアで組織が製品として配ると、OSS を各自の判断で使う今の形より、提供者や店との関係で配布者の責任が重くなる。有料なら消費者契約法の制限で MIT の無保証にも頼りにくい（§4）。説明に Wi2・USEN・店名を出すと、5.2.1（第三者の商標）と、提携しているような誤認が論点になる
+  - 2.4.5 はサンドボックス、Xcode で作った単一の `.app`、App Store 経由の更新を求める。標準コマンドのスクリプトでは満たせず、作り直しが要る。USEN の同意の証拠（システムログ、§3.1）もサンドボックスでは読めない見込み
+  - 審査で求める信頼と導入の手軽さは、公証済みの `.pkg`（§6.2）でほぼ足りる。審査を通っても、規約上の扱いが確かになるわけではない
+  - 見直すのは、Wi2・USEN から自動の再同意の書面の許諾を得たときだけ。そのうえで、サンドボックス内で USEN の同意を確かめる方式と、配布者の責任の範囲を決める
 - `.pkg` でのオプション（`--no-menubar` など）の選択画面。選ぶ人はターミナルで入れる（§6.2）

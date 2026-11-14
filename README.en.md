@@ -78,6 +78,8 @@ Install it in one of the following ways.
 
 It supports macOS 15 or later.
 
+<a href="https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.pkg"><img src="https://img.shields.io/badge/Download-.pkg%20%28macOS%2015%2B%29-0969da" alt="Download: .pkg (macOS 15+)"></a>
+
 1. Download [cafe-wifi-okawari.pkg](https://github.com/hiroaki-com/cafe-wifi-okawari/releases/latest/download/cafe-wifi-okawari.pkg) and double-click it.
 2. Read the license screen and agree.
 3. For the destination, choose "Install for me only", then click "Install". No administrator password is needed.
