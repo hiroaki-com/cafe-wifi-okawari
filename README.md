@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/icon/icon-white.png">
-    <img src="assets/icon/icon.png" width="112" alt="">
-  </picture>
+  <img src="assets/icon/icon-readme.png" width="112" alt="">
 </p>
 
 <h1 align="center">cafe-wifi-okawari</h1>
@@ -139,11 +136,11 @@ git clone https://github.com/hiroaki-com/cafe-wifi-okawari.git && cd cafe-wifi-o
 
 |  | 意味 |
 |---|---|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-on-white.png"><img src="assets/icon/state-on.png" width="33" height="22" alt="カップ"></picture> | 動作中 |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-check-white.png"><img src="assets/icon/state-check.png" width="33" height="22" alt="カップ ✓"></picture> | 10分以内に自動で再接続した |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-warn-white.png"><img src="assets/icon/state-warn.png" width="33" height="22" alt="カップ !"></picture> | この Wi‑Fi で対応が要る |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="カップ …"></picture> | macOS が認証画面での同意を待っている |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="薄いカップ"></picture> | 停止中。導入の手順をもう一度行うと戻ります |
+| <img src="assets/icon/state-on.png" width="41" height="22" alt="カップ"> | 動作中 |
+| <img src="assets/icon/state-check.png" width="41" height="22" alt="カップ ✓"> | 10分以内に自動で再接続した |
+| <img src="assets/icon/state-warn.png" width="41" height="22" alt="カップ !"> | この Wi‑Fi で対応が要る |
+| <img src="assets/icon/state-wait.png" width="41" height="22" alt="カップ …"> | macOS が認証画面での同意を待っている |
+| <img src="assets/icon/state-off.png" width="41" height="22" alt="薄いカップ"> | 停止中。導入の手順をもう一度行うと戻ります |
 
 クリックすると、今の Wi‑Fi の名前・自動再接続が有効か・次の時間切れの目安・直近の出来事3件が出ます（メニューは英語のみ）。名前の左の印は、緑が自動再接続が有効、黄が次の時間切れかご自身の同意を待っている、赤が再接続に失敗、灰が働いていない（未同意・未接続・停止中）ことを表します。MAC アドレス・IP アドレスは出さないので、画面共有に写っても差し支えありません。
 

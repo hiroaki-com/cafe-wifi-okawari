@@ -42,28 +42,35 @@ guard maxX >= minX, maxY >= minY,
     fatalError("Source has no visible silhouette")
 }
 
-for (name, size, dpi, white) in [("icon.png", 1024, 72, false),
-                                  ("icon-white.png", 1024, 72, true),
-                                  ("menuBarTemplate.png", 18, 72, false),
-                                  ("menuBarTemplate@2x.png", 36, 144, false)] {
+for (name, size, dpi, tile) in [("icon.png", 1024, 72, false),
+                                 ("icon-readme.png", 1024, 72, true),
+                                 ("menuBarTemplate.png", 18, 72, false),
+                                 ("menuBarTemplate@2x.png", 36, 144, false)] {
     guard let output = CGContext(data: nil, width: size, height: size,
                                  bitsPerComponent: 8, bytesPerRow: size * 4,
                                  space: colorSpace, bitmapInfo: bitmapInfo) else {
         fatalError("Cannot allocate output")
     }
     // One logical point of padding on an 18-point canvas; preserve aspect ratio.
-    let padding = CGFloat(size) / 18
+    // The README tile leaves more room so the glyph sits inside the rounded square.
+    let padding = CGFloat(size) / (tile ? 6 : 18)
+    if tile {
+        // README in any theme: black glyph on a white rounded square with a thin grey edge.
+        // The page theme and the OS appearance can differ, so no <picture> switch is used.
+        let edge = CGFloat(size) / 128
+        let rect = CGRect(x: edge / 2, y: edge / 2, width: CGFloat(size) - edge, height: CGFloat(size) - edge)
+        let radius = CGFloat(size) * 0.225
+        output.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+        output.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        output.setStrokeColor(CGColor(red: 0.82, green: 0.84, blue: 0.87, alpha: 1))
+        output.setLineWidth(edge)
+        output.drawPath(using: .fillStroke)
+    }
     let scale = (CGFloat(size) - 2 * padding) / CGFloat(max(cropped.width, cropped.height))
     let w = CGFloat(cropped.width) * scale, h = CGFloat(cropped.height) * scale
     output.interpolationQuality = .high
     output.draw(cropped, in: CGRect(x: (CGFloat(size) - w) / 2,
                                    y: (CGFloat(size) - h) / 2, width: w, height: h))
-    if white {
-        // README on a dark background: same alpha, white instead of black.
-        output.setBlendMode(.sourceIn)
-        output.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
-        output.fill(CGRect(x: 0, y: 0, width: size, height: size))
-    }
     guard let image = output.makeImage(),
           let destination = CGImageDestinationCreateWithURL(
             directory.appendingPathComponent(name) as CFURL,

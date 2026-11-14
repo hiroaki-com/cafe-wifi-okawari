@@ -6,12 +6,12 @@ Wi-Fi に見立てた2本の湯気と、外側の線の先端の矢印で「お�
 | ファイル | 用途 |
 | --- | --- |
 | `source.png` | 採用した生成画像の原本（1254 × 1254 px）。加工せず保管 |
-| `icon.png` | 余白調整済みマスター（1024 × 1024 px、黒一色・透過）。README の見出しにも使う |
-| `icon-white.png` | `icon.png` の白一色版。README をダークモードで見たときに使う |
+| `icon.png` | 余白調整済みマスター（1024 × 1024 px、黒一色・透過） |
+| `icon-readme.png` | README の見出し用。白い角丸の台に黒の図柄を載せ、薄い灰の縁を付ける（1024 × 1024 px） |
 | `menuBarTemplate.png` | メニューバー用 1x（18 × 18 px、72 dpi） |
 | `menuBarTemplate@2x.png` | メニューバー用 2x（36 × 36 px、144 dpi） |
 | `prepare.swift` | 原本から配布用PNGを再作成するmacOS標準フレームワークのスクリプト |
-| `state-*.png`・`state-*-white.png` | README の「メニューバーのアイコン」の表に載せる5状態（on・check・warn・wait・off）の見本。白版はダークモード用（2x、表示は 33 × 22 pt） |
+| `state-*.png` | README の「メニューバーのアイコン」の表に載せる5状態（on・check・warn・wait・off）の見本。明るいメニューバーに見立てた薄い灰の角丸の帯に黒で描く（2x、表示は 41 × 22 pt） |
 | `states.swift` | `menuBarTemplate@2x.png` から状態の見本を作るスクリプト。`menubar.js` と同じく印を右に付け、停止中は薄く描く |
 
 ## 最適化
@@ -19,7 +19,9 @@ Wi-Fi に見立てた2本の湯気と、外側の線の先端の矢印で「お�
 元画像のアルファ値を保持してRGBを黒に統一し、透明な外周余白を除去。
 カップ・湯気・矢印の形状や相対位置は変更せず、縦横比を保って中央配置する。
 18 pt の正方形に上下各1 ptの余白を設け、同じ配置で各解像度へ直接縮小する。
-再生成や輪郭の描き直しは行わない。白背景は焼き込まない。
+再生成や輪郭の描き直しは行わない。`icon.png` とメニューバー用には白背景を焼き込まない。
+
+README 用の `icon-readme.png`・`state-*.png` だけは明るい台を焼き込む。`<picture>` の `prefers-color-scheme` は表示側のテーマではなく OS の外観に従うため、OS がライトで GitHub やエディタがダークだと黒い図柄が背景に埋もれる。台があればどちらのテーマでも同じに見える。
 
 リポジトリのルートで再作成：
 
@@ -30,7 +32,7 @@ swift assets/icon/states.swift
 
 ## 組み込み
 
-メニューバーのアイコンとして使う（DESIGN.md §3.2）。README.md・README.en.md の見出しには `icon.png` を、ダークモードでは `<picture>` で `icon-white.png` を表示する。「メニューバーのアイコン」の表には `state-*.png` を同じく `<picture>` で表示する。`menuBarTemplate.png`・`menuBarTemplate@2x.png` を
+メニューバーのアイコンとして使う（DESIGN.md §3.2）。README.md・README.en.md の見出しには `icon-readme.png` を、「メニューバーのアイコン」の表には `state-*.png` を表示する（テーマによる切り替えはしない）。`menuBarTemplate.png`・`menuBarTemplate@2x.png` を
 `install.sh` が `~/.local/bin/cafe-wifi-okawari-menubar.png`・`cafe-wifi-okawari-menubar@2x.png` へコピーし、
 `menubar.js` が1x・2xを同じ18 × 18 ptのNSImageの表現として読み込み、`template = true` を指定する。
 ファイル名だけでのテンプレート判定には依存しない。状態で画像は替えず、停止中は薄く表示し、印（! … ✓）は右に付く。

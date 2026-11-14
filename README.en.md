@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/icon/icon-white.png">
-    <img src="assets/icon/icon.png" width="112" alt="">
-  </picture>
+  <img src="assets/icon/icon-readme.png" width="112" alt="">
 </p>
 
 <h1 align="center">cafe-wifi-okawari</h1>
@@ -139,11 +136,11 @@ The coffee cup in the menu bar (its steam is drawn as Wi‑Fi waves, with an arr
 
 |  | Meaning |
 |---|---|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-on-white.png"><img src="assets/icon/state-on.png" width="33" height="22" alt="Cup"></picture> | Running |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-check-white.png"><img src="assets/icon/state-check.png" width="33" height="22" alt="Cup ✓"></picture> | Reconnected automatically within the last 10 minutes |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-warn-white.png"><img src="assets/icon/state-warn.png" width="33" height="22" alt="Cup !"></picture> | You need to act on this Wi‑Fi |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-wait-white.png"><img src="assets/icon/state-wait.png" width="33" height="22" alt="Cup …"></picture> | macOS is waiting for you to accept on the login page |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/state-off-white.png"><img src="assets/icon/state-off.png" width="33" height="22" alt="Faded cup"></picture> | Stopped. Go through the install steps again to restart it |
+| <img src="assets/icon/state-on.png" width="41" height="22" alt="Cup"> | Running |
+| <img src="assets/icon/state-check.png" width="41" height="22" alt="Cup ✓"> | Reconnected automatically within the last 10 minutes |
+| <img src="assets/icon/state-warn.png" width="41" height="22" alt="Cup !"> | You need to act on this Wi‑Fi |
+| <img src="assets/icon/state-wait.png" width="41" height="22" alt="Cup …"> | macOS is waiting for you to accept on the login page |
+| <img src="assets/icon/state-off.png" width="41" height="22" alt="Faded cup"> | Stopped. Go through the install steps again to restart it |
 
 Click it to see the current Wi‑Fi's name, whether automatic reconnection is on, the estimated next time-out, and the last three events (the menu is in English only). The dot next to the name is green when automatic reconnection is on, yellow when it is waiting for the next time-out or for you to accept, red when reconnecting failed, and gray when it is not working (not accepted, offline, or stopped). It shows no MAC or IP addresses, so it is safe to show in screen sharing.
 
